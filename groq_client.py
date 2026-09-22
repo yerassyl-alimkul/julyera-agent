@@ -1,0 +1,84 @@
+"""
+Обёртка над Groq API: превращает произвольный текст в список
+структурированных задач по схеме, которую использует наш API.
+"""
+import json
+import os
+from datetime import date
+from typing import Optional
+
+from dotenv import load_dotenv
+from groq import Groq
+
+load_dotenv()
+
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    raise RuntimeError("GROQ_API_KEY должен быть задан в .env файле.")
+
+_client = Groq(api_key=GROQ_API_KEY)
+
+MODEL = "openai/gpt-oss-120b"
+
+SYSTEM_PROMPT = """Ты — ассистент, который превращает произвольный текст (учебный материал,
+письмо, список дел) в структурированные задачи.
+
+Правила:
+- Извлекай только конкретные, выполнимые действия. Игнорируй общий информационный текст.
+- Поле category — строго одно из значений: "Study", "Work", "Personal", "UniMe".
+  "UniMe" — конкретные дедлайны/задания по магистратуре в Университете Мессины.
+  "Study" — самостоятельное изучение (например, аналитика данных) вне рамок универа.
+- Если дедлайн явно не указан, но есть косвенное упоминание (например "экзамен в декабре"),
+  поставь дедлайн за 7 дней до события и опиши это в note.
+- Поле priority определяй по близости дедлайна относительно сегодняшней даты ({today}):
+  меньше 3 дней — "High", меньше 14 дней — "Mid", иначе — "Low".
+  Если дедлайна нет вообще — ставь "Mid".
+- is_recurring: true, только если из текста явно следует повторяемость
+  (например "каждую неделю", "ежедневно"). Тогда recurrence_pattern — одно из
+  "daily", "weekly", "monthly". Иначе is_recurring: false, recurrence_pattern: null.
+- Верни ТОЛЬКО валидный JSON-объект вида {{"tasks": [...]}}, без пояснений и без markdown.
+
+Формат каждого элемента массива "tasks":
+{{
+  "task": "строка",
+  "category": "Study | Work | Personal | UniMe",
+  "source": "строка или null",
+  "deadline": "YYYY-MM-DD или null",
+  "priority": "High | Mid | Low",
+  "note": "строка или пусто",
+  "is_recurring": true | false,
+  "recurrence_pattern": "daily | weekly | monthly | null"
+}}"""
+
+
+def parse_text_to_tasks(raw_text: str, source_hint: Optional[str] = None) -> list[dict]:
+    """
+    Отправляет сырой текст в Groq и возвращает список словарей,
+    готовых к вставке в таблицу tasks (без id/created_at/updated_at).
+    """
+    system = SYSTEM_PROMPT.format(today=date.today().isoformat())
+    user_content = raw_text
+    if source_hint:
+        user_content = f"[Источник: {source_hint}]\n{raw_text}"
+
+    response = _client.chat.completions.create(
+        model=MODEL,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_content},
+        ],
+        temperature=0.2,
+        response_format={"type": "json_object"},
+    )
+
+    content = response.choices[0].message.content
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Groq вернул невалидный JSON: {content!r}") from exc
+
+    tasks = parsed.get("tasks", [])
+    if not isinstance(tasks, list):
+        raise ValueError(f"Ожидался список задач в поле 'tasks', получено: {parsed!r}")
+
+    return tasks

@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Task Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #12141A;
+    --surface: #1A1D26;
+    --surface-alt: #1F2330;
+    --border: #2A2F3D;
+    --text: #EDEEF2;
+    --text-dim: #8B93A7;
+    --text-faint: #5C6478;
+    --accent: #5B8DEF;
+    --accent-dim: #33456E;
+    --high: #F2545B;
+    --mid: #F2A93B;
+    --low: #4FBF8B;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: 'Sora', 'Inter', sans-serif;
+  }
+
+  .app {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    min-height: 100vh;
+  }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar {
+    border-right: 1px solid var(--border);
+    padding: 28px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+
+  .brand {
+    font-family: 'Sora', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: -0.02em;
+  }
+
+  .brand-sub {
+    color: var(--text-faint);
+    font-size: 12.5px;
+    margin-top: 2px;
+  }
+
+  .filter-group { display: flex; flex-direction: column; gap: 8px; }
+
+  .filter-label {
+    color: var(--text-dim);
+    font-size: 12.5px;
+    font-weight: 500;
+    margin-bottom: 2px;
+  }
+
+  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  .chip {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-dim);
+    padding: 6px 11px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color .15s, color .15s, background .15s;
+    user-select: none;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--text); }
+  .chip.active {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: var(--text);
+  }
+
+  .stats {
+    margin-top: auto;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .stat-row { display: flex; justify-content: space-between; align-items: baseline; }
+  .stat-num { font-family: 'Sora', sans-serif; font-weight: 600; font-size: 17px; }
+  .stat-label { color: var(--text-faint); font-size: 12.5px; }
+
+  .backend-status {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text-faint);
+  }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint); flex-shrink: 0; }
+  .dot.ok { background: var(--low); }
+  .dot.err { background: var(--high); }
+
+  /* ---------- Main ---------- */
+  .main {
+    padding: 28px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    min-width: 0;
+  }
+
+  .composer {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .composer textarea {
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+    min-height: 44px;
+    outline: none;
+  }
+  .composer textarea::placeholder { color: var(--text-faint); }
+
+  .composer-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .composer-hint { color: var(--text-faint); font-size: 12px; }
+
+  button.primary {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 9px 18px;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    font-size: 13.5px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: filter .15s;
+  }
+  button.primary:hover { filter: brightness(1.1); }
+  button.primary:disabled { opacity: .5; cursor: default; }
+
+  .board {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+    align-items: start;
+  }
+
+  .column-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .column-title { font-family: 'Sora', sans-serif; font-weight: 600; font-size: 14.5px; }
+  .column-count {
+    color: var(--text-faint);
+    font-size: 12.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 1px 8px;
+    border-radius: 999px;
+  }
+
+  .column-body { display: flex; flex-direction: column; gap: 10px; min-height: 60px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--border-left, var(--text-faint));
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .card-task { font-size: 13.5px; line-height: 1.4; }
+
+  .card-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .badge {
+    font-size: 11.5px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+
+  .priority-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .priority-label { font-size: 11.5px; color: var(--text-dim); display: flex; align-items: center; gap: 5px; }
+
+  .card-deadline { font-size: 12px; color: var(--text-faint); }
+  .card-deadline.overdue { color: var(--high); }
+
+  .card-actions { display: flex; gap: 6px; margin-top: 2px; }
+
+  .icon-btn {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 12px;
+    padding: 5px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-family: inherit;
+    transition: border-color .15s, color .15s;
+  }
+  .icon-btn:hover { border-color: var(--accent); color: var(--text); }
+  .icon-btn.danger:hover { border-color: var(--high); color: var(--high); }
+
+  .empty-col {
+    color: var(--text-faint);
+    font-size: 12.5px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-md);
+    padding: 18px 12px;
+    text-align: center;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 18px;
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s, transform .2s;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(-6px); }
+
+  @media (max-width: 880px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar { flex-direction: row; flex-wrap: wrap; border-right: none; border-bottom: 1px solid var(--border); }
+    .stats { margin-top: 0; padding-top: 0; border-top: none; }
+    .board { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div>
+      <div class="brand">Task Agent</div>
+      <div class="brand-sub">Учёба · Работа · Поиск</div>
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-label">Категория</div>
+      <div class="chip-row" id="categoryChips"></div>
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-label">Приоритет</div>
+      <div class="chip-row" id="priorityChips"></div>
+    </div>
+
+    <div class="stats">
+      <div class="stat-row">
+        <span class="stat-num" id="statTotal">0</span>
+        <span class="stat-label">активных задач</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-num" id="statHigh">0</span>
+        <span class="stat-label">высокий приоритет</span>
+      </div>
+      <div class="backend-status" id="backendStatus" style="margin-top: 4px;">
+        <span class="dot" id="statusDot"></span>
+        <span id="statusText">Проверка backend…</span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="composer">
+      <textarea id="composerInput" placeholder="Опиши задачу своими словами — я сам разберу категорию, приоритет и дедлайн…"></textarea>
+      <div class="composer-footer">
+        <span class="composer-hint">Enter — новая строка, кнопка — отправить</span>
+        <button class="primary" id="composerBtn">Добавить</button>
+      </div>
+    </div>
+
+    <div class="board">
+      <div>
+        <div class="column-head">
+          <span class="column-title">To Do</span>
+          <span class="column-count" id="countTodo">0</span>
+        </div>
+        <div class="column-body" id="colTodo"></div>
+      </div>
+      <div>
+        <div class="column-head">
+          <span class="column-title">In Progress</span>
+          <span class="column-count" id="countProgress">0</span>
+        </div>
+        <div class="column-body" id="colProgress"></div>
+      </div>
+      <div>
+        <div class="column-head">
+          <span class="column-title">Done</span>
+          <span class="column-count" id="countDone">0</span>
+        </div>
+        <div class="column-body" id="colDone"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const BASE_URL = localStorage.getItem('task_agent_backend_url') || 'http://127.0.0.1:8000';
+
+const CATEGORIES = ['Study', 'Work', 'Personal', 'UniMe'];
+const PRIORITIES = ['High', 'Mid', 'Low'];
+const PRIORITY_COLOR = { High: 'var(--high)', Mid: 'var(--mid)', Low: 'var(--low)' };
+const CATEGORY_LABEL = { Study: 'Study', Work: 'Work', Personal: 'Personal', UniMe: 'UniMe' };
+
+let activeCategory = null;
+let activePriority = null;
+let allTasks = [];
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+function renderChips() {
+  const catWrap = document.getElementById('categoryChips');
+  catWrap.innerHTML = '';
+  const allChip = makeChip('Все', activeCategory === null, () => { activeCategory = null; renderChips(); loadTasks(); });
+  catWrap.appendChild(allChip);
+  CATEGORIES.forEach(c => {
+    catWrap.appendChild(makeChip(CATEGORY_LABEL[c], activeCategory === c, () => { activeCategory = c; renderChips(); loadTasks(); }));
+  });
+
+  const prWrap = document.getElementById('priorityChips');
+  prWrap.innerHTML = '';
+  prWrap.appendChild(makeChip('Все', activePriority === null, () => { activePriority = null; renderChips(); loadTasks(); }));
+  PRIORITIES.forEach(p => {
+    prWrap.appendChild(makeChip(p, activePriority === p, () => { activePriority = p; renderChips(); loadTasks(); }));
+  });
+}
+
+function makeChip(label, active, onClick) {
+  const el = document.createElement('div');
+  el.className = 'chip' + (active ? ' active' : '');
+  el.textContent = label;
+  el.onclick = onClick;
+  return el;
+}
+
+function fmtDeadline(d) {
+  if (!d) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const date = new Date(d + 'T00:00:00');
+  const diffDays = Math.round((date - today) / 86400000);
+  let label = date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+  if (diffDays === 0) label = 'Сегодня';
+  else if (diffDays === 1) label = 'Завтра';
+  else if (diffDays < 0) label += ' (просрочено)';
+  return { label, overdue: diffDays < 0 };
+}
+
+function cardEl(task) {
+  const el = document.createElement('div');
+  el.className = 'card';
+  el.style.setProperty('--border-left', PRIORITY_COLOR[task.priority] || 'var(--text-faint)');
+
+  const taskLine = document.createElement('div');
+  taskLine.className = 'card-task';
+  taskLine.textContent = task.task;
+  el.appendChild(taskLine);
+
+  const meta = document.createElement('div');
+  meta.className = 'card-meta';
+
+  const catBadge = document.createElement('span');
+  catBadge.className = 'badge';
+  catBadge.textContent = CATEGORY_LABEL[task.category] || task.category;
+  meta.appendChild(catBadge);
+
+  const prLabel = document.createElement('span');
+  prLabel.className = 'priority-label';
+  const dot = document.createElement('span');
+  dot.className = 'priority-dot';
+  dot.style.background = PRIORITY_COLOR[task.priority] || 'var(--text-faint)';
+  prLabel.appendChild(dot);
+  prLabel.append(task.priority);
+  meta.appendChild(prLabel);
+
+  el.appendChild(meta);
+
+  const dl = fmtDeadline(task.deadline);
+  if (dl) {
+    const dEl = document.createElement('div');
+    dEl.className = 'card-deadline' + (dl.overdue ? ' overdue' : '');
+    dEl.textContent = dl.label;
+    el.appendChild(dEl);
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'card-actions';
+
+  if (task.status === 'To Do') {
+    actions.appendChild(actionBtn('В работу', () => updateStatus(task.id, 'In Progress')));
+  }
+  if (task.status === 'In Progress') {
+    actions.appendChild(actionBtn('Готово', () => updateStatus(task.id, 'Done')));
+    actions.appendChild(actionBtn('Назад', () => updateStatus(task.id, 'To Do')));
+  }
+  if (task.status === 'Done') {
+    actions.appendChild(actionBtn('Вернуть', () => updateStatus(task.id, 'To Do')));
+  }
+  const delBtn = actionBtn('Удалить', () => deleteTask(task.id));
+  delBtn.classList.add('danger');
+  actions.appendChild(delBtn);
+
+  el.appendChild(actions);
+  return el;
+}
+
+function actionBtn(label, onClick) {
+  const b = document.createElement('button');
+  b.className = 'icon-btn';
+  b.textContent = label;
+  b.onclick = onClick;
+  return b;
+}
+
+function renderBoard() {
+  const cols = { 'To Do': document.getElementById('colTodo'), 'In Progress': document.getElementById('colProgress'), 'Done': document.getElementById('colDone') };
+  Object.values(cols).forEach(c => c.innerHTML = '');
+
+  const grouped = { 'To Do': [], 'In Progress': [], 'Done': [] };
+  allTasks.forEach(t => { if (grouped[t.status]) grouped[t.status].push(t); });
+
+  Object.keys(grouped).forEach(status => {
+    const list = grouped[status];
+    const container = cols[status];
+    if (list.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'empty-col';
+      empty.textContent = 'Пусто';
+      container.appendChild(empty);
+    } else {
+      list.forEach(t => container.appendChild(cardEl(t)));
+    }
+  });
+
+  document.getElementById('countTodo').textContent = grouped['To Do'].length;
+  document.getElementById('countProgress').textContent = grouped['In Progress'].length;
+  document.getElementById('countDone').textContent = grouped['Done'].length;
+
+  const activeTasks = allTasks.filter(t => t.status !== 'Done');
+  document.getElementById('statTotal').textContent = activeTasks.length;
+  document.getElementById('statHigh').textContent = activeTasks.filter(t => t.priority === 'High').length;
+}
+
+async function loadTasks() {
+  const params = new URLSearchParams();
+  if (activeCategory) params.set('category', activeCategory);
+  if (activePriority) params.set('priority', activePriority);
+  try {
+    const res = await fetch(`${BASE_URL}/tasks?${params.toString()}`);
+    if (!res.ok) throw new Error('bad status');
+    allTasks = await res.json();
+    setBackendStatus(true);
+    renderBoard();
+  } catch (e) {
+    setBackendStatus(false);
+  }
+}
+
+function setBackendStatus(ok) {
+  const dot = document.getElementById('statusDot');
+  const text = document.getElementById('statusText');
+  dot.classList.toggle('ok', ok);
+  dot.classList.toggle('err', !ok);
+  text.textContent = ok ? 'Backend подключён' : 'Backend недоступен';
+}
+
+async function updateStatus(id, status) {
+  try {
+    const res = await fetch(`${BASE_URL}/tasks/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    });
+    if (!res.ok) throw new Error('bad status');
+    await loadTasks();
+  } catch (e) {
+    toast('Не удалось обновить задачу');
+  }
+}
+
+async function deleteTask(id) {
+  try {
+    const res = await fetch(`${BASE_URL}/tasks/${id}`, { method: 'DELETE' });
+    if (!res.ok && res.status !== 204) throw new Error('bad status');
+    await loadTasks();
+  } catch (e) {
+    toast('Не удалось удалить задачу');
+  }
+}
+
+async function submitComposer() {
+  const input = document.getElementById('composerInput');
+  const btn = document.getElementById('composerBtn');
+  const text = input.value.trim();
+  if (!text) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Разбираю…';
+  try {
+    const res = await fetch(`${BASE_URL}/tasks/parse`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    if (!res.ok) throw new Error('bad status');
+    const created = await res.json();
+    input.value = '';
+    toast(`Добавлено задач: ${created.length}`);
+    await loadTasks();
+  } catch (e) {
+    toast('Не удалось разобрать текст');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Добавить';
+  }
+}
+
+document.getElementById('composerBtn').onclick = submitComposer;
+document.getElementById('composerInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitComposer();
+});
+
+renderChips();
+loadTasks();
+setInterval(loadTasks, 15000);
+</script>
+</body>
+</html>
