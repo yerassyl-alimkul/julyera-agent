@@ -354,7 +354,11 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const BASE_URL = localStorage.getItem('task_agent_backend_url') || 'http://127.0.0.1:8000';
+// Если страница открыта как обычный сайт (http/https) — используем тот же
+// домен, с которого она загружена (значит backend всегда рядом, без хардкода).
+// Если открыта как локальный файл (file://) — используем облачный backend напрямую.
+const BASE_URL = localStorage.getItem('task_agent_backend_url')
+  || (location.protocol.startsWith('http') ? location.origin : 'https://julyera-agent.onrender.com');
 
 const CATEGORIES = ['Study', 'Work', 'Personal', 'UniMe'];
 const PRIORITIES = ['High', 'Mid', 'Low'];

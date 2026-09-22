@@ -26,6 +26,7 @@ from uuid import UUID
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 load_dotenv()
 
@@ -142,3 +143,14 @@ async def telegram_webhook(token: str, request: Request):
 @app.get("/health")
 def health_check():
     return {"status": "ok", "telegram_webhook": bool(telegram_app and WEBHOOK_BASE_URL)}
+
+
+# Раздаём веб-интерфейс с того же домена, что и API — без хардкода URL,
+# без AirDrop, просто открываешь ссылку в любом браузере на любом устройстве.
+# Смонтировано ПОСЛЕДНИМ: конкретные API-маршруты выше матчатся первыми,
+# всё остальное (включая "/") отдаёт статику из папки web/.
+import os as _os
+
+_web_dir = _os.path.join(_os.path.dirname(__file__), "web")
+if _os.path.isdir(_web_dir):
+    app.mount("/", StaticFiles(directory=_web_dir, html=True), name="web")
