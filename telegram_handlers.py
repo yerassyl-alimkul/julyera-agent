@@ -4,6 +4,7 @@
 task_service — без HTTP-круга внутри процесса.
 """
 import logging
+from datetime import date
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -23,7 +24,29 @@ def _format_task_line(task: dict) -> str:
     return f"{emoji_c} {emoji_p} {task['task']} — {deadline}"
 
 
+def format_reminder_message(tasks: list[dict]) -> str:
+    """Сообщение для проактивного напоминания — с человекочитаемыми датами."""
+    today = date.today()
+    lines = ["⏰ Напоминание о дедлайнах:"]
+    for t in tasks:
+        d = date.fromisoformat(t["deadline"])
+        days = (d - today).days
+        if days < 0:
+            label = "Просрочено"
+        elif days == 0:
+            label = "Сегодня"
+        elif days == 1:
+            label = "Завтра"
+        else:
+            label = d.strftime("%d.%m")
+        emoji_c = CATEGORY_EMOJI.get(t.get("category"), "")
+        emoji_p = PRIORITY_EMOJI.get(t.get("priority"), "")
+        lines.append(f"{emoji_c} {emoji_p} {t['task']} — {label}")
+    return "\n".join(lines)
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    task_service.upsert_telegram_chat(update.effective_chat.id)
     await update.message.reply_text(
         "Привет! Просто напиши мне текст с задачей (или несколькими) — "
         "я сам разберу его на структурированные задачи и сохраню.\n\n"
@@ -34,6 +57,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    task_service.upsert_telegram_chat(update.effective_chat.id)
     raw_text = update.message.text
     await update.message.chat.send_action("typing")
 

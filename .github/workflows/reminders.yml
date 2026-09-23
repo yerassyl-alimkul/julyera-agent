@@ -1,0 +1,17 @@
+name: Daily task reminders
+
+# Almaty = UTC+5, без перехода на летнее время.
+# 04:00 UTC = 09:00 по Алматы.
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch: {}  # позволяет запустить вручную из вкладки Actions на GitHub
+
+jobs:
+  trigger-reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call reminders endpoint
+        run: |
+          curl -sf -X POST "https://julyera-agent.onrender.com/internal/reminders/run" \
+            -H "X-Reminder-Secret: ${{ secrets.REMINDER_SECRET }}"

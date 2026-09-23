@@ -23,6 +23,7 @@ from datetime import date
 from typing import Optional
 from uuid import UUID
 
+import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,6 +36,7 @@ from models import Category, ParseRequest, Priority, Status, Task, TaskCreate, T
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 WEBHOOK_BASE_URL = os.environ.get("WEBHOOK_BASE_URL")  # например https://task-agent.onrender.com
+REMINDERS_SECRET = os.environ.get("REMINDERS_SECRET")  # секрет для /internal/reminders/run
 
 telegram_app = None
 if TELEGRAM_BOT_TOKEN:
@@ -138,6 +140,41 @@ async def telegram_webhook(token: str, request: Request):
     update = TgUpdate.de_json(data, telegram_app.bot)
     await telegram_app.process_update(update)
     return {"ok": True}
+
+
+@app.post("/internal/reminders/run")
+async def run_reminders(request: Request):
+    """
+    Проверяет задачи с приближающимся/просроченным дедлайном и шлёт
+    напоминание в Telegram. Вызывается по расписанию извне (см. GitHub Actions
+    workflow .github/workflows/reminders.yml) — сам backend расписание не хранит.
+    Защищено секретным заголовком, чтобы эндпоинт не мог дёргать кто угодно.
+    """
+    if not REMINDERS_SECRET or request.headers.get("X-Reminder-Secret") != REMINDERS_SECRET:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    if not TELEGRAM_BOT_TOKEN:
+        raise HTTPException(status_code=500, detail="TELEGRAM_BOT_TOKEN не настроен")
+
+    from telegram_handlers import format_reminder_message
+
+    tasks = task_service.get_reminder_tasks()
+    chat_ids = task_service.get_telegram_chat_ids()
+
+    if not tasks or not chat_ids:
+        return {"sent": 0, "tasks_found": len(tasks)}
+
+    message = format_reminder_message(tasks)
+    sent = 0
+    async with httpx.AsyncClient(timeout=15) as client:
+        for chat_id in chat_ids:
+            resp = await client.post(
+                f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+                json={"chat_id": chat_id, "text": message},
+            )
+            if resp.status_code == 200:
+                sent += 1
+
+    return {"sent": sent, "tasks_found": len(tasks)}
 
 
 @app.get("/health")

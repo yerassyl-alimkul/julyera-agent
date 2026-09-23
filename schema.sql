@@ -17,3 +17,9 @@ create table tasks (
 
 create index idx_tasks_status_deadline on tasks (status, deadline);
 create index idx_tasks_recurring on tasks (is_recurring) where is_recurring = true;
+
+-- Хранит chat_id для отправки проактивных напоминаний в Telegram.
+create table telegram_chats (
+    chat_id bigint primary key,
+    created_at timestamptz not null default now()
+);

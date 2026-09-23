@@ -108,3 +108,32 @@ def update_task(task_id: str, payload: TaskUpdate) -> Optional[dict]:
 def delete_task(task_id: str) -> bool:
     result = supabase.table(TABLE).delete().eq("id", task_id).execute()
     return bool(result.data)
+
+
+def upsert_telegram_chat(chat_id: int) -> None:
+    """Запоминает chat_id, чтобы потом можно было слать туда напоминания."""
+    supabase.table("telegram_chats").upsert({"chat_id": chat_id}).execute()
+
+
+def get_telegram_chat_ids() -> list[int]:
+    result = supabase.table("telegram_chats").select("chat_id").execute()
+    return [row["chat_id"] for row in result.data]
+
+
+def get_reminder_tasks(days_ahead: int = 2) -> list[dict]:
+    """
+    Задачи, которые не закрыты и у которых дедлайн уже прошёл или наступает
+    в течение ближайших `days_ahead` дней (по умолчанию 2 — сегодня/завтра/послезавтра).
+    """
+    cutoff = date.today() + timedelta(days=days_ahead)
+    result = []
+    for t in list_tasks():
+        if t.get("status") == Status.done.value:
+            continue
+        deadline = t.get("deadline")
+        if not deadline:
+            continue
+        if date.fromisoformat(deadline) <= cutoff:
+            result.append(t)
+    result.sort(key=lambda t: t["deadline"])
+    return result
