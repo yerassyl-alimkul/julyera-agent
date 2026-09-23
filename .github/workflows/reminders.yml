@@ -1,10 +1,12 @@
-name: Daily task reminders
+name: Task reminders
 
 # Almaty = UTC+5, без перехода на летнее время.
-# 04:00 UTC = 09:00 по Алматы.
+# 09:00 / 16:00 / 21:00 по Алматы = 04:00 / 11:00 / 16:00 UTC.
 on:
   schedule:
     - cron: '0 4 * * *'
+    - cron: '0 11 * * *'
+    - cron: '0 16 * * *'
   workflow_dispatch: {}  # позволяет запустить вручную из вкладки Actions на GitHub
 
 jobs:
