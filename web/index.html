@@ -336,6 +336,10 @@
         <span class="dot" id="statusDot"></span>
         <span id="statusText">Проверка backend…</span>
       </div>
+      <div class="backend-status" id="googleStatusRow" style="margin-top: 4px;">
+        <span class="dot" id="googleDot"></span>
+        <span id="googleStatusText">Google Calendar…</span>
+      </div>
     </div>
   </aside>
 
@@ -661,6 +665,32 @@ function setBackendStatus(ok) {
   text.textContent = ok ? 'Backend подключён' : 'Backend недоступен';
 }
 
+async function checkGoogleStatus() {
+  const dot = document.getElementById('googleDot');
+  const text = document.getElementById('googleStatusText');
+  try {
+    const res = await fetch(`${BASE_URL}/google/status`);
+    if (!res.ok) throw new Error('bad status');
+    const data = await res.json();
+    if (data.connected) {
+      dot.classList.add('ok'); dot.classList.remove('err');
+      text.textContent = 'Google Calendar подключён';
+    } else {
+      dot.classList.remove('ok', 'err');
+      text.innerHTML = '';
+      const link = document.createElement('a');
+      link.href = `${BASE_URL}/google/auth`;
+      link.target = '_blank';
+      link.style.color = 'var(--accent)';
+      link.textContent = 'Подключить Google Calendar';
+      text.appendChild(link);
+    }
+  } catch (e) {
+    dot.classList.remove('ok'); dot.classList.add('err');
+    text.textContent = 'Google Calendar: нет связи';
+  }
+}
+
 async function updateStatus(id, status) {
   try {
     const res = await fetch(`${BASE_URL}/tasks/${id}`, {
@@ -719,6 +749,7 @@ document.getElementById('composerInput').addEventListener('keydown', (e) => {
 
 renderChips();
 loadTasks();
+checkGoogleStatus();
 setInterval(loadTasks, 15000);
 </script>
 </body>

@@ -27,11 +27,13 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 load_dotenv()
 
 import task_service
+import google_calendar_service as gcal
 from models import Category, ParseRequest, Priority, Status, Task, TaskCreate, TaskUpdate
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -180,6 +182,35 @@ async def run_reminders(request: Request):
 @app.get("/health")
 def health_check():
     return {"status": "ok", "telegram_webhook": bool(telegram_app and WEBHOOK_BASE_URL)}
+
+
+@app.get("/google/auth")
+def google_auth_start():
+    """Перенаправляет на страницу согласия Google для подключения календаря."""
+    if not gcal.is_configured():
+        raise HTTPException(
+            status_code=500,
+            detail="Google OAuth не настроен: нет GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI",
+        )
+    return RedirectResponse(gcal.build_auth_url())
+
+
+@app.get("/google/callback")
+def google_auth_callback(code: Optional[str] = None, error: Optional[str] = None):
+    """Google перенаправляет сюда после согласия пользователя."""
+    if error:
+        return HTMLResponse(f"<h3>Google Calendar: доступ не предоставлен ({error})</h3>")
+    if not code:
+        raise HTTPException(status_code=400, detail="Отсутствует параметр code")
+    gcal.exchange_code(code)
+    return HTMLResponse(
+        "<h3>Google Calendar подключён ✅</h3><p>Можешь закрыть эту вкладку и вернуться в приложение.</p>"
+    )
+
+
+@app.get("/google/status")
+def google_status():
+    return {"connected": gcal.is_connected(), "configured": gcal.is_configured()}
 
 
 # Раздаём веб-интерфейс с того же домена, что и API — без хардкода URL,

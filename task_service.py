@@ -6,6 +6,7 @@
 from datetime import datetime, timedelta
 from typing import Optional
 
+import google_calendar_service as gcal
 from database import supabase
 from groq_client import parse_text_to_tasks
 from models import Status, TaskCreate, TaskUpdate
@@ -24,12 +25,32 @@ def _next_deadline(current: Optional[datetime], pattern: Optional[str]) -> Optio
     return None
 
 
+def _sync_google_upsert(task: dict) -> dict:
+    """Создаёт/обновляет событие в Google Calendar и, если id изменился,
+    сохраняет его в самой задаче. Возвращает актуальную версию задачи."""
+    event_id = gcal.sync_task_upsert(task)
+    if event_id != task.get("google_event_id"):
+        supabase.table(TABLE).update({"google_event_id": event_id}).eq("id", task["id"]).execute()
+        task["google_event_id"] = event_id
+    return task
+
+
+def _sync_google_clear(task: dict) -> dict:
+    """Удаляет событие из Google Calendar (если было) и чистит ссылку на него."""
+    gcal.sync_task_delete(task.get("google_event_id"))
+    if task.get("google_event_id"):
+        supabase.table(TABLE).update({"google_event_id": None}).eq("id", task["id"]).execute()
+        task["google_event_id"] = None
+    return task
+
+
 def create_task(payload: TaskCreate) -> dict:
     data = payload.model_dump(mode="json", exclude_none=False)
     result = supabase.table(TABLE).insert(data).execute()
     if not result.data:
         raise RuntimeError("Не удалось создать задачу")
-    return result.data[0]
+    task = result.data[0]
+    return _sync_google_upsert(task)
 
 
 def create_tasks_from_text(raw_text: str, source_hint: Optional[str] = None) -> list[dict]:
@@ -102,10 +123,23 @@ def update_task(task_id: str, payload: TaskUpdate) -> Optional[dict]:
         }
         supabase.table(TABLE).insert(new_task).execute()
 
+    # Синхронизация с Google Calendar: закрыли задачу — убираем событие из
+    # календаря; иначе, если есть дедлайн, создаём/обновляем событие;
+    # если дедлайн убрали — тоже убираем событие.
+    if became_done:
+        updated = _sync_google_clear(updated)
+    elif updated.get("deadline"):
+        updated = _sync_google_upsert(updated)
+    elif updated.get("google_event_id"):
+        updated = _sync_google_clear(updated)
+
     return updated
 
 
 def delete_task(task_id: str) -> bool:
+    task = get_task(task_id)
+    if task:
+        gcal.sync_task_delete(task.get("google_event_id"))
     result = supabase.table(TABLE).delete().eq("id", task_id).execute()
     return bool(result.data)
 

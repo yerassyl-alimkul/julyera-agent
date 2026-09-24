@@ -76,6 +76,7 @@ class TaskUpdate(BaseModel):
 class Task(TaskBase):
     """Полная модель задачи, как она возвращается из API."""
     id: UUID
+    google_event_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
