@@ -19,7 +19,7 @@ Backend для персонального агента структуриров�
 """
 import os
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
@@ -98,7 +98,7 @@ def list_tasks(
     category: Optional[Category] = Query(None),
     status: Optional[Status] = Query(None),
     priority: Optional[Priority] = Query(None),
-    deadline_before: Optional[date] = Query(None),
+    deadline_before: Optional[datetime] = Query(None),
 ):
     return task_service.list_tasks(
         category=category.value if category else None,

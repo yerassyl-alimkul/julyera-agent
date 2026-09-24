@@ -3,7 +3,7 @@
 и Telegram-хендлерами (telegram_handlers.py) — без лишнего HTTP-круга
 внутри одного процесса, когда бот работает в режиме webhook.
 """
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Optional
 
 from database import supabase
@@ -13,8 +13,8 @@ from models import Status, TaskCreate, TaskUpdate
 TABLE = "tasks"
 
 
-def _next_deadline(current: Optional[date], pattern: Optional[str]) -> Optional[date]:
-    base = current or date.today()
+def _next_deadline(current: Optional[datetime], pattern: Optional[str]) -> Optional[datetime]:
+    base = current or datetime.now()
     if pattern == "daily":
         return base + timedelta(days=1)
     if pattern == "weekly":
@@ -49,7 +49,7 @@ def list_tasks(
     category: Optional[str] = None,
     status: Optional[str] = None,
     priority: Optional[str] = None,
-    deadline_before: Optional[date] = None,
+    deadline_before: Optional[datetime] = None,
 ) -> list[dict]:
     query = supabase.table(TABLE).select("*")
     if category:
@@ -86,7 +86,7 @@ def update_task(task_id: str, payload: TaskUpdate) -> Optional[dict]:
     became_done = update_data.get("status") == Status.done.value
     if became_done and current.get("is_recurring"):
         next_deadline = _next_deadline(
-            current.get("deadline") and date.fromisoformat(current["deadline"]),
+            current.get("deadline") and datetime.fromisoformat(current["deadline"]),
             current.get("recurrence_pattern"),
         )
         new_task = {
@@ -124,8 +124,10 @@ def get_reminder_tasks(days_ahead: int = 2) -> list[dict]:
     """
     Задачи, которые не закрыты и у которых дедлайн уже прошёл или наступает
     в течение ближайших `days_ahead` дней (по умолчанию 2 — сегодня/завтра/послезавтра).
+    Сравнение идёт по дате (без учёта времени суток), чтобы задача "сегодня в 23:59"
+    и "сегодня в 09:00" одинаково считались "сегодняшними".
     """
-    cutoff = date.today() + timedelta(days=days_ahead)
+    cutoff = datetime.now().date() + timedelta(days=days_ahead)
     result = []
     for t in list_tasks():
         if t.get("status") == Status.done.value:
@@ -133,7 +135,7 @@ def get_reminder_tasks(days_ahead: int = 2) -> list[dict]:
         deadline = t.get("deadline")
         if not deadline:
             continue
-        if date.fromisoformat(deadline) <= cutoff:
+        if datetime.fromisoformat(deadline).date() <= cutoff:
             result.append(t)
     result.sort(key=lambda t: t["deadline"])
     return result

@@ -1,7 +1,7 @@
 """
 Pydantic-модели для валидации входных/выходных данных API.
 """
-from datetime import date, datetime
+from datetime import datetime
 from enum import Enum
 from typing import Optional
 from uuid import UUID
@@ -38,7 +38,7 @@ class TaskBase(BaseModel):
     task: str = Field(..., min_length=1, description="Описание задачи")
     category: Category
     source: Optional[str] = None
-    deadline: Optional[date] = None
+    deadline: Optional[datetime] = None
     priority: Priority = Priority.mid
     status: Status = Status.todo
     note: Optional[str] = None
@@ -65,7 +65,7 @@ class TaskUpdate(BaseModel):
     task: Optional[str] = None
     category: Optional[Category] = None
     source: Optional[str] = None
-    deadline: Optional[date] = None
+    deadline: Optional[datetime] = None
     priority: Optional[Priority] = None
     status: Optional[Status] = None
     note: Optional[str] = None
