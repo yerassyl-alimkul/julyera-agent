@@ -120,6 +120,13 @@ def _event_body(task: dict) -> dict:
     emoji_c = CATEGORY_EMOJI.get(task.get("category"), "")
     emoji_p = PRIORITY_EMOJI.get(task.get("priority"), "")
     start_dt = datetime.fromisoformat(task["deadline"])
+    # В нашей системе дедлайн хранится и везде показывается как "голая" стена
+    # часов (12:00 значит 12:00 по Алматы, без реального UTC-пересчёта), но
+    # Supabase иногда возвращает строку с суффиксом +00:00. Google Calendar,
+    # в отличие от бота и веб-интерфейса, ЧЕСТНО пересчитывает время по этому
+    # смещению — поэтому убираем его и передаём зону отдельным полем timeZone.
+    if start_dt.tzinfo is not None:
+        start_dt = start_dt.replace(tzinfo=None)
     end_dt = start_dt + timedelta(minutes=30)
     return {
         "summary": f"{emoji_c} {emoji_p} {task['task']}".strip(),
