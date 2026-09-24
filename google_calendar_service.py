@@ -131,8 +131,8 @@ def _event_body(task: dict) -> dict:
     return {
         "summary": f"{emoji_c} {emoji_p} {task['task']}".strip(),
         "description": task.get("note") or "",
-        "start": {"dateTime": start_dt.isoformat(), "timeZone": "Asia/Almaty"},
-        "end": {"dateTime": end_dt.isoformat(), "timeZone": "Asia/Almaty"},
+        "start": {"dateTime": start_dt.isoformat(), "timeZone": "Europe/Rome"},
+        "end": {"dateTime": end_dt.isoformat(), "timeZone": "Europe/Rome"},
     }
 
 

@@ -420,9 +420,22 @@ function renderChips() {
 }
 
 // Дедлайн хранит дату И время (ISO "YYYY-MM-DDTHH:MM:SS").
+// Парсит дедлайн как "голую" стену часов, игнорируя любое смещение
+// (+00:00 и т.п.), которое мог приписать Postgres. Строим Date через
+// локальный конструктор (год, месяц, день, час, минута) — тогда
+// toLocaleString ниже не станет пересчитывать время под часовой пояс
+// браузера, а просто вернёт те же самые цифры, что были введены.
+function parseNaiveDeadline(d) {
+  const m = d.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+  if (!m) return null;
+  const [, y, mo, day, h, mi, s] = m.map(Number);
+  return new Date(y, mo - 1, day, h, mi, s);
+}
+
 function fmtDeadline(d) {
   if (!d) return null;
-  const dt = new Date(d);
+  const dt = parseNaiveDeadline(d);
+  if (!dt) return null;
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const dtDay = new Date(dt); dtDay.setHours(0, 0, 0, 0);
   const diffDays = Math.round((dtDay - today) / 86400000);
