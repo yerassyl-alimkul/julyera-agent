@@ -18,7 +18,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 load_dotenv()
 
-from telegram_handlers import handle_text, list_tasks_handler, start
+from telegram_handlers import handle_text, handle_voice, list_tasks_handler, start
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 if not TELEGRAM_BOT_TOKEN:
@@ -37,6 +37,7 @@ def main() -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("list", list_tasks_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    app.add_handler(MessageHandler(filters.VOICE, handle_voice))
     logger.info("Бот запущен (polling), ждёт сообщений...")
     app.run_polling()
 

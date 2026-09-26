@@ -91,3 +91,18 @@ def parse_text_to_tasks(raw_text: str, source_hint: Optional[str] = None) -> lis
         raise ValueError(f"Ожидался список задач в поле 'tasks', получено: {parsed!r}")
 
     return tasks
+
+
+def transcribe_audio(audio_bytes: bytes, filename: str = "voice.ogg") -> str:
+    """
+    Распознаёт голосовое сообщение через Whisper (Groq).
+    filename нужен только чтобы Groq понял формат по расширению —
+    Telegram присылает голосовые в .ogg (кодек Opus), это поддерживаемый формат.
+    """
+    transcription = _client.audio.transcriptions.create(
+        file=(filename, audio_bytes),
+        model="whisper-large-v3",
+        language="ru",
+        response_format="json",
+    )
+    return transcription.text

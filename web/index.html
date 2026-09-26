@@ -156,7 +156,12 @@
     align-items: center;
   }
 
+  .composer-buttons { display: flex; align-items: center; gap: 8px; }
+
   .composer-hint { color: var(--text-faint); font-size: 12px; }
+
+  #micBtn { font-size: 16px; padding: 7px 11px; }
+  #micBtn.recording { border-color: var(--high); color: var(--high); background: rgba(242, 84, 91, .12); }
 
   button.primary {
     background: var(--accent);
@@ -566,7 +571,10 @@
       <textarea id="composerInput" placeholder="Опиши задачу своими словами — я сам разберу категорию, приоритет и дедлайн (можно с временем, например «сегодня в 18:00»)…"></textarea>
       <div class="composer-footer">
         <span class="composer-hint">Enter — новая строка, кнопка — отправить</span>
-        <button class="primary" id="composerBtn">Добавить</button>
+        <div class="composer-buttons">
+          <button class="icon-btn" id="micBtn" title="Голосовой ввод">🎤</button>
+          <button class="primary" id="composerBtn">Добавить</button>
+        </div>
       </div>
     </div>
 
@@ -609,7 +617,10 @@
         <textarea id="noteInput" placeholder="Запиши мысль, идею или напоминание для себя…"></textarea>
         <div class="composer-footer">
           <span class="composer-hint">Enter — новая строка, кнопка — сохранить</span>
-          <button class="primary" id="noteAddBtn">Сохранить</button>
+          <div class="composer-buttons">
+            <button class="icon-btn" id="noteMicBtn" title="Голосовой ввод">🎤</button>
+            <button class="primary" id="noteAddBtn">Сохранить</button>
+          </div>
         </div>
       </div>
       <div class="notes-list" id="notesList"></div>
@@ -1478,6 +1489,57 @@ document.getElementById('composerBtn').onclick = submitComposer;
 document.getElementById('composerInput').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitComposer();
 });
+
+// ---------- Голосовой ввод (Web Speech API, без backend) ----------
+function setupVoiceInput(buttonId, textareaId) {
+  const btn = document.getElementById(buttonId);
+  const textarea = document.getElementById(textareaId);
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    btn.style.display = 'none'; // браузер не поддерживает — просто прячем кнопку
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+  recognition.lang = 'ru-RU';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  let isRecording = false;
+
+  recognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    const sep = textarea.value.trim() ? ' ' : '';
+    textarea.value = textarea.value.trim() + sep + transcript;
+  };
+
+  recognition.onerror = () => {
+    toast('Не удалось распознать речь');
+  };
+
+  recognition.onend = () => {
+    isRecording = false;
+    btn.classList.remove('recording');
+  };
+
+  btn.onclick = () => {
+    if (isRecording) {
+      recognition.stop();
+      return;
+    }
+    try {
+      recognition.start();
+      isRecording = true;
+      btn.classList.add('recording');
+    } catch (e) {
+      // start() бросает ошибку, если распознавание уже идёт — игнорируем
+    }
+  };
+}
+
+setupVoiceInput('micBtn', 'composerInput');
+setupVoiceInput('noteMicBtn', 'noteInput');
 
 renderChips();
 loadTasks();

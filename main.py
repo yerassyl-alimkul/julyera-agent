@@ -61,12 +61,13 @@ if TELEGRAM_BOT_TOKEN:
     from telegram import Update as TgUpdate
     from telegram.ext import Application as TgApplication, CommandHandler, MessageHandler, filters
 
-    from telegram_handlers import handle_text, list_tasks_handler, start
+    from telegram_handlers import handle_text, handle_voice, list_tasks_handler, start
 
     telegram_app = TgApplication.builder().token(TELEGRAM_BOT_TOKEN).build()
     telegram_app.add_handler(CommandHandler("start", start))
     telegram_app.add_handler(CommandHandler("list", list_tasks_handler))
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    telegram_app.add_handler(MessageHandler(filters.VOICE, handle_voice))
 
 
 @asynccontextmanager

@@ -9,6 +9,7 @@ from datetime import date, datetime
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from groq_client import transcribe_audio
 import task_service
 
 logger = logging.getLogger(__name__)
@@ -98,4 +99,38 @@ async def list_tasks_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     lines = ["Активные задачи:"] + [_format_task_line(t) for t in tasks]
+    await update.message.reply_text("\n".join(lines))
+
+
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Голосовое сообщение → распознавание речи (Whisper) → тот же парсер задач."""
+    task_service.upsert_telegram_chat(update.effective_chat.id)
+    await update.message.chat.send_action("typing")
+
+    try:
+        voice = update.message.voice
+        tg_file = await context.bot.get_file(voice.file_id)
+        audio_bytes = bytes(await tg_file.download_as_bytearray())
+        recognized_text = transcribe_audio(audio_bytes)
+    except Exception:
+        logger.exception("Ошибка распознавания голосового сообщения")
+        await update.message.reply_text("Не удалось распознать голосовое сообщение 😕")
+        return
+
+    if not recognized_text.strip():
+        await update.message.reply_text("Не расслышал ничего внятного, попробуй ещё раз.")
+        return
+
+    try:
+        tasks = task_service.create_tasks_from_text(recognized_text)
+    except Exception:
+        logger.exception("Ошибка при разборе текста из голосового сообщения")
+        await update.message.reply_text(f"🎙 Расслышал: «{recognized_text}», но не смог разобрать на задачи.")
+        return
+
+    if not tasks:
+        await update.message.reply_text(f"🎙 Расслышал: «{recognized_text}», но задач в этом не нашёл.")
+        return
+
+    lines = [f"🎙 Расслышал: «{recognized_text}»", "Добавил:"] + [_format_task_line(t) for t in tasks]
     await update.message.reply_text("\n".join(lines))
