@@ -64,3 +64,13 @@ create table subtasks (
 );
 
 create index idx_subtasks_task_id on subtasks (task_id);
+
+-- Новая категория для трекера заявок на работу.
+alter table tasks drop constraint tasks_category_check;
+alter table tasks add constraint tasks_category_check
+  check (category in ('Study', 'Work', 'Personal', 'UniMe', 'JobSearch'));
+
+-- Откат: JobSearch не нужна (пользователь уже работает, не ищет).
+alter table tasks drop constraint tasks_category_check;
+alter table tasks add constraint tasks_category_check
+  check (category in ('Study', 'Work', 'Personal', 'UniMe'));
