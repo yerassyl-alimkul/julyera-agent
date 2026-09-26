@@ -41,6 +41,9 @@ SYSTEM_PROMPT = """Ты — ассистент, который превраща�
 - is_recurring: true, только если из текста явно следует повторяемость
   (например "каждую неделю", "ежедневно"). Тогда recurrence_pattern — одно из
   "daily", "weekly", "monthly". Иначе is_recurring: false, recurrence_pattern: null.
+- Поле tags — список строк, только явные хэштеги из текста (например "#экзамен"
+  превращается в "экзамен", без символа #). Если хэштегов в тексте нет — пустой
+  список []. Не придумывай теги сам, только то, что явно написано через #.
 - Верни ТОЛЬКО валидный JSON-объект вида {{"tasks": [...]}}, без пояснений и без markdown.
 
 Формат каждого элемента массива "tasks":
@@ -52,7 +55,8 @@ SYSTEM_PROMPT = """Ты — ассистент, который превраща�
   "priority": "High | Mid | Low",
   "note": "строка или пусто",
   "is_recurring": true | false,
-  "recurrence_pattern": "daily | weekly | monthly | null"
+  "recurrence_pattern": "daily | weekly | monthly | null",
+  "tags": ["строка", ...]
 }}"""
 
 

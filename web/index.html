@@ -382,6 +382,15 @@
   .card-deadline { font-size: 12px; color: var(--text-faint); }
   .card-deadline.overdue { color: var(--high); }
 
+  .card-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+  .tag-badge {
+    font-size: 11px;
+    color: var(--accent);
+    background: var(--accent-dim);
+    padding: 1px 7px;
+    border-radius: 999px;
+  }
+
   .card-actions { display: flex; gap: 6px; margin-top: 2px; flex-wrap: wrap; }
 
   .icon-btn {
@@ -441,8 +450,21 @@
     opacity: 0;
     pointer-events: none;
     transition: opacity .2s, transform .2s;
+    display: flex;
+    align-items: center;
+    gap: 14px;
   }
-  .toast.show { opacity: 1; transform: translateX(-50%) translateY(-6px); }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(-6px); pointer-events: auto; }
+  .toast-action {
+    background: transparent;
+    border: none;
+    color: var(--accent);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+  }
 
   @media (max-width: 880px) {
     .app { grid-template-columns: 1fr; }
@@ -551,7 +573,10 @@
   </main>
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast">
+  <span id="toastMsg"></span>
+  <button id="toastAction" class="toast-action" style="display: none;"></button>
+</div>
 
 <script>
 // Если страница открыта как обычный сайт (http/https) — используем тот же
@@ -577,12 +602,28 @@ let allNotes = [];
 let editingNoteId = null;
 let allTasks = [];
 
-function toast(msg) {
+function toast(msg, actionLabel, actionFn) {
   const el = document.getElementById('toast');
-  el.textContent = msg;
+  const msgEl = document.getElementById('toastMsg');
+  const actionEl = document.getElementById('toastAction');
+  msgEl.textContent = msg;
+
+  if (actionLabel && actionFn) {
+    actionEl.textContent = actionLabel;
+    actionEl.style.display = '';
+    actionEl.onclick = () => {
+      actionFn();
+      el.classList.remove('show');
+      clearTimeout(toast._t);
+    };
+  } else {
+    actionEl.style.display = 'none';
+    actionEl.onclick = null;
+  }
+
   el.classList.add('show');
   clearTimeout(toast._t);
-  toast._t = setTimeout(() => el.classList.remove('show'), 2600);
+  toast._t = setTimeout(() => el.classList.remove('show'), actionLabel ? 5000 : 2600);
 }
 
 function makeChip(label, active, onClick) {
@@ -701,6 +742,18 @@ function cardEl(task) {
     el.appendChild(dEl);
   }
 
+  if (task.tags && task.tags.length > 0) {
+    const tagsRow = document.createElement('div');
+    tagsRow.className = 'card-tags';
+    task.tags.forEach(tag => {
+      const tagEl = document.createElement('span');
+      tagEl.className = 'tag-badge';
+      tagEl.textContent = `#${tag}`;
+      tagsRow.appendChild(tagEl);
+    });
+    el.appendChild(tagsRow);
+  }
+
   const actions = document.createElement('div');
   actions.className = 'card-actions';
 
@@ -776,6 +829,18 @@ function editCardEl(task, el) {
   dlField.append(dlLabel, dlInput);
   el.appendChild(dlField);
 
+  const tagsField = document.createElement('div');
+  tagsField.className = 'edit-field';
+  const tagsLabel = document.createElement('label');
+  tagsLabel.textContent = 'Теги (через запятую)';
+  const tagsInput = document.createElement('input');
+  tagsInput.className = 'edit-input';
+  tagsInput.type = 'text';
+  tagsInput.placeholder = 'срочно, экзамен';
+  tagsInput.value = (task.tags || []).join(', ');
+  tagsField.append(tagsLabel, tagsInput);
+  el.appendChild(tagsField);
+
   const actions = document.createElement('div');
   actions.className = 'card-actions';
   actions.appendChild(actionBtn('Сохранить', () => saveEdit(task.id, {
@@ -783,6 +848,7 @@ function editCardEl(task, el) {
     category: catSelect,
     priority: prSelect,
     deadline: dlInput,
+    tags: tagsInput,
   }), 'save'));
   actions.appendChild(actionBtn('Отмена', () => { editingTaskId = null; renderCurrentPage(); }));
   el.appendChild(actions);
@@ -801,6 +867,7 @@ async function saveEdit(id, fields) {
     category: fields.category.value,
     priority: fields.priority.value,
     deadline: fields.deadline.value ? fields.deadline.value + ':00' : null,
+    tags: fields.tags.value.split(',').map(t => t.trim()).filter(Boolean),
   };
   try {
     const res = await fetch(`${BASE_URL}/tasks/${id}`, {
@@ -1062,14 +1129,37 @@ async function saveNoteEdit(id, content) {
   }
 }
 
-async function deleteNote(id) {
-  try {
-    const res = await fetch(`${BASE_URL}/notes/${id}`, { method: 'DELETE' });
-    if (!res.ok && res.status !== 204) throw new Error('bad status');
-    await loadNotes();
-  } catch (e) {
-    toast('Не удалось удалить заметку');
-  }
+let pendingNoteDeletions = {}; // id -> { timeoutId, note }
+
+function deleteNote(id) {
+  const note = allNotes.find(n => n.id === id);
+  if (!note) return;
+
+  allNotes = allNotes.filter(n => n.id !== id);
+  renderNotes();
+
+  const timeoutId = setTimeout(async () => {
+    delete pendingNoteDeletions[id];
+    try {
+      const res = await fetch(`${BASE_URL}/notes/${id}`, { method: 'DELETE' });
+      if (!res.ok && res.status !== 204) throw new Error('bad status');
+    } catch (e) {
+      toast('Не удалось удалить заметку — попробуй ещё раз');
+      await loadNotes();
+    }
+  }, 5000);
+
+  pendingNoteDeletions[id] = { timeoutId, note };
+  toast('Заметка удалена', 'Отменить', () => undoDeleteNote(id));
+}
+
+function undoDeleteNote(id) {
+  const pending = pendingNoteDeletions[id];
+  if (!pending) return;
+  clearTimeout(pending.timeoutId);
+  delete pendingNoteDeletions[id];
+  allNotes.unshift(pending.note);
+  renderNotes();
 }
 
 async function submitNote() {
@@ -1179,14 +1269,37 @@ async function updateStatus(id, status) {
   }
 }
 
-async function deleteTask(id) {
-  try {
-    const res = await fetch(`${BASE_URL}/tasks/${id}`, { method: 'DELETE' });
-    if (!res.ok && res.status !== 204) throw new Error('bad status');
-    await loadTasks();
-  } catch (e) {
-    toast('Не удалось удалить задачу');
-  }
+let pendingDeletions = {}; // id -> { timeoutId, task }
+
+function deleteTask(id) {
+  const task = allTasks.find(t => t.id === id);
+  if (!task) return;
+
+  allTasks = allTasks.filter(t => t.id !== id);
+  renderCurrentPage();
+
+  const timeoutId = setTimeout(async () => {
+    delete pendingDeletions[id];
+    try {
+      const res = await fetch(`${BASE_URL}/tasks/${id}`, { method: 'DELETE' });
+      if (!res.ok && res.status !== 204) throw new Error('bad status');
+    } catch (e) {
+      toast('Не удалось удалить задачу — попробуй ещё раз');
+      await loadTasks();
+    }
+  }, 5000);
+
+  pendingDeletions[id] = { timeoutId, task };
+  toast('Задача удалена', 'Отменить', () => undoDeleteTask(id));
+}
+
+function undoDeleteTask(id) {
+  const pending = pendingDeletions[id];
+  if (!pending) return;
+  clearTimeout(pending.timeoutId);
+  delete pendingDeletions[id];
+  allTasks.push(pending.task);
+  renderCurrentPage();
 }
 
 async function submitComposer() {

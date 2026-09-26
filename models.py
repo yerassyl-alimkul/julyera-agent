@@ -3,7 +3,7 @@ Pydantic-модели для валидации входных/выходных 
 """
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -44,6 +44,7 @@ class TaskBase(BaseModel):
     note: Optional[str] = None
     is_recurring: bool = False
     recurrence_pattern: Optional[RecurrencePattern] = None
+    tags: List[str] = Field(default_factory=list)
 
 
 class TaskCreate(TaskBase):
@@ -71,6 +72,7 @@ class TaskUpdate(BaseModel):
     note: Optional[str] = None
     is_recurring: Optional[bool] = None
     recurrence_pattern: Optional[RecurrencePattern] = None
+    tags: Optional[List[str]] = None
 
 
 class Task(TaskBase):

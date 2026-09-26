@@ -50,3 +50,6 @@ create table notes (
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
+
+-- Теги: свободные метки поверх категорий.
+alter table tasks add column tags text[] not null default '{}';
