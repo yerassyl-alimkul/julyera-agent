@@ -33,8 +33,9 @@ from fastapi.staticfiles import StaticFiles
 load_dotenv()
 
 import task_service
+import notes_service
 import google_calendar_service as gcal
-from models import Category, ParseRequest, Priority, Status, Task, TaskCreate, TaskUpdate
+from models import Category, ParseRequest, Priority, Status, Task, TaskCreate, TaskUpdate, Note, NoteCreate, NoteUpdate
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 WEBHOOK_BASE_URL = os.environ.get("WEBHOOK_BASE_URL")  # например https://task-agent.onrender.com
@@ -211,6 +212,32 @@ def google_auth_callback(code: Optional[str] = None, error: Optional[str] = None
 @app.get("/google/status")
 def google_status():
     return {"connected": gcal.is_connected(), "configured": gcal.is_configured()}
+
+
+@app.post("/notes", response_model=Note, status_code=201)
+def create_note(payload: NoteCreate):
+    return notes_service.create_note(payload)
+
+
+@app.get("/notes", response_model=list[Note])
+def list_notes():
+    return notes_service.list_notes()
+
+
+@app.patch("/notes/{note_id}", response_model=Note)
+def update_note(note_id: UUID, payload: NoteUpdate):
+    updated = notes_service.update_note(str(note_id), payload)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Заметка не найдена")
+    return updated
+
+
+@app.delete("/notes/{note_id}", status_code=204)
+def delete_note(note_id: UUID):
+    deleted = notes_service.delete_note(str(note_id))
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Заметка не найдена")
+    return None
 
 
 # Раздаём веб-интерфейс с того же домена, что и API — без хардкода URL,

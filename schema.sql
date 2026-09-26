@@ -42,3 +42,11 @@ create table google_credentials (
 
 -- Связь задачи с созданным для неё событием в Google Calendar.
 alter table tasks add column google_event_id text;
+
+-- Заметки: третья страница — свободный текст, не привязан к задачам.
+create table notes (
+    id uuid primary key default gen_random_uuid(),
+    content text not null,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);

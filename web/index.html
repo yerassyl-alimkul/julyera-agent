@@ -286,6 +286,45 @@
     font-weight: 500;
   }
 
+  .notes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 640px;
+  }
+
+  .note-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .note-content {
+    font-size: 13.5px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+
+  .note-meta { font-size: 11.5px; color: var(--text-faint); }
+
+  .note-edit-textarea {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13.5px;
+    padding: 9px 10px;
+    border-radius: var(--radius-sm);
+    outline: none;
+    resize: vertical;
+    min-height: 60px;
+  }
+  .note-edit-textarea:focus { border-color: var(--accent); }
+
   .list-head {
     display: flex;
     align-items: center;
@@ -468,6 +507,7 @@
     <div class="page-tabs">
       <button class="page-tab active" id="tabList">Список</button>
       <button class="page-tab" id="tabCalendar">Календарь</button>
+      <button class="page-tab" id="tabNotes">Заметки</button>
     </div>
 
     <div id="listView">
@@ -497,6 +537,17 @@
         </div>
       </div>
     </div>
+
+    <div id="notesView" style="display: none;">
+      <div class="composer">
+        <textarea id="noteInput" placeholder="Запиши мысль, идею или напоминание для себя…"></textarea>
+        <div class="composer-footer">
+          <span class="composer-hint">Enter — новая строка, кнопка — сохранить</span>
+          <button class="primary" id="noteAddBtn">Сохранить</button>
+        </div>
+      </div>
+      <div class="notes-list" id="notesList"></div>
+    </div>
   </main>
 </div>
 
@@ -522,6 +573,8 @@ let currentPage = 'list'; // 'list' | 'calendar'
 let calYear = new Date().getFullYear();
 let calMonth = new Date().getMonth(); // 0-based
 let calSelectedDate = null; // 'YYYY-MM-DD' | null
+let allNotes = [];
+let editingNoteId = null;
 let allTasks = [];
 
 function toast(msg) {
@@ -817,9 +870,12 @@ function switchPage(page) {
   currentPage = page;
   document.getElementById('tabList').classList.toggle('active', page === 'list');
   document.getElementById('tabCalendar').classList.toggle('active', page === 'calendar');
+  document.getElementById('tabNotes').classList.toggle('active', page === 'notes');
   document.getElementById('listView').style.display = page === 'list' ? '' : 'none';
   document.getElementById('calendarView').style.display = page === 'calendar' ? '' : 'none';
-  renderCurrentPage();
+  document.getElementById('notesView').style.display = page === 'notes' ? '' : 'none';
+  if (page === 'notes') loadNotes();
+  else renderCurrentPage();
 }
 
 const MONTH_NAMES_RU = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
@@ -917,6 +973,133 @@ function renderCalendar() {
 
 document.getElementById('tabList').onclick = () => switchPage('list');
 document.getElementById('tabCalendar').onclick = () => switchPage('calendar');
+document.getElementById('tabNotes').onclick = () => switchPage('notes');
+
+// ---------- Заметки ----------
+
+async function loadNotes() {
+  try {
+    const res = await fetch(`${BASE_URL}/notes`);
+    if (!res.ok) throw new Error('bad status');
+    allNotes = await res.json();
+    setBackendStatus(true);
+    renderNotes();
+  } catch (e) {
+    setBackendStatus(false);
+  }
+}
+
+function fmtNoteDate(d) {
+  const dt = new Date(d);
+  return dt.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+function noteCardEl(note) {
+  const el = document.createElement('div');
+  el.className = 'note-card';
+
+  if (editingNoteId === note.id) {
+    const textarea = document.createElement('textarea');
+    textarea.className = 'note-edit-textarea';
+    textarea.value = note.content;
+    el.appendChild(textarea);
+
+    const actions = document.createElement('div');
+    actions.className = 'card-actions';
+    actions.appendChild(actionBtn('Сохранить', () => saveNoteEdit(note.id, textarea.value), 'save'));
+    actions.appendChild(actionBtn('Отмена', () => { editingNoteId = null; renderNotes(); }));
+    el.appendChild(actions);
+    return el;
+  }
+
+  const content = document.createElement('div');
+  content.className = 'note-content';
+  content.textContent = note.content;
+  el.appendChild(content);
+
+  const meta = document.createElement('div');
+  meta.className = 'note-meta';
+  meta.textContent = fmtNoteDate(note.updated_at || note.created_at);
+  el.appendChild(meta);
+
+  const actions = document.createElement('div');
+  actions.className = 'card-actions';
+  actions.appendChild(actionBtn('Изменить', () => { editingNoteId = note.id; renderNotes(); }));
+  actions.appendChild(actionBtn('Удалить', () => deleteNote(note.id), 'danger'));
+  el.appendChild(actions);
+
+  return el;
+}
+
+function renderNotes() {
+  const container = document.getElementById('notesList');
+  container.innerHTML = '';
+  if (allNotes.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'Заметок пока нет';
+    container.appendChild(empty);
+  } else {
+    allNotes.forEach(n => container.appendChild(noteCardEl(n)));
+  }
+}
+
+async function saveNoteEdit(id, content) {
+  const trimmed = content.trim();
+  if (!trimmed) { toast('Заметка не может быть пустой'); return; }
+  try {
+    const res = await fetch(`${BASE_URL}/notes/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: trimmed }),
+    });
+    if (!res.ok) throw new Error('bad status');
+    editingNoteId = null;
+    toast('Сохранено');
+    await loadNotes();
+  } catch (e) {
+    toast('Не удалось сохранить заметку');
+  }
+}
+
+async function deleteNote(id) {
+  try {
+    const res = await fetch(`${BASE_URL}/notes/${id}`, { method: 'DELETE' });
+    if (!res.ok && res.status !== 204) throw new Error('bad status');
+    await loadNotes();
+  } catch (e) {
+    toast('Не удалось удалить заметку');
+  }
+}
+
+async function submitNote() {
+  const input = document.getElementById('noteInput');
+  const btn = document.getElementById('noteAddBtn');
+  const content = input.value.trim();
+  if (!content) return;
+
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${BASE_URL}/notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    });
+    if (!res.ok) throw new Error('bad status');
+    input.value = '';
+    await loadNotes();
+  } catch (e) {
+    toast('Не удалось сохранить заметку');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('noteAddBtn').onclick = submitNote;
+document.getElementById('noteInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitNote();
+});
+
 document.getElementById('calPrev').onclick = () => {
   calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; }
   renderCalendar();
