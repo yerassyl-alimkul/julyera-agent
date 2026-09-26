@@ -34,8 +34,23 @@ load_dotenv()
 
 import task_service
 import notes_service
+import subtasks_service
 import google_calendar_service as gcal
-from models import Category, ParseRequest, Priority, Status, Task, TaskCreate, TaskUpdate, Note, NoteCreate, NoteUpdate
+from models import (
+    Category,
+    ParseRequest,
+    Priority,
+    Status,
+    Task,
+    TaskCreate,
+    TaskUpdate,
+    Note,
+    NoteCreate,
+    NoteUpdate,
+    Subtask,
+    SubtaskCreate,
+    SubtaskUpdate,
+)
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 WEBHOOK_BASE_URL = os.environ.get("WEBHOOK_BASE_URL")  # например https://task-agent.onrender.com
@@ -237,6 +252,32 @@ def delete_note(note_id: UUID):
     deleted = notes_service.delete_note(str(note_id))
     if not deleted:
         raise HTTPException(status_code=404, detail="Заметка не найдена")
+    return None
+
+
+@app.post("/tasks/{task_id}/subtasks", response_model=Subtask, status_code=201)
+def create_subtask(task_id: UUID, payload: SubtaskCreate):
+    return subtasks_service.create_subtask(str(task_id), payload)
+
+
+@app.get("/subtasks", response_model=list[Subtask])
+def list_subtasks():
+    return subtasks_service.list_all_subtasks()
+
+
+@app.patch("/subtasks/{subtask_id}", response_model=Subtask)
+def update_subtask(subtask_id: UUID, payload: SubtaskUpdate):
+    updated = subtasks_service.update_subtask(str(subtask_id), payload)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Подзадача не найдена")
+    return updated
+
+
+@app.delete("/subtasks/{subtask_id}", status_code=204)
+def delete_subtask(subtask_id: UUID):
+    deleted = subtasks_service.delete_subtask(str(subtask_id))
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Подзадача не найдена")
     return None
 
 

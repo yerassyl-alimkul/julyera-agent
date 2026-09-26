@@ -53,3 +53,14 @@ create table notes (
 
 -- Теги: свободные метки поверх категорий.
 alter table tasks add column tags text[] not null default '{}';
+
+-- Подзадачи: чек-лист шагов внутри задачи.
+create table subtasks (
+    id uuid primary key default gen_random_uuid(),
+    task_id uuid not null references tasks(id) on delete cascade,
+    content text not null,
+    is_done boolean not null default false,
+    created_at timestamptz not null default now()
+);
+
+create index idx_subtasks_task_id on subtasks (task_id);

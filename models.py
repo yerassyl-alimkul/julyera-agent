@@ -102,3 +102,23 @@ class Note(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class SubtaskCreate(BaseModel):
+    content: str = Field(..., min_length=1)
+
+
+class SubtaskUpdate(BaseModel):
+    content: Optional[str] = None
+    is_done: Optional[bool] = None
+
+
+class Subtask(BaseModel):
+    id: UUID
+    task_id: UUID
+    content: str
+    is_done: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

@@ -391,6 +391,50 @@
     border-radius: 999px;
   }
 
+  .subtasks-block {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 2px 0;
+  }
+  .subtask-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .subtask-checkbox {
+    accent-color: var(--accent);
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+  .subtask-text { font-size: 12.5px; flex: 1; }
+  .subtask-text.done { color: var(--text-faint); text-decoration: line-through; }
+  .subtask-del {
+    background: transparent;
+    border: none;
+    color: var(--text-faint);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 2px;
+  }
+  .subtask-del:hover { color: var(--high); }
+  .subtask-add-row { margin-top: 2px; }
+  .subtask-add-input {
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed var(--border);
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 12.5px;
+    padding: 3px 0;
+    width: 100%;
+    outline: none;
+  }
+  .subtask-add-input:focus { border-bottom-color: var(--accent); color: var(--text); }
+  .subtask-add-input::placeholder { color: var(--text-faint); }
+
   .card-actions { display: flex; gap: 6px; margin-top: 2px; flex-wrap: wrap; }
 
   .icon-btn {
@@ -601,6 +645,7 @@ let calSelectedDate = null; // 'YYYY-MM-DD' | null
 let allNotes = [];
 let editingNoteId = null;
 let allTasks = [];
+let allSubtasks = []; // все подзадачи разом, группируем по task_id на клиенте
 
 function toast(msg, actionLabel, actionFn) {
   const el = document.getElementById('toast');
@@ -701,6 +746,100 @@ function actionBtn(label, onClick, extraClass) {
   return b;
 }
 
+function subtasksBlockEl(taskId) {
+  const wrap = document.createElement('div');
+  wrap.className = 'subtasks-block';
+
+  const items = allSubtasks.filter(s => s.task_id === taskId);
+  items.forEach(sub => {
+    const row = document.createElement('div');
+    row.className = 'subtask-row';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'subtask-checkbox';
+    checkbox.checked = sub.is_done;
+    checkbox.onchange = () => toggleSubtask(sub.id, checkbox.checked);
+    row.appendChild(checkbox);
+
+    const text = document.createElement('span');
+    text.className = 'subtask-text' + (sub.is_done ? ' done' : '');
+    text.textContent = sub.content;
+    row.appendChild(text);
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'subtask-del';
+    delBtn.textContent = '×';
+    delBtn.onclick = () => deleteSubtask(sub.id);
+    row.appendChild(delBtn);
+
+    wrap.appendChild(row);
+  });
+
+  const addRow = document.createElement('div');
+  addRow.className = 'subtask-add-row';
+  const input = document.createElement('input');
+  input.className = 'subtask-add-input';
+  input.type = 'text';
+  input.placeholder = '+ добавить шаг';
+  const submit = () => {
+    const value = input.value.trim();
+    if (!value) return;
+    addSubtask(taskId, value);
+    input.value = '';
+  };
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+  addRow.appendChild(input);
+  wrap.appendChild(addRow);
+
+  return wrap;
+}
+
+async function toggleSubtask(id, isDone) {
+  const sub = allSubtasks.find(s => s.id === id);
+  if (sub) sub.is_done = isDone; // оптимистично, без ожидания ответа
+  renderCurrentPage();
+  try {
+    const res = await fetch(`${BASE_URL}/subtasks/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_done: isDone }),
+    });
+    if (!res.ok) throw new Error('bad status');
+  } catch (e) {
+    toast('Не удалось обновить подзадачу');
+    await loadTasks();
+  }
+}
+
+async function addSubtask(taskId, content) {
+  try {
+    const res = await fetch(`${BASE_URL}/tasks/${taskId}/subtasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    });
+    if (!res.ok) throw new Error('bad status');
+    const created = await res.json();
+    allSubtasks.push(created);
+    renderCurrentPage();
+  } catch (e) {
+    toast('Не удалось добавить подзадачу');
+  }
+}
+
+async function deleteSubtask(id) {
+  allSubtasks = allSubtasks.filter(s => s.id !== id);
+  renderCurrentPage();
+  try {
+    const res = await fetch(`${BASE_URL}/subtasks/${id}`, { method: 'DELETE' });
+    if (!res.ok && res.status !== 204) throw new Error('bad status');
+  } catch (e) {
+    toast('Не удалось удалить подзадачу');
+    await loadTasks();
+  }
+}
+
 function cardEl(task) {
   const el = document.createElement('div');
   el.className = 'card';
@@ -753,6 +892,8 @@ function cardEl(task) {
     });
     el.appendChild(tagsRow);
   }
+
+  el.appendChild(subtasksBlockEl(task.id));
 
   const actions = document.createElement('div');
   actions.className = 'card-actions';
@@ -1211,9 +1352,13 @@ async function loadTasks() {
   if (activeCategory) params.set('category', activeCategory);
   if (activePriority) params.set('priority', activePriority);
   try {
-    const res = await fetch(`${BASE_URL}/tasks?${params.toString()}`);
-    if (!res.ok) throw new Error('bad status');
-    allTasks = await res.json();
+    const [tasksRes, subtasksRes] = await Promise.all([
+      fetch(`${BASE_URL}/tasks?${params.toString()}`),
+      fetch(`${BASE_URL}/subtasks`),
+    ]);
+    if (!tasksRes.ok) throw new Error('bad status');
+    allTasks = await tasksRes.json();
+    allSubtasks = subtasksRes.ok ? await subtasksRes.json() : [];
     setBackendStatus(true);
     renderCurrentPage();
   } catch (e) {
