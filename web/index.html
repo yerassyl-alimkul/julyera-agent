@@ -207,6 +207,23 @@
     min-width: 140px;
   }
 
+  .cal-body {
+    display: flex;
+    gap: 28px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .cal-calendar-col {
+    flex: 1 1 560px;
+    max-width: 640px;
+    min-width: 320px;
+  }
+  .cal-day-tasks-panel {
+    flex: 1 1 300px;
+    min-width: 280px;
+    max-width: 420px;
+  }
+
   .cal-weekdays {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
@@ -224,7 +241,6 @@
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     gap: 6px;
-    max-width: 640px;
   }
 
   .cal-day {
@@ -245,7 +261,21 @@
   .cal-day.today { border-color: var(--accent); }
   .cal-day.selected { background: var(--accent-dim); border-color: var(--accent); }
 
+  .cal-day-num-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
   .cal-day-num { font-size: 12px; color: var(--text-dim); }
+  .cal-day-count {
+    font-size: 10px;
+    color: var(--text);
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0 5px;
+    line-height: 1.5;
+  }
   .cal-day-dots { display: flex; flex-wrap: wrap; gap: 3px; }
   .cal-dot { width: 6px; height: 6px; border-radius: 50%; }
 
@@ -455,11 +485,17 @@
         <button class="icon-btn" id="calNext">→</button>
         <button class="icon-btn" id="calToday">Сегодня</button>
       </div>
-      <div class="cal-weekdays">
-        <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
+      <div class="cal-body">
+        <div class="cal-calendar-col">
+          <div class="cal-weekdays">
+            <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
+          </div>
+          <div class="cal-grid" id="calGrid"></div>
+        </div>
+        <div class="cal-day-tasks-panel" id="calDayTasks">
+          <div class="empty-state">Выбери день, чтобы увидеть задачи</div>
+        </div>
       </div>
-      <div class="cal-grid" id="calGrid"></div>
-      <div id="calDayTasks"></div>
     </div>
   </main>
 </div>
@@ -820,14 +856,25 @@ function renderCalendar() {
     if (key === todayKey) cell.classList.add('today');
     if (key === calSelectedDate) cell.classList.add('selected');
 
-    const num = document.createElement('div');
+    const dayTasks = byDate[key] || [];
+
+    const numRow = document.createElement('div');
+    numRow.className = 'cal-day-num-row';
+    const num = document.createElement('span');
     num.className = 'cal-day-num';
     num.textContent = cellDate.getDate();
-    cell.appendChild(num);
+    numRow.appendChild(num);
+    if (dayTasks.length > 0) {
+      const countBadge = document.createElement('span');
+      countBadge.className = 'cal-day-count';
+      countBadge.textContent = dayTasks.length;
+      numRow.appendChild(countBadge);
+    }
+    cell.appendChild(numRow);
 
     const dots = document.createElement('div');
     dots.className = 'cal-day-dots';
-    (byDate[key] || []).slice(0, 4).forEach(t => {
+    dayTasks.slice(0, 4).forEach(t => {
       const dot = document.createElement('span');
       dot.className = 'cal-dot';
       dot.style.background = PRIORITY_COLOR[t.priority] || 'var(--text-faint)';
@@ -841,7 +888,12 @@ function renderCalendar() {
 
   const dayTasksContainer = document.getElementById('calDayTasks');
   dayTasksContainer.innerHTML = '';
-  if (calSelectedDate) {
+  if (!calSelectedDate) {
+    const hint = document.createElement('div');
+    hint.className = 'empty-state';
+    hint.textContent = 'Выбери день, чтобы увидеть задачи';
+    dayTasksContainer.appendChild(hint);
+  } else {
     const head = document.createElement('div');
     head.className = 'cal-day-tasks-head';
     const [y, m, d] = calSelectedDate.split('-').map(Number);
