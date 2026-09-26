@@ -173,6 +173,89 @@
   button.primary:hover { filter: brightness(1.1); }
   button.primary:disabled { opacity: .5; cursor: default; }
 
+  .page-tabs {
+    display: flex;
+    gap: 6px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 2px;
+  }
+  .page-tab {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 500;
+    padding: 8px 4px 10px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .page-tab:hover { color: var(--text); }
+  .page-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+  .cal-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .cal-month-label {
+    font-family: 'Sora', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    min-width: 140px;
+  }
+
+  .cal-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  .cal-weekdays span {
+    text-align: center;
+    font-size: 11.5px;
+    color: var(--text-faint);
+    font-weight: 500;
+  }
+
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+    max-width: 640px;
+  }
+
+  .cal-day {
+    aspect-ratio: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    cursor: pointer;
+    transition: border-color .15s;
+    min-height: 52px;
+  }
+  .cal-day:hover { border-color: var(--accent); }
+  .cal-day.other-month { opacity: .35; }
+  .cal-day.today { border-color: var(--accent); }
+  .cal-day.selected { background: var(--accent-dim); border-color: var(--accent); }
+
+  .cal-day-num { font-size: 12px; color: var(--text-dim); }
+  .cal-day-dots { display: flex; flex-wrap: wrap; gap: 3px; }
+  .cal-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+  .cal-day-tasks-head {
+    font-size: 12.5px;
+    color: var(--text-dim);
+    margin: 18px 0 10px;
+    font-weight: 500;
+  }
+
   .list-head {
     display: flex;
     align-items: center;
@@ -352,12 +435,31 @@
       </div>
     </div>
 
-    <div>
+    <div class="page-tabs">
+      <button class="page-tab active" id="tabList">Список</button>
+      <button class="page-tab" id="tabCalendar">Календарь</button>
+    </div>
+
+    <div id="listView">
       <div class="list-head">
         <span class="list-title" id="listTitle">To Do</span>
         <span class="list-count" id="listCount">0</span>
       </div>
       <div class="task-list" id="taskList"></div>
+    </div>
+
+    <div id="calendarView" style="display: none;">
+      <div class="cal-header">
+        <button class="icon-btn" id="calPrev">←</button>
+        <span class="cal-month-label" id="calMonthLabel"></span>
+        <button class="icon-btn" id="calNext">→</button>
+        <button class="icon-btn" id="calToday">Сегодня</button>
+      </div>
+      <div class="cal-weekdays">
+        <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div id="calDayTasks"></div>
     </div>
   </main>
 </div>
@@ -380,6 +482,10 @@ let activeCategory = null;
 let activePriority = null;
 let viewMode = 'active'; // 'active' | 'archive'
 let editingTaskId = null;
+let currentPage = 'list'; // 'list' | 'calendar'
+let calYear = new Date().getFullYear();
+let calMonth = new Date().getMonth(); // 0-based
+let calSelectedDate = null; // 'YYYY-MM-DD' | null
 let allTasks = [];
 
 function toast(msg) {
@@ -511,7 +617,7 @@ function cardEl(task) {
 
   if (viewMode === 'active') {
     actions.appendChild(actionBtn('Готово', () => updateStatus(task.id, 'Done')));
-    actions.appendChild(actionBtn('Изменить', () => { editingTaskId = task.id; renderList(); }));
+    actions.appendChild(actionBtn('Изменить', () => { editingTaskId = task.id; renderCurrentPage(); }));
   } else {
     actions.appendChild(actionBtn('Вернуть', () => updateStatus(task.id, 'To Do')));
   }
@@ -589,7 +695,7 @@ function editCardEl(task, el) {
     priority: prSelect,
     deadline: dlInput,
   }), 'save'));
-  actions.appendChild(actionBtn('Отмена', () => { editingTaskId = null; renderList(); }));
+  actions.appendChild(actionBtn('Отмена', () => { editingTaskId = null; renderCurrentPage(); }));
   el.appendChild(actions);
 
   return el;
@@ -655,6 +761,126 @@ function renderList() {
   document.getElementById('statHigh').textContent = activeTasks.filter(t => t.priority === 'High').length;
 }
 
+// Ключ "YYYY-MM-DD" из дедлайна задачи, игнорируя время и любое смещение
+// в строке — используем ту же логику, что и parseNaiveDeadline.
+function dateKey(deadlineStr) {
+  const dt = parseNaiveDeadline(deadlineStr);
+  if (!dt) return null;
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, '0');
+  const d = String(dt.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function renderCurrentPage() {
+  if (currentPage === 'list') renderList();
+  else renderCalendar();
+}
+
+function switchPage(page) {
+  currentPage = page;
+  document.getElementById('tabList').classList.toggle('active', page === 'list');
+  document.getElementById('tabCalendar').classList.toggle('active', page === 'calendar');
+  document.getElementById('listView').style.display = page === 'list' ? '' : 'none';
+  document.getElementById('calendarView').style.display = page === 'calendar' ? '' : 'none';
+  renderCurrentPage();
+}
+
+const MONTH_NAMES_RU = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+
+function renderCalendar() {
+  const grid = document.getElementById('calGrid');
+  grid.innerHTML = '';
+  document.getElementById('calMonthLabel').textContent = `${MONTH_NAMES_RU[calMonth]} ${calYear}`;
+
+  const activeTasks = allTasks.filter(t => t.status !== 'Done' && t.deadline);
+  const byDate = {};
+  activeTasks.forEach(t => {
+    const key = dateKey(t.deadline);
+    if (!key) return;
+    (byDate[key] = byDate[key] || []).push(t);
+  });
+
+  const firstOfMonth = new Date(calYear, calMonth, 1);
+  // Понедельник — начало недели: смещаем JS-нумерацию (0=Вс) на 0=Пн.
+  const startOffset = (firstOfMonth.getDay() + 6) % 7;
+  const gridStart = new Date(calYear, calMonth, 1 - startOffset);
+
+  const todayKey = dateKey(new Date().toISOString());
+
+  for (let i = 0; i < 42; i++) {
+    const cellDate = new Date(gridStart);
+    cellDate.setDate(gridStart.getDate() + i);
+    const key = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2, '0')}-${String(cellDate.getDate()).padStart(2, '0')}`;
+    const isOtherMonth = cellDate.getMonth() !== calMonth;
+
+    const cell = document.createElement('div');
+    cell.className = 'cal-day';
+    if (isOtherMonth) cell.classList.add('other-month');
+    if (key === todayKey) cell.classList.add('today');
+    if (key === calSelectedDate) cell.classList.add('selected');
+
+    const num = document.createElement('div');
+    num.className = 'cal-day-num';
+    num.textContent = cellDate.getDate();
+    cell.appendChild(num);
+
+    const dots = document.createElement('div');
+    dots.className = 'cal-day-dots';
+    (byDate[key] || []).slice(0, 4).forEach(t => {
+      const dot = document.createElement('span');
+      dot.className = 'cal-dot';
+      dot.style.background = PRIORITY_COLOR[t.priority] || 'var(--text-faint)';
+      dots.appendChild(dot);
+    });
+    cell.appendChild(dots);
+
+    cell.onclick = () => { calSelectedDate = key; renderCalendar(); };
+    grid.appendChild(cell);
+  }
+
+  const dayTasksContainer = document.getElementById('calDayTasks');
+  dayTasksContainer.innerHTML = '';
+  if (calSelectedDate) {
+    const head = document.createElement('div');
+    head.className = 'cal-day-tasks-head';
+    const [y, m, d] = calSelectedDate.split('-').map(Number);
+    head.textContent = new Date(y, m - 1, d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+    dayTasksContainer.appendChild(head);
+
+    const dayTasks = byDate[calSelectedDate] || [];
+    if (dayTasks.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'На этот день задач нет';
+      dayTasksContainer.appendChild(empty);
+    } else {
+      const list = document.createElement('div');
+      list.className = 'task-list';
+      dayTasks.forEach(t => list.appendChild(cardEl(t)));
+      dayTasksContainer.appendChild(list);
+    }
+  }
+}
+
+document.getElementById('tabList').onclick = () => switchPage('list');
+document.getElementById('tabCalendar').onclick = () => switchPage('calendar');
+document.getElementById('calPrev').onclick = () => {
+  calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; }
+  renderCalendar();
+};
+document.getElementById('calNext').onclick = () => {
+  calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; }
+  renderCalendar();
+};
+document.getElementById('calToday').onclick = () => {
+  const now = new Date();
+  calYear = now.getFullYear();
+  calMonth = now.getMonth();
+  calSelectedDate = null;
+  renderCalendar();
+};
+
 async function loadTasks() {
   const params = new URLSearchParams();
   if (activeCategory) params.set('category', activeCategory);
@@ -664,7 +890,7 @@ async function loadTasks() {
     if (!res.ok) throw new Error('bad status');
     allTasks = await res.json();
     setBackendStatus(true);
-    renderList();
+    renderCurrentPage();
   } catch (e) {
     setBackendStatus(false);
   }
