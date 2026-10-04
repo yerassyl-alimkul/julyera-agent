@@ -120,8 +120,11 @@ def update_task(task_id: str, payload: TaskUpdate) -> Optional[dict]:
             "note": current.get("note"),
             "is_recurring": True,
             "recurrence_pattern": current.get("recurrence_pattern"),
+            "tags": current.get("tags") or [],
         }
-        supabase.table(TABLE).insert(new_task).execute()
+        inserted = supabase.table(TABLE).insert(new_task).execute()
+        if inserted.data:
+            _sync_google_upsert(inserted.data[0])
 
     # Синхронизация с Google Calendar: закрыли задачу — убираем событие из
     # календаря; иначе, если есть дедлайн, создаём/обновляем событие;

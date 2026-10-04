@@ -1174,7 +1174,9 @@ function renderCalendar() {
   const startOffset = (firstOfMonth.getDay() + 6) % 7;
   const gridStart = new Date(calYear, calMonth, 1 - startOffset);
 
-  const todayKey = dateKey(new Date().toISOString());
+  // Сегодняшняя дата по часам браузера (toISOString дал бы дату по UTC).
+  const now = new Date();
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
   for (let i = 0; i < 42; i++) {
     const cellDate = new Date(gridStart);
