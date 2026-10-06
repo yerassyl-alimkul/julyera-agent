@@ -4,8 +4,9 @@
 """
 import json
 import os
-from datetime import date
+from datetime import datetime
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from groq import Groq
@@ -19,6 +20,11 @@ if not GROQ_API_KEY:
 _client = Groq(api_key=GROQ_API_KEY)
 
 MODEL = "openai/gpt-oss-120b"
+
+# «Сегодня» для разбора «завтра», «в пятницу» и приоритета считается по времени владельца,
+# а не по часам сервера (UTC): иначе после полуночи по Италии «завтра» сдвигается на день.
+# Та же зона, что у событий в google_calendar_service.py.
+USER_TIMEZONE = ZoneInfo("Europe/Rome")
 
 SYSTEM_PROMPT = """Ты — ассистент, который превращает произвольный текст (учебный материал,
 письмо, список дел) в структурированные задачи.
@@ -65,7 +71,7 @@ def parse_text_to_tasks(raw_text: str, source_hint: Optional[str] = None) -> lis
     Отправляет сырой текст в Groq и возвращает список словарей,
     готовых к вставке в таблицу tasks (без id/created_at/updated_at).
     """
-    system = SYSTEM_PROMPT.format(today=date.today().isoformat())
+    system = SYSTEM_PROMPT.format(today=datetime.now(USER_TIMEZONE).date().isoformat())
     user_content = raw_text
     if source_hint:
         user_content = f"[Источник: {source_hint}]\n{raw_text}"

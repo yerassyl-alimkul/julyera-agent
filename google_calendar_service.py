@@ -8,14 +8,13 @@
 """
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
 
 from database import supabase
 
@@ -89,6 +88,13 @@ def _load_credentials() -> Optional[Credentials]:
     if not result.data:
         return None
     row = result.data[0]
+    # Срок действия access_token обязательно передаём: без него google-auth считает
+    # токен вечным, не обновляет его заранее и падает уже посреди запроса к API.
+    expiry = None
+    if row.get("token_expiry"):
+        expiry = datetime.fromisoformat(row["token_expiry"])
+        if expiry.tzinfo is not None:  # google-auth ждёт «голое» время в UTC
+            expiry = expiry.astimezone(timezone.utc).replace(tzinfo=None)
     creds = Credentials(
         token=row.get("access_token"),
         refresh_token=row["refresh_token"],
@@ -96,6 +102,7 @@ def _load_credentials() -> Optional[Credentials]:
         client_id=GOOGLE_CLIENT_ID,
         client_secret=GOOGLE_CLIENT_SECRET,
         scopes=SCOPES,
+        expiry=expiry,
     )
     if not creds.valid:
         creds.refresh(GoogleRequest())
@@ -113,7 +120,11 @@ def _get_service():
         return None
     if not creds:
         return None
-    return build("calendar", "v3", credentials=creds, cache_discovery=False)
+    try:
+        return build("calendar", "v3", credentials=creds, cache_discovery=False)
+    except Exception:
+        logger.exception("Не удалось создать клиент Google Calendar")
+        return None
 
 
 def _event_body(task: dict) -> dict:
@@ -150,16 +161,18 @@ def sync_task_upsert(task: dict) -> Optional[str]:
     if not service:
         return task.get("google_event_id")
 
-    body = _event_body(task)
     event_id = task.get("google_event_id")
 
     try:
+        body = _event_body(task)
         if event_id:
             service.events().update(calendarId="primary", eventId=event_id, body=body).execute()
             return event_id
         created = service.events().insert(calendarId="primary", body=body).execute()
         return created["id"]
-    except HttpError:
+    except Exception:
+        # Не только HttpError: сеть, тайм-аут, отозванный refresh_token (RefreshError).
+        # Задача уже сохранена в базе, поэтому ошибка календаря не должна ронять запрос.
         logger.exception("Ошибка синхронизации с Google Calendar (upsert)")
         return event_id
 
@@ -172,5 +185,5 @@ def sync_task_delete(event_id: Optional[str]) -> None:
         return
     try:
         service.events().delete(calendarId="primary", eventId=event_id).execute()
-    except HttpError:
+    except Exception:
         logger.exception("Ошибка синхронизации с Google Calendar (delete)")

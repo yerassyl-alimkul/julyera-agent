@@ -2623,7 +2623,14 @@ async function submitComposer() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }),
     });
-    if (!res.ok) throw new Error('bad status');
+    if (!res.ok) {
+      // 422 и 502 — разбор не удался, задач нет. Другая ошибка могла случиться уже после
+      // сохранения задачи, поэтому перечитываем список и не обещаем, что ничего не добавилось.
+      if (res.status === 422) toast('Не нашёл в тексте задач, попробуй переформулировать');
+      else if (res.status === 502) toast('Не удалось разобрать текст');
+      else { toast('Сервер ответил ошибкой. Проверь список: задача могла сохраниться'); loadTasks(); }
+      return;
+    }
     const created = await res.json();
     input.value = '';
     closeNewTask();
@@ -2637,7 +2644,9 @@ async function submitComposer() {
     switchPage('list');
     await loadTasks();
   } catch (e) {
-    toast('Не удалось разобрать текст');
+    // Нет ответа (сеть, сервер просыпается): запрос мог дойти, поэтому тоже перечитываем список.
+    toast('Нет связи с сервером. Проверь список: задача могла сохраниться');
+    loadTasks();
   } finally {
     btn.disabled = false;
     btn.textContent = 'Добавить';
