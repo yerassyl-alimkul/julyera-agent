@@ -12,6 +12,7 @@ from groq_client import parse_text_to_tasks
 from models import Status, TaskCreate, TaskUpdate
 
 TABLE = "tasks"
+NULLABLE_FIELDS = {"deadline", "note", "source", "recurrence_pattern"}
 
 
 def _next_deadline(current: Optional[datetime], pattern: Optional[str]) -> Optional[datetime]:
@@ -95,7 +96,13 @@ def update_task(task_id: str, payload: TaskUpdate) -> Optional[dict]:
     if not current:
         return None
 
-    update_data = payload.model_dump(mode="json", exclude_none=True)
+    # Берём только переданные поля. Явный null разрешён там, где колонка может быть пустой
+    # (так снимается дедлайн); для остальных полей null игнорируется.
+    update_data = {
+        key: value
+        for key, value in payload.model_dump(mode="json", exclude_unset=True).items()
+        if value is not None or key in NULLABLE_FIELDS
+    }
     update_data["updated_at"] = datetime.utcnow().isoformat()
 
     result = supabase.table(TABLE).update(update_data).eq("id", task_id).execute()

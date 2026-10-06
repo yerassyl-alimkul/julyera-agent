@@ -577,35 +577,48 @@
     text-align: center;
   }
 
+  /* ---------- Toast: уведомление над нижней панелью (макет Deleted) ---------- */
   .toast {
     position: fixed;
-    bottom: 20px;
     left: 50%;
-    transform: translateX(-50%);
-    background: var(--surface-alt);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 10px 18px;
-    border-radius: var(--radius-md);
-    font-size: 13px;
+    bottom: calc(116px + env(safe-area-inset-bottom));
+    width: min(100% - 2 * var(--gutter), 480px - 2 * var(--gutter));
+    z-index: 80;
+    overflow: hidden;
+    border-radius: var(--radius-compact);
+    background: var(--ink);
+    color: #FFFFFF;
     opacity: 0;
+    transform: translate(-50%, 12px);
     pointer-events: none;
-    transition: opacity .2s, transform .2s;
+    transition: opacity var(--dur-base) ease-out, transform var(--dur-base) ease-out;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+  .toast-body {
+    min-height: 56px;
     display: flex;
     align-items: center;
-    gap: 14px;
+    justify-content: space-between;
+    gap: var(--gap-l);
+    padding: 6px 8px 6px 18px;
   }
-  .toast.show { opacity: 1; transform: translateX(-50%) translateY(-6px); pointer-events: auto; }
+  #toastMsg { font-size: 15px; font-weight: 500; }
   .toast-action {
-    background: transparent;
+    flex: 0 0 auto;
+    height: var(--touch);
+    padding: 0 14px;
     border: none;
-    color: var(--accent);
-    font-family: inherit;
-    font-size: 13px;
+    background: transparent;
+    color: var(--cat-personal);
+    font-size: 15px;
     font-weight: 600;
     cursor: pointer;
-    padding: 0;
   }
+  .toast-progress { height: 3px; background: rgba(255, 255, 255, 0.18); }
+  .toast-progress[hidden] { display: none; }
+  .toast-progress-fill { height: 100%; width: 100%; background: var(--cat-personal); transform-origin: left; }
+  .toast-progress-fill.run { animation: toast-countdown 5000ms linear forwards; }
+  @keyframes toast-countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 
   .mobile-overlay {
     display: none;
@@ -830,7 +843,7 @@
   }
   .fab svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
 
-  /* ---------- Экран «Новая задача» (временно: каркас, оформление на шаге 3) ---------- */
+  /* ---------- Модальные экраны: NewTask и Edit ---------- */
   .sheet {
     position: fixed;
     inset: 0;
@@ -838,16 +851,318 @@
     overflow-y: auto;
     background: var(--bg);
   }
-  .sheet[hidden] { display: none; }
-  .sheet-inner { max-width: 480px; margin: 0 auto; padding: 0 var(--gutter) var(--gutter); }
-  .sheet-head { display: flex; align-items: center; gap: var(--gap-l); padding: calc(12px + env(safe-area-inset-top)) 0 var(--gap-section); }
-  .sheet-head .t-modal-title { margin: 0; }
+  .sheet-inner {
+    max-width: 480px;
+    margin: 0 auto;
+    /* снизу место под закреплённую панель с главной кнопкой */
+    padding: 0 var(--gutter) calc(120px + env(safe-area-inset-bottom));
+  }
+  .sheet-head {
+    display: grid;
+    grid-template-columns: var(--touch) 1fr var(--touch);
+    align-items: center;
+    gap: var(--gap-s);
+    padding-top: calc(12px + env(safe-area-inset-top));
+  }
+  .sheet-head .t-modal-title { margin: 0; text-align: center; }
+  .sheet-footer {
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(100%, 480px);
+    display: flex;
+    align-items: center;
+    gap: var(--gap-l);
+    padding: 14px var(--gutter) calc(16px + env(safe-area-inset-bottom));
+    background: var(--bg);
+    border-top: 1px solid var(--hairline);
+  }
+  .btn-primary {
+    flex: 1;
+    height: var(--touch-l);
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-fab);
+    background: var(--accent);
+    color: #FFFFFF;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-primary:disabled { opacity: .6; cursor: default; }
+  .btn-mic {
+    flex: 0 0 var(--touch-l);
+    width: var(--touch-l);
+    height: var(--touch-l);
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--ink);
+    border-radius: var(--radius-fab);
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .btn-mic svg, .btn-danger svg, .swipe-actions svg {
+    width: 20px; height: 20px;
+    fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .btn-mic svg { width: 24px; height: 24px; }
+  .btn-mic.recording { border-color: var(--danger); color: var(--danger); background: rgba(179, 38, 30, .08); }
+
+  /* NewTask */
+  .newtask-body { padding-top: 32px; }
+  .newtask-label { display: block; margin-bottom: var(--gap-m); font-size: 14px; font-weight: 500; color: var(--ink-muted); }
+  .newtask-input {
+    width: 100%;
+    height: 200px;
+    padding: 18px;
+    border: 1.5px solid var(--ink);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    font-size: 20px;
+    line-height: 1.4;
+    resize: none;
+    outline: none;
+  }
+  .newtask-hint { margin: var(--gap-l) 0 0; font-size: 14px; line-height: 1.45; color: var(--ink-muted); }
+
+  /* Edit: форма */
+  .edit-form { display: flex; flex-direction: column; gap: var(--gap-section); padding-top: var(--gap-header); }
+  .form-section { display: flex; flex-direction: column; gap: var(--gap-m); }
+  .form-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--gap-s); }
+  .form-label { margin: 0; font-family: var(--font-text); font-size: 14px; font-weight: 600; color: var(--ink-muted); }
+  .form-aside { font-size: 13px; color: var(--ink-muted); }
+  .link-btn {
+    min-height: var(--touch);
+    padding: 0 4px;
+    border: none;
+    background: transparent;
+    color: var(--ink-muted);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .field {
+    width: 100%;
+    height: 52px;
+    padding: 0 16px;
+    border: 1.5px solid var(--line);
+    border-radius: var(--radius-input);
+    background: var(--surface);
+    font-size: 16px;
+    outline: none;
+  }
+  .field:focus { border-color: var(--ink); }
+  .field-title {
+    height: 96px;
+    padding: 14px 16px;
+    border-color: var(--ink);
+    border-radius: var(--radius-input-l);
+    font-size: 18px;
+    line-height: 1.35;
+    resize: none;
+  }
+  .field-row { display: flex; gap: var(--gap-s); }
+  .field-row .field-date { flex: 1.6; min-width: 0; }
+  .field-row .field-time { flex: 1; min-width: 0; }
+
+  /* FilterChip (выбор категории и приоритета) */
+  .chip-group { display: flex; flex-wrap: wrap; gap: var(--gap-s); }
+  .choice-chip {
+    height: var(--touch);
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    gap: var(--gap-s);
+    border: 1.5px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .choice-chip[aria-pressed="true"] { border-color: var(--ink); font-weight: 600; }
+  .choice-chip.prio[aria-pressed="true"] { background: var(--hairline); }
+  .cat-dot { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--ink); }
+  .cat-Work .cat-dot, .choice-chip.cat-Work[aria-pressed="true"] { background: var(--cat-work); }
+  .cat-UniMe .cat-dot, .choice-chip.cat-UniMe[aria-pressed="true"] { background: var(--cat-unime); }
+  .cat-Study .cat-dot, .choice-chip.cat-Study[aria-pressed="true"] { background: var(--cat-study); }
+  .cat-Personal .cat-dot, .choice-chip.cat-Personal[aria-pressed="true"] { background: var(--cat-personal); }
+  .mini-bars { display: flex; align-items: flex-end; gap: 2px; height: 14px; }
+  .mini-bars span { width: 3px; border-radius: 1.5px; background: var(--bar-off); }
+  .mini-bars span:nth-child(1) { height: 6px; }
+  .mini-bars span:nth-child(2) { height: 10px; }
+  .mini-bars span:nth-child(3) { height: 14px; }
+  .mini-bars span.on { background: var(--ink); }
+
+  /* StepRow */
+  .step-list { display: flex; flex-direction: column; }
+  .step-row { min-height: 48px; display: flex; align-items: center; gap: 4px; }
+  .step-check {
+    flex: 0 0 var(--touch);
+    width: var(--touch);
+    height: var(--touch);
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+  }
+  .step-circle {
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 2px solid var(--ink);
+    transition: transform var(--dur-fast) ease-out, background-color var(--dur-fast) ease-out;
+  }
+  .step-circle svg {
+    width: 11px; height: 11px;
+    fill: none; stroke: transparent; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .step-row.done .step-circle { background: var(--ink); }
+  .step-row.done .step-circle svg { stroke: #FFFFFF; }
+  .step-text { flex: 1; min-width: 0; font-size: 16px; line-height: 1.3; overflow-wrap: anywhere; }
+  .step-row.done .step-text { text-decoration: line-through; color: var(--ink-muted); }
+  .step-remove {
+    flex: 0 0 var(--touch);
+    width: var(--touch);
+    height: var(--touch);
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--ink-muted);
+    cursor: pointer;
+  }
+  .step-remove svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .step-input {
+    width: 100%;
+    height: 48px;
+    margin-top: 4px;
+    padding: 0 16px;
+    border: 1.5px dashed var(--dashed);
+    border-radius: var(--radius-input);
+    background: transparent;
+    font-size: 16px;
+    outline: none;
+  }
+  .step-input:focus { border-color: var(--ink); }
+  .btn-danger {
+    width: 100%;
+    height: 52px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--gap-m);
+    border: 1.5px solid var(--danger);
+    border-radius: var(--radius-input-l);
+    background: transparent;
+    color: var(--danger);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* ---------- Свайп по строке (макет Swipe) ---------- */
+  .swipe { position: relative; overflow: hidden; border-radius: var(--radius-card); }
+  .swipe-track {
+    display: flex;
+    align-items: stretch;
+    gap: var(--gap-s);
+    width: calc(100% + 140px);
+    transition: transform var(--dur-swipe) ease-out;
+    touch-action: pan-y; /* вертикальную прокрутку оставляем браузеру */
+  }
+  .swipe-track.dragging { transition: none; }
+  .swipe-track > .task-row { flex: 0 0 calc(100% - 140px); }
+  .swipe-actions { flex: 0 0 132px; display: flex; gap: var(--gap-s); }
+  .swipe-actions button {
+    flex: 1;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border: none;
+    border-radius: var(--radius-card);
+    color: #FFFFFF;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .swipe-edit { background: var(--ink); }
+  .swipe-delete { background: var(--danger); }
+
+  /* ---------- Раскрытая карточка (макет TaskExpanded) ---------- */
+  .task-row { flex-wrap: wrap; cursor: pointer; }
+  .task-row.has-more { padding-right: 6px; }
+  .row-chevron {
+    flex: 0 0 var(--touch);
+    width: var(--touch);
+    height: var(--touch);
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .row-chevron svg {
+    width: 20px; height: 20px;
+    fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;
+    transition: transform var(--dur-base) ease-out;
+  }
+  .row-chevron[aria-expanded="true"] svg { transform: rotate(180deg); }
+  .task-row.has-more .prio-bars { margin-right: 10px; }
+  .row-more {
+    flex: 0 0 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 0 10px 6px 50px;
+    cursor: default;
+  }
+  .row-more-head { display: flex; align-items: baseline; justify-content: space-between; font-size: 13px; }
+  .row-more-head b { font-weight: 600; color: var(--ink); }
+  .row-more-head span { color: var(--ink-meta); }
+  .row-more .step-row { min-height: 44px; gap: 2px; }
+  .row-more .step-check { margin-left: -12px; }
+  .row-more .step-circle { width: 20px; height: 20px; }
+  .row-more .step-circle svg { width: 10px; height: 10px; }
+  .row-more .step-text { font-size: 15px; }
+  .row-more .step-row.done .step-text { color: var(--ink); }
+  .tag-pills { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 2px; }
+  .tag-pill { padding: 3px 10px; border-radius: var(--radius-pill); background: var(--tag-bg); font-size: 12px; font-weight: 600; }
+  .row-more .step-input {
+    height: 44px;
+    margin-top: 4px;
+    padding: 0 14px;
+    border-color: rgba(23, 24, 28, 0.35);
+    border-radius: var(--radius-btn);
+    font-size: 15px;
+  }
+
   body.no-scroll { overflow: hidden; }
 
   /* ВРЕМЕННО: отступ под верхней панелью у старых экранов (новые на шагах 5 и 6) */
   #calendarView, #notesView { padding-top: var(--gap-section); }
 
-  .toast { bottom: calc(100px + env(safe-area-inset-bottom)); z-index: 80; }
 
 </style>
 </head>
@@ -982,31 +1297,88 @@
   </button>
 </div>
 
-<!-- ВРЕМЕННО: каркас экрана NewTask со старым полем ввода, оформление на шаге 3 -->
+<!-- Экран «Новая задача» (макет NewTask) -->
 <div class="sheet" id="newTaskSheet" role="dialog" aria-modal="true" aria-labelledby="newTaskTitle" hidden>
   <div class="sheet-inner">
     <div class="sheet-head">
-      <button class="tb-btn" id="newTaskClose" aria-label="Закрыть">
-        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
-      </button>
+      <button class="tb-btn" id="newTaskClose" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       <h2 class="t-modal-title" id="newTaskTitle">Новая задача</h2>
+      <span></span>
     </div>
-    <div class="composer">
-      <textarea id="composerInput" placeholder="Опиши задачу своими словами — я сам разберу категорию, приоритет и дедлайн (можно с временем, например «сегодня в 18:00»)…"></textarea>
-      <div class="composer-footer">
-        <span class="composer-hint">Enter — новая строка, кнопка — отправить</span>
-        <div class="composer-buttons">
-          <button class="icon-btn" id="micBtn" title="Голосовой ввод" aria-label="Голосовой ввод">🎤</button>
-          <button class="primary" id="composerBtn">Добавить</button>
-        </div>
-      </div>
+    <div class="newtask-body">
+      <label class="newtask-label" for="composerInput">Опиши задачу своими словами</label>
+      <textarea class="newtask-input" id="composerInput"></textarea>
+      <p class="newtask-hint">Дату и время можно писать словами («завтра в 18:00»), теги через решётку («#экзамен»). Категорию и приоритет приложение определит само.</p>
     </div>
+  </div>
+  <div class="sheet-footer">
+    <button class="btn-mic" id="micBtn" aria-label="Наговорить задачу голосом">
+      <svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+    </button>
+    <button class="btn-primary" id="composerBtn">Добавить</button>
   </div>
 </div>
 
-<div class="toast" id="toast">
-  <span id="toastMsg"></span>
-  <button id="toastAction" class="toast-action" style="display: none;"></button>
+<!-- Экран «Изменить задачу» (макет Edit); содержимое заполняет openEdit() -->
+<div class="sheet" id="editSheet" role="dialog" aria-modal="true" aria-labelledby="editTitle" hidden>
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <button class="tb-btn" id="editClose" aria-label="Закрыть без сохранения"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <h2 class="t-modal-title" id="editTitle">Изменить задачу</h2>
+      <span></span>
+    </div>
+    <div class="edit-form">
+      <section class="form-section">
+        <label class="form-label" for="editText">Задача</label>
+        <textarea class="field field-title" id="editText"></textarea>
+      </section>
+      <section class="form-section">
+        <h3 class="form-label" id="editCatLabel">Категория</h3>
+        <div class="chip-group" id="editCategory" role="group" aria-labelledby="editCatLabel"></div>
+      </section>
+      <section class="form-section">
+        <h3 class="form-label" id="editPrioLabel">Приоритет</h3>
+        <div class="chip-group" id="editPriority" role="group" aria-labelledby="editPrioLabel"></div>
+      </section>
+      <section class="form-section">
+        <div class="form-section-head">
+          <h3 class="form-label">Дедлайн</h3>
+          <button class="link-btn" id="editClearDeadline" type="button">Без даты</button>
+        </div>
+        <div class="field-row">
+          <input class="field field-date" id="editDate" type="date" aria-label="Дата дедлайна">
+          <input class="field field-time" id="editTime" type="time" aria-label="Время дедлайна">
+        </div>
+      </section>
+      <section class="form-section">
+        <label class="form-label" for="editTags">Теги (через запятую)</label>
+        <input class="field" id="editTags" type="text" autocomplete="off">
+      </section>
+      <section class="form-section" style="gap: 6px;">
+        <div class="form-section-head">
+          <h3 class="form-label">Шаги</h3>
+          <span class="form-aside" id="editStepsCount"></span>
+        </div>
+        <div class="step-list" id="editSteps"></div>
+        <input class="step-input" id="editStepInput" type="text" placeholder="+ добавить шаг" aria-label="Новый шаг" autocomplete="off">
+      </section>
+      <button class="btn-danger" id="editDelete" type="button">
+        <svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/></svg>
+        Удалить задачу
+      </button>
+    </div>
+  </div>
+  <div class="sheet-footer">
+    <button class="btn-primary" id="editSave">Сохранить</button>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite">
+  <div class="toast-body">
+    <span id="toastMsg"></span>
+    <button id="toastAction" class="toast-action" style="display: none;"></button>
+  </div>
+  <div class="toast-progress" id="toastProgress" hidden><div class="toast-progress-fill" id="toastProgressFill"></div></div>
 </div>
 
 <script>
@@ -1052,6 +1424,14 @@ function toast(msg, actionLabel, actionFn) {
     actionEl.style.display = 'none';
     actionEl.onclick = null;
   }
+
+  // Полоска времени только у уведомлений с действием (5 с на отмену).
+  const progress = document.getElementById('toastProgress');
+  const fill = document.getElementById('toastProgressFill');
+  progress.hidden = !(actionLabel && actionFn);
+  fill.classList.remove('run');
+  void fill.offsetWidth; // перезапуск анимации, если уведомление пришло поверх прежнего
+  if (actionLabel && actionFn) fill.classList.add('run');
 
   el.classList.add('show');
   clearTimeout(toast._t);
@@ -1392,14 +1772,14 @@ async function saveEdit(id, fields) {
   const taskText = fields.task.value.trim();
   if (!taskText) {
     toast('Текст задачи не может быть пустым');
-    return;
+    return false;
   }
   const payload = {
     task: taskText,
     category: fields.category.value,
     priority: fields.priority.value,
     deadline: fields.deadline.value ? fields.deadline.value + ':00' : null,
-    tags: fields.tags.value.split(',').map(t => t.trim()).filter(Boolean),
+    tags: fields.tags.value.split(',').map(t => t.trim().replace(/^#+/, '')).filter(Boolean),
   };
   try {
     const res = await fetch(`${BASE_URL}/tasks/${id}`, {
@@ -1411,8 +1791,10 @@ async function saveEdit(id, fields) {
     editingTaskId = null;
     toast('Сохранено');
     await loadTasks();
+    return true;
   } catch (e) {
     toast('Не удалось сохранить изменения');
+    return false;
   }
 }
 
@@ -1464,6 +1846,7 @@ function dateKey(deadlineStr) {
 
 function renderCurrentPage() {
   updateStats();
+  if (editingId) renderEditSteps();
   if (currentPage === 'list') {
     const archive = viewMode === 'archive';
     document.getElementById('dayView').hidden = archive;
@@ -1503,6 +1886,7 @@ const DAY_NODATE = 'nodate';
 
 let selectedDay = null; // DAY_OVERDUE | DAY_NODATE | 'YYYY-MM-DD'; null — сегодня
 let stripNeedsScroll = true; // прокрутить полосу к выбранному дню при следующей отрисовке
+const expandedTasks = new Set(); // id задач с раскрытыми шагами и тегами
 
 // Ключ "YYYY-MM-DD" локальной даты (не toISOString: тот дал бы дату по UTC).
 function localDateKey(dt) {
@@ -1567,6 +1951,7 @@ function dayChipEl({ key, wd, num, count, label, extraClass }) {
   const btn = document.createElement('button');
   btn.className = 'day-chip' + (extraClass ? ' ' + extraClass : '');
   btn.dataset.day = key;
+  btn.dataset.focusKey = 'day-' + key;
   btn.setAttribute('aria-pressed', String(key === selectedDay));
   btn.setAttribute('aria-label', label);
   if (key === selectedDay) btn.classList.add('selected');
@@ -1584,19 +1969,89 @@ function selectDay(key) {
   renderMain();
 }
 
-function taskRowEl(task, mode) {
+function priorityBarsEl(priority) {
+  const bars = document.createElement('div');
+  bars.className = 'prio-bars';
+  const level = PRIORITY_LEVEL[priority] || 0;
+  for (let i = 1; i <= 3; i++) {
+    const bar = document.createElement('span');
+    bar.setAttribute('aria-hidden', 'true');
+    if (i <= level) bar.className = 'on';
+    bars.appendChild(bar);
+  }
+  const prioText = document.createElement('span');
+  prioText.className = 'sr-only';
+  prioText.textContent = PRIORITY_TEXT[priority] || '';
+  bars.appendChild(prioText);
+  return bars;
+}
+
+// StepRow: шаг с кружком-отметкой; onRemove — кнопка удаления (только на экране «Изменить»).
+function stepRowEl(step, onRemove) {
   const row = document.createElement('div');
-  row.className = `task-row cat-${task.category}`;
+  row.className = 'step-row' + (step.is_done ? ' done' : '');
+  const check = document.createElement('button');
+  check.type = 'button';
+  check.className = 'step-check';
+  check.dataset.focusKey = 'step-check-' + step.id;
+  check.setAttribute('aria-label', (step.is_done ? 'Снять отметку: ' : 'Отметить выполненным: ') + step.content);
+  check.innerHTML = '<span class="step-circle"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>';
+  check.onclick = () => toggleSubtask(step.id, !step.is_done);
+  const text = document.createElement('span');
+  text.className = 'step-text';
+  text.textContent = step.content;
+  row.append(check, text);
+  if (onRemove) {
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'step-remove';
+    remove.setAttribute('aria-label', 'Удалить шаг: ' + step.content);
+    remove.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+    remove.onclick = onRemove;
+    row.appendChild(remove);
+  }
+  return row;
+}
+
+// Поле «+ добавить шаг»: Enter сохраняет шаг сразу (POST /tasks/{id}/subtasks).
+function stepInputEl(input, taskId) {
+  input.onkeydown = (e) => {
+    if (e.key !== 'Enter' || e.isComposing) return;
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    addSubtask(taskId, text);
+  };
+  return input;
+}
+
+function taskRowEl(task, mode) {
+  const steps = allSubtasks.filter(s => s.task_id === task.id);
+  const tags = task.tags || [];
+  const hasMore = steps.length > 0 || tags.length > 0;
+  const expanded = hasMore && expandedTasks.has(task.id);
+
+  const row = document.createElement('div');
+  row.className = `task-row cat-${task.category}` + (hasMore ? ' has-more' : '');
   row.dataset.id = task.id;
 
   const check = document.createElement('button');
   check.className = 'row-check';
+  check.dataset.focusKey = 'check-' + task.id;
   check.setAttribute('aria-label', 'Отметить выполненной: ' + task.task);
   check.innerHTML = '<span class="check-circle"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>';
   check.onclick = () => completeTask(task.id, row, check);
 
+  // Тело строки открывает «Изменить» (тап или Enter/пробел с клавиатуры).
   const body = document.createElement('div');
   body.className = 'row-body';
+  body.setAttribute('role', 'button');
+  body.tabIndex = 0;
+  body.dataset.focusKey = 'body-' + task.id;
+  const srEdit = document.createElement('span');
+  srEdit.className = 'sr-only';
+  srEdit.textContent = 'Изменить задачу: ';
   const title = document.createElement('div');
   title.className = 'row-title';
   title.textContent = task.task;
@@ -1615,31 +2070,180 @@ function taskRowEl(task, mode) {
     time.textContent = timeOf(task.deadline);
   }
   const rest = [CATEGORY_LABEL[task.category] || task.category];
-  const steps = allSubtasks.filter(s => s.task_id === task.id);
   if (steps.length) rest.push(stepsText(steps.filter(s => s.is_done).length, steps.length));
-  (task.tags || []).forEach(tag => rest.push('#' + tag));
+  if (!expanded) tags.forEach(tag => rest.push('#' + tag)); // в раскрытой карточке теги показаны плашками
   const restEl = document.createElement('span');
   restEl.textContent = rest.join(' · ');
   meta.append(time, restEl);
-  body.append(title, meta);
+  body.append(srEdit, title, meta);
+  body.onkeydown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEdit(task.id); }
+  };
 
-  const bars = document.createElement('div');
-  bars.className = 'prio-bars';
-  const level = PRIORITY_LEVEL[task.priority] || 0;
-  for (let i = 1; i <= 3; i++) {
-    const bar = document.createElement('span');
-    bar.setAttribute('aria-hidden', 'true');
-    if (i <= level) bar.className = 'on';
-    bars.appendChild(bar);
+  row.append(check, body);
+
+  if (hasMore) {
+    const chevron = document.createElement('button');
+    chevron.className = 'row-chevron';
+    chevron.dataset.focusKey = 'chev-' + task.id;
+    chevron.setAttribute('aria-expanded', String(expanded));
+    chevron.setAttribute('aria-label', (expanded ? 'Свернуть: ' : 'Развернуть: ') + task.task);
+    chevron.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>';
+    chevron.onclick = () => {
+      if (expandedTasks.has(task.id)) expandedTasks.delete(task.id);
+      else expandedTasks.add(task.id);
+      renderMain();
+    };
+    row.appendChild(chevron);
   }
-  const prioText = document.createElement('span');
-  prioText.className = 'sr-only';
-  prioText.textContent = PRIORITY_TEXT[task.priority] || '';
-  bars.appendChild(prioText);
+  row.appendChild(priorityBarsEl(task.priority));
 
-  row.append(check, body, bars);
-  return row;
+  if (expanded) {
+    const more = document.createElement('div');
+    more.className = 'row-more';
+    const head = document.createElement('div');
+    head.className = 'row-more-head';
+    head.innerHTML = '<b>Шаги</b><span></span>';
+    head.querySelector('span').textContent = steps.length ? `${steps.filter(s => s.is_done).length} из ${steps.length}` : '';
+    more.appendChild(head);
+    steps.forEach(step => more.appendChild(stepRowEl(step)));
+    if (tags.length) {
+      const pills = document.createElement('div');
+      pills.className = 'tag-pills';
+      tags.forEach(tag => {
+        const pill = document.createElement('span');
+        pill.className = 'tag-pill';
+        pill.textContent = '#' + tag;
+        pills.appendChild(pill);
+      });
+      more.appendChild(pills);
+    }
+    const input = document.createElement('input');
+    input.className = 'step-input';
+    input.type = 'text';
+    input.placeholder = '+ добавить шаг';
+    input.autocomplete = 'off';
+    input.setAttribute('aria-label', 'Новый шаг: ' + task.task);
+    input.dataset.focusKey = 'step-input-' + task.id;
+    more.appendChild(stepInputEl(input, task.id));
+    row.appendChild(more);
+  }
+
+  // Тап по строке: открыть «Изменить» (кроме кнопок, полей и раскрытой части).
+  row.addEventListener('click', (e) => {
+    if (Date.now() < suppressRowClickUntil) return;
+    if (e.target.closest('button, input, .row-more')) return;
+    if (openSwipe && openSwipe.id === task.id) { closeSwipe(); return; }
+    openEdit(task.id);
+  });
+
+  return swipeWrapEl(row, task.id);
 }
+
+// ---------- Свайп влево: «Изменить» и «Удалить» (макет Swipe) ----------
+const SWIPE_OPEN = 140;
+let openSwipe = null;  // { track, id }
+let swipeDrag = null;  // текущее перетаскивание
+let suppressRowClickUntil = 0;
+
+function swipeWrapEl(row, taskId) {
+  const wrap = document.createElement('div');
+  wrap.className = 'swipe';
+  const track = document.createElement('div');
+  track.className = 'swipe-track';
+  const actions = document.createElement('div');
+  actions.className = 'swipe-actions';
+  actions.setAttribute('aria-hidden', 'true');
+  actions.innerHTML =
+    '<button class="swipe-edit" tabindex="-1" aria-label="Изменить задачу"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg>Изменить</button>' +
+    '<button class="swipe-delete" tabindex="-1" aria-label="Удалить задачу"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/></svg>Удалить</button>';
+  actions.querySelector('.swipe-edit').onclick = () => { closeSwipe(); openEdit(taskId); };
+  actions.querySelector('.swipe-delete').onclick = () => { closeSwipe(); deleteTask(taskId); };
+  track.append(row, actions);
+  wrap.appendChild(track);
+
+  track.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (e.target.closest('input, textarea, .swipe-actions')) return;
+    swipeDrag = {
+      track, id: taskId, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY,
+      base: openSwipe && openSwipe.track === track ? -SWIPE_OPEN : 0, dx: 0, active: false,
+    };
+  });
+  track.addEventListener('pointermove', (e) => {
+    const d = swipeDrag;
+    if (!d || d.track !== track || d.pointerId !== e.pointerId) return;
+    const dx = e.clientX - d.startX;
+    const dy = e.clientY - d.startY;
+    if (!d.active) {
+      if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { swipeDrag = null; return; } // это прокрутка
+      if (Math.abs(dx) < 8) return;
+      d.active = true;
+      if (openSwipe && openSwipe.track !== track) closeSwipe();
+      track.setPointerCapture(e.pointerId);
+      track.classList.add('dragging');
+    }
+    d.dx = Math.max(-SWIPE_OPEN, Math.min(0, d.base + dx));
+    track.style.transform = `translateX(${d.dx}px)`;
+  });
+  const finish = () => {
+    const d = swipeDrag;
+    if (!d || d.track !== track) return;
+    swipeDrag = null;
+    if (!d.active) return;
+    track.classList.remove('dragging');
+    suppressRowClickUntil = Date.now() + 350; // отпускание пальца не должно открыть «Изменить»
+    if (d.dx < -SWIPE_OPEN / 2) setSwipeOpen(track, taskId);
+    else closeSwipe(track);
+  };
+  track.addEventListener('pointerup', finish);
+  track.addEventListener('pointercancel', finish);
+  return wrap;
+}
+
+function setSwipeOpen(track, taskId) {
+  track.style.transform = `translateX(${-SWIPE_OPEN}px)`;
+  openSwipe = { track, id: taskId };
+  const actions = track.querySelector('.swipe-actions');
+  actions.removeAttribute('aria-hidden');
+  actions.querySelectorAll('button').forEach(b => b.removeAttribute('tabindex'));
+}
+
+function closeSwipe(track) {
+  const t = track || (openSwipe && openSwipe.track);
+  if (t) {
+    t.style.transform = '';
+    const actions = t.querySelector('.swipe-actions');
+    actions.setAttribute('aria-hidden', 'true');
+    actions.querySelectorAll('button').forEach(b => b.setAttribute('tabindex', '-1'));
+  }
+  if (!track || (openSwipe && openSwipe.track === track)) openSwipe = null;
+  setTimeout(flushDeferredRender, 200); // после анимации закрытия
+}
+
+// Тап вне открытой строки закрывает действия.
+document.addEventListener('pointerdown', (e) => {
+  if (openSwipe && !openSwipe.track.contains(e.target)) closeSwipe();
+}, true);
+
+// ---------- Отложенная перерисовка ----------
+// Опрос раз в 15 с не должен закрывать свайп и сбивать ввод шага в раскрытой карточке.
+let renderDeferred = false;
+
+function isRowInteractionBusy() {
+  if (openSwipe || (swipeDrag && swipeDrag.active)) return true;
+  const a = document.activeElement;
+  return !!(a && a.matches('input, textarea') && a.closest('#dayTasks'));
+}
+
+function flushDeferredRender() {
+  if (renderDeferred && !isRowInteractionBusy()) {
+    renderDeferred = false;
+    renderCurrentPage();
+  }
+}
+
+document.getElementById('dayTasks').addEventListener('focusout', () => setTimeout(flushDeferredRender, 0));
 
 async function completeTask(id, row, check) {
   if (check.disabled) return;
@@ -1655,6 +2259,12 @@ async function completeTask(id, row, check) {
 }
 
 function renderMain() {
+  // Перерисовка пересоздаёт строки: запоминаем фокус (по data-focus-key), чтобы вернуть его.
+  const active = document.activeElement;
+  const focusKey = active && active.dataset ? active.dataset.focusKey : null;
+  const focusValue = focusKey && 'value' in active ? active.value : null;
+  openSwipe = null;
+
   const { today, groups } = groupActiveTasks();
   const dayKeys = stripDayKeys(today, groups.byDay);
 
@@ -1730,6 +2340,14 @@ function renderMain() {
     list.appendChild(empty);
   } else {
     tasks.forEach(t => list.appendChild(taskRowEl(t, mode)));
+  }
+
+  if (focusKey) {
+    const again = document.querySelector(`[data-focus-key="${focusKey}"]`);
+    if (again) {
+      if (focusValue !== null) again.value = focusValue;
+      again.focus({ preventScroll: true });
+    }
   }
 }
 
@@ -2024,7 +2642,8 @@ async function loadTasks() {
     allTasks = (await tasksRes.json()).filter(t => !pendingDeletions[t.id]);
     allSubtasks = subtasksRes.ok ? await subtasksRes.json() : [];
     setBackendStatus(true);
-    renderCurrentPage();
+    if (isRowInteractionBusy()) renderDeferred = true;
+    else renderCurrentPage();
   } catch (e) {
     setBackendStatus(false);
   }
@@ -2290,14 +2909,22 @@ const sidebarEl = document.getElementById('sidebar');
 function openMobileMenu() {
   sidebarEl.classList.add('mobile-open');
   mobileOverlay.classList.add('show');
+  setBackgroundInert(true);
 }
 function closeMobileMenu() {
   sidebarEl.classList.remove('mobile-open');
   mobileOverlay.classList.remove('show');
+  setBackgroundInert(false);
 }
 document.getElementById('menuBtn').onclick = openMobileMenu;
 document.getElementById('filtersBtn').onclick = openMobileMenu;
 mobileOverlay.onclick = closeMobileMenu;
+
+// Пока открыт модальный экран или меню, страница под ним недоступна для Tab и скринридера.
+function setBackgroundInert(on) {
+  document.querySelector('.app').inert = on;
+  document.querySelector('.dock-wrap').inert = on;
+}
 
 // ---------- Экран «Новая задача» и кнопка «+» ----------
 const newTaskSheet = document.getElementById('newTaskSheet');
@@ -2306,13 +2933,16 @@ let sheetReturnFocus = null;
 function openNewTask() {
   sheetReturnFocus = document.activeElement;
   newTaskSheet.hidden = false;
+  newTaskSheet.scrollTop = 0;
   document.body.classList.add('no-scroll');
+  setBackgroundInert(true);
   document.getElementById('composerInput').focus();
 }
 function closeNewTask() {
   newTaskSheet.hidden = true;
   document.body.classList.remove('no-scroll');
-  if (sheetReturnFocus) sheetReturnFocus.focus();
+  setBackgroundInert(false);
+  if (sheetReturnFocus && document.body.contains(sheetReturnFocus)) sheetReturnFocus.focus();
 }
 document.getElementById('newTaskClose').onclick = closeNewTask;
 document.getElementById('fabBtn').onclick = () => {
@@ -2321,10 +2951,141 @@ document.getElementById('fabBtn').onclick = () => {
   else openNewTask();
 };
 
+// ---------- Экран «Изменить задачу» (раздел 5) ----------
+const editSheet = document.getElementById('editSheet');
+let editingId = null;
+let editChoice = { category: null, priority: null };
+let editReturnFocus = null;
+
+function choiceChipEl(label, pressed, extraClass, onPick) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'choice-chip ' + extraClass;
+  btn.setAttribute('aria-pressed', String(pressed));
+  btn.onclick = onPick;
+  const text = document.createElement('span');
+  text.textContent = label;
+  return [btn, text];
+}
+
+function renderEditChips() {
+  const cats = document.getElementById('editCategory');
+  cats.innerHTML = '';
+  CATEGORIES.forEach(c => {
+    const [btn, text] = choiceChipEl(CATEGORY_LABEL[c], editChoice.category === c, 'cat-' + c,
+      () => { editChoice.category = c; renderEditChips(); });
+    const dot = document.createElement('span');
+    dot.className = 'cat-dot';
+    btn.append(dot, text);
+    cats.appendChild(btn);
+  });
+  const prios = document.getElementById('editPriority');
+  prios.innerHTML = '';
+  PRIORITIES.forEach(p => {
+    const [btn, text] = choiceChipEl(p, editChoice.priority === p, 'prio',
+      () => { editChoice.priority = p; renderEditChips(); });
+    const bars = document.createElement('span');
+    bars.className = 'mini-bars';
+    bars.setAttribute('aria-hidden', 'true');
+    for (let i = 1; i <= 3; i++) {
+      const bar = document.createElement('span');
+      if (i <= PRIORITY_LEVEL[p]) bar.className = 'on';
+      bars.appendChild(bar);
+    }
+    btn.append(bars, text);
+    prios.appendChild(btn);
+  });
+}
+
+function renderEditSteps() {
+  if (!editingId) return;
+  const steps = allSubtasks.filter(s => s.task_id === editingId);
+  const list = document.getElementById('editSteps');
+  const focusKey = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.focusKey : null;
+  list.innerHTML = '';
+  steps.forEach(step => list.appendChild(stepRowEl(step, () => deleteSubtask(step.id))));
+  document.getElementById('editStepsCount').textContent =
+    steps.length ? `${steps.filter(s => s.is_done).length} из ${steps.length}` : '';
+  if (focusKey) {
+    const again = list.querySelector(`[data-focus-key="${focusKey}"]`);
+    if (again) again.focus({ preventScroll: true });
+  }
+}
+
+function openEdit(id) {
+  const task = allTasks.find(t => t.id === id);
+  if (!task) return;
+  editReturnFocus = document.activeElement;
+  editingId = id;
+  editChoice = { category: task.category, priority: task.priority };
+  document.getElementById('editText').value = task.task;
+  document.getElementById('editDate').value = task.deadline ? task.deadline.slice(0, 10) : '';
+  document.getElementById('editTime').value = task.deadline ? task.deadline.slice(11, 16) : '';
+  document.getElementById('editTags').value = (task.tags || []).join(', ');
+  document.getElementById('editStepInput').value = '';
+  renderEditChips();
+  renderEditSteps();
+  editSheet.hidden = false;
+  editSheet.scrollTop = 0;
+  document.body.classList.add('no-scroll');
+  setBackgroundInert(true);
+  document.getElementById('editClose').focus();
+}
+
+function closeEdit() {
+  editSheet.hidden = true;
+  editingId = null;
+  document.body.classList.remove('no-scroll');
+  setBackgroundInert(false);
+  if (editReturnFocus && document.body.contains(editReturnFocus)) editReturnFocus.focus();
+  flushDeferredRender();
+}
+
+async function submitEdit() {
+  const btn = document.getElementById('editSave');
+  const date = document.getElementById('editDate').value;
+  const time = document.getElementById('editTime').value || '23:59'; // без времени — конец дня, как у разбора текста
+  const fields = {
+    task: document.getElementById('editText'),
+    category: { value: editChoice.category },
+    priority: { value: editChoice.priority },
+    deadline: { value: date ? `${date}T${time}` : '' }, // saveEdit добавит секунды; пусто → null
+    tags: document.getElementById('editTags'),
+  };
+  btn.disabled = true;
+  const ok = await saveEdit(editingId, fields);
+  btn.disabled = false;
+  if (ok) closeEdit();
+  else if (!fields.task.value.trim()) fields.task.focus();
+}
+
+document.getElementById('editClose').onclick = closeEdit;
+document.getElementById('editSave').onclick = submitEdit;
+document.getElementById('editClearDeadline').onclick = () => {
+  document.getElementById('editDate').value = '';
+  document.getElementById('editTime').value = '';
+};
+document.getElementById('editDelete').onclick = () => {
+  const id = editingId;
+  closeEdit();
+  deleteTask(id);
+};
+document.getElementById('editStepInput').onkeydown = (e) => {
+  if (e.key !== 'Enter' || e.isComposing) return;
+  e.preventDefault();
+  const input = e.currentTarget;
+  const text = input.value.trim();
+  if (!text || !editingId) return;
+  input.value = '';
+  addSubtask(editingId, text);
+};
+
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
-  if (!newTaskSheet.hidden) closeNewTask();
+  if (!editSheet.hidden) closeEdit();
+  else if (!newTaskSheet.hidden) closeNewTask();
   else if (sidebarEl.classList.contains('mobile-open')) closeMobileMenu();
+  else if (openSwipe) closeSwipe();
 });
 
 renderChips();
