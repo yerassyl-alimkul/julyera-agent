@@ -402,6 +402,79 @@
   button.primary:hover { filter: brightness(1.1); }
   button.primary:disabled { opacity: .5; cursor: default; }
 
+  /* ---------- Search (макет Search) ---------- */
+  #editSheet { z-index: 75; } /* «Изменить» открывается поверх поиска */
+  .search-head {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-m);
+    padding-top: calc(12px + env(safe-area-inset-top));
+  }
+  .search-box {
+    flex: 1;
+    min-width: 0;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    gap: var(--gap-s);
+    padding: 0 4px 0 14px;
+    border: 1.5px solid var(--ink);
+    border-radius: var(--radius-input);
+    background: var(--surface);
+  }
+  .search-box > svg {
+    width: 20px; height: 20px; flex: 0 0 auto;
+    fill: none; stroke: var(--ink-muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .search-input {
+    flex: 1;
+    min-width: 0;
+    height: var(--touch);
+    padding: 0;
+    border: none;
+    background: transparent;
+    font-size: 17px;
+    outline: none;
+  }
+  .search-input::-webkit-search-cancel-button { display: none; }
+  .search-clear {
+    flex: 0 0 var(--touch);
+    width: var(--touch);
+    height: var(--touch);
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--ink-muted);
+    cursor: pointer;
+  }
+  .search-clear svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .search-count { padding-top: var(--gap-section); font-size: 14px; color: var(--ink-muted); }
+  .search-list { display: flex; flex-direction: column; gap: var(--gap-m); padding-top: 14px; }
+  .search-row {
+    width: 100%;
+    min-height: 72px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: var(--gap-l);
+    border: none;
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    color: var(--ink);
+    text-align: left;
+    cursor: pointer;
+  }
+  .search-row.cat-Work { background: var(--cat-work); }
+  .search-row.cat-UniMe { background: var(--cat-unime); }
+  .search-row.cat-Study { background: var(--cat-study); }
+  .search-row.cat-Personal { background: var(--cat-personal); }
+  .search-row.done .row-title { text-decoration: line-through; color: var(--ink-meta); }
+  /* Отрицательные поля компенсируют padding: фон шире слова, но буквы не раздвигаются. */
+  mark.hl { margin: 0 -2px; padding: 0 2px; border-radius: 5px; background: var(--highlight); color: inherit; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+
   /* ---------- Calendar: месяц с понедельника (макет Calendar) ---------- */
   .cal-head {
     display: flex;
@@ -1353,6 +1426,7 @@
       <svg viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></svg>
     </button>
     <div class="topbar-group">
+      <button class="tb-btn" id="searchBtn" aria-label="Поиск"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button>
       <button class="tb-btn" id="filtersBtn" aria-label="Фильтры по категории и приоритету">
         <svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
         <span class="filter-dot" id="filterDot" hidden></span>
@@ -1461,6 +1535,27 @@
       <svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
     </button>
     <button class="btn-primary" id="composerBtn">Добавить</button>
+  </div>
+</div>
+
+<!-- Экран «Поиск» (макет Search) -->
+<div class="sheet" id="searchSheet" role="dialog" aria-modal="true" aria-label="Поиск по задачам" hidden>
+  <div class="sheet-inner">
+    <div class="search-head">
+      <button class="tb-btn" id="searchClose" aria-label="Закрыть поиск">
+        <svg viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></svg>
+      </button>
+      <div class="search-box">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+        <label class="sr-only" for="searchInput">Поиск по задачам</label>
+        <input class="search-input" id="searchInput" type="search" autocomplete="off" enterkeyhint="search" placeholder="Название или #тег">
+        <button class="search-clear" id="searchClear" aria-label="Очистить запрос" hidden>
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="search-count" id="searchCount" role="status" aria-live="polite"></div>
+    <div class="search-list" id="searchResults"></div>
   </div>
 </div>
 
@@ -2004,6 +2099,7 @@ function dateKey(deadlineStr) {
 function renderCurrentPage() {
   updateStats();
   if (editingId) renderEditSteps();
+  if (!searchSheet.hidden) renderSearch();
   if (currentPage === 'list') {
     const archive = viewMode === 'archive';
     document.getElementById('dayView').hidden = archive;
@@ -2965,7 +3061,7 @@ async function updateStatus(id, status) {
 let pendingDeletions = {}; // id -> { timeoutId, task }
 
 function deleteTask(id) {
-  const task = allTasks.find(t => t.id === id);
+  const task = findTask(id);
   if (!task) return;
 
   allTasks = allTasks.filter(t => t.id !== id);
@@ -2973,6 +3069,7 @@ function deleteTask(id) {
 
   const timeoutId = setTimeout(async () => {
     delete pendingDeletions[id];
+    if (searchPool) searchPool = searchPool.filter(t => t.id !== id);
     try {
       const res = await fetch(`${BASE_URL}/tasks/${id}`, { method: 'DELETE' });
       if (!res.ok && res.status !== 204) throw new Error('bad status');
@@ -3310,6 +3407,145 @@ document.getElementById('fabBtn').onclick = () => {
   else openNewTask();
 };
 
+// ---------- Поиск (макет Search, раздел 5) ----------
+// Подстрока без учёта регистра по названию и тегам всех задач, без учёта фильтров;
+// «е» и «ё» считаются одной буквой. Удалённые (ожидающие 5 с) не показываются.
+const searchSheet = document.getElementById('searchSheet');
+const searchInput = document.getElementById('searchInput');
+let searchPool = null; // все задачи без фильтров; null — пока не загружены
+let searchReturnFocus = null;
+
+function normalizeSearch(text) {
+  return text.toLowerCase().replace(/ё/g, 'е'); // длина строки не меняется
+}
+
+// Текст с подсветкой совпадений (<mark>), без innerHTML.
+function highlightedEl(tag, text, query) {
+  const el = document.createElement(tag);
+  const hay = normalizeSearch(text);
+  let pos = 0;
+  let idx = query ? hay.indexOf(query) : -1;
+  while (idx !== -1) {
+    if (idx > pos) el.append(text.slice(pos, idx));
+    const mark = document.createElement('mark');
+    mark.className = 'hl';
+    mark.textContent = text.slice(idx, idx + query.length);
+    el.appendChild(mark);
+    pos = idx + query.length;
+    idx = hay.indexOf(query, pos);
+  }
+  if (pos < text.length) el.append(text.slice(pos));
+  return el;
+}
+
+function pluralFound(n) {
+  const a = n % 10, b = n % 100;
+  if (a === 1 && b !== 11) return `Найдена ${n} задача`;
+  if (a >= 2 && a <= 4 && (b < 12 || b > 14)) return `Найдено ${n} задачи`;
+  return `Найдено ${n} задач`;
+}
+
+function renderSearch() {
+  const raw = searchInput.value;
+  const query = normalizeSearch(raw.trim().replace(/^#+/, ''));
+  document.getElementById('searchClear').hidden = raw === '';
+  const count = document.getElementById('searchCount');
+  const list = document.getElementById('searchResults');
+  const focusKey = list.contains(document.activeElement) ? document.activeElement.dataset.focusKey : null;
+  list.innerHTML = '';
+  if (!query) { count.textContent = ''; return; }
+
+  const pool = (searchPool || allTasks).filter(t => !pendingDeletions[t.id]);
+  const found = pool.filter(t => normalizeSearch(t.task).includes(query)
+    || (t.tags || []).some(tag => normalizeSearch(tag).includes(query)));
+  // По дате по возрастанию, задачи без даты в конце.
+  found.sort((a, b) => {
+    if (!a.deadline || !b.deadline) return (a.deadline ? 0 : 1) - (b.deadline ? 0 : 1);
+    return byDeadline(a, b);
+  });
+
+  count.textContent = found.length ? pluralFound(found.length) : `Ничего не найдено по «${raw.trim()}»`;
+  found.forEach(task => {
+    const row = document.createElement('button');
+    row.className = `search-row cat-${task.category}` + (task.status === 'Done' ? ' done' : '');
+    row.dataset.focusKey = 'search-' + task.id;
+    const body = document.createElement('div');
+    body.className = 'row-body';
+    const title = highlightedEl('div', task.task, query);
+    title.className = 'row-title';
+    const meta = document.createElement('div');
+    meta.className = 'row-meta';
+    const when = document.createElement('span');
+    when.className = 'row-time';
+    const dt = task.deadline && parseNaiveDeadline(task.deadline);
+    when.textContent = dt ? `${dt.getDate()} ${MONTH_GENITIVE[dt.getMonth()]}, ${timeOf(task.deadline)}` : 'Без срока';
+    meta.append(when, CATEGORY_LABEL[task.category] || task.category);
+    if (task.status === 'Done') meta.append(' · В архиве');
+    (task.tags || []).forEach(tag => {
+      meta.append(' · ');
+      meta.appendChild(highlightedEl('span', '#' + tag, normalizeSearch(tag).includes(query) ? query : ''));
+    });
+    body.append(title, meta);
+    row.append(body, priorityBarsEl(task.priority));
+    row.onclick = () => openSearchResult(task);
+    list.appendChild(row);
+  });
+  if (focusKey) {
+    const again = list.querySelector(`[data-focus-key="${focusKey}"]`);
+    if (again) again.focus({ preventScroll: true });
+  }
+}
+
+async function refreshSearchPool() {
+  try {
+    const res = await fetch(`${BASE_URL}/tasks`);
+    if (!res.ok) throw new Error('bad status');
+    searchPool = await res.json();
+  } catch (e) {
+    searchPool = null; // без связи ищем по уже загруженным задачам
+  }
+  if (!searchSheet.hidden) renderSearch();
+}
+
+function openSearch() {
+  searchReturnFocus = document.activeElement;
+  searchSheet.hidden = false;
+  searchSheet.scrollTop = 0;
+  document.body.classList.add('no-scroll');
+  setBackgroundInert(true);
+  searchInput.focus();
+  renderSearch();
+  refreshSearchPool();
+}
+
+function closeSearch() {
+  searchSheet.hidden = true;
+  document.body.classList.remove('no-scroll');
+  setBackgroundInert(false);
+  if (searchReturnFocus && document.body.contains(searchReturnFocus)) searchReturnFocus.focus();
+}
+
+function openSearchResult(task) {
+  openEdit(task.id);
+}
+
+// Задача по id: из загруженных или, если её скрывают фильтры, из результатов поиска.
+function findTask(id) {
+  return allTasks.find(t => t.id === id) || (searchPool || []).find(t => t.id === id);
+}
+
+document.getElementById('searchBtn').onclick = openSearch;
+document.getElementById('searchClose').onclick = closeSearch;
+document.getElementById('searchClear').onclick = () => {
+  searchInput.value = '';
+  renderSearch();
+  searchInput.focus();
+};
+searchInput.addEventListener('input', renderSearch);
+searchInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); searchInput.blur(); } // спрятать клавиатуру на телефоне
+});
+
 // ---------- Экран «Изменить задачу» (раздел 5) ----------
 const editSheet = document.getElementById('editSheet');
 let editingId = null;
@@ -3373,7 +3609,7 @@ function renderEditSteps() {
 }
 
 function openEdit(id) {
-  const task = allTasks.find(t => t.id === id);
+  const task = findTask(id);
   if (!task) return;
   editReturnFocus = document.activeElement;
   editReturnKey = editReturnFocus && editReturnFocus.dataset ? editReturnFocus.dataset.focusKey : null;
@@ -3396,8 +3632,10 @@ function openEdit(id) {
 function closeEdit() {
   editSheet.hidden = true;
   editingId = null;
-  document.body.classList.remove('no-scroll');
-  setBackgroundInert(false);
+  if (searchSheet.hidden) { // если под «Изменить» открыт поиск, он остаётся модальным
+    document.body.classList.remove('no-scroll');
+    setBackgroundInert(false);
+  }
   let target = editReturnFocus && document.body.contains(editReturnFocus) ? editReturnFocus : null;
   if (!target && editReturnKey) target = document.querySelector(`[data-focus-key="${editReturnKey}"]`);
   if (target) target.focus({ preventScroll: true });
@@ -3418,7 +3656,10 @@ async function submitEdit() {
   btn.disabled = true;
   const ok = await saveEdit(editingId, fields);
   btn.disabled = false;
-  if (ok) closeEdit();
+  if (ok) {
+    closeEdit();
+    if (!searchSheet.hidden) refreshSearchPool();
+  }
   else if (!fields.task.value.trim()) fields.task.focus();
 }
 
@@ -3448,6 +3689,7 @@ document.addEventListener('keydown', (e) => {
   if (!editSheet.hidden) closeEdit();
   else if (!filtersSheet.hidden) closeFilters();
   else if (!newTaskSheet.hidden) closeNewTask();
+  else if (!searchSheet.hidden) closeSearch();
   else if (sidebarEl.classList.contains('mobile-open')) closeMobileMenu();
   else if (openSwipe) closeSwipe();
 });
