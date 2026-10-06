@@ -481,44 +481,74 @@
     overflow-wrap: anywhere;
   }
 
-  .notes-list {
+  /* ---------- Notes (макет Notes) ---------- */
+  .notes-list { display: flex; flex-direction: column; gap: var(--gap-m); padding-top: 20px; }
+  .note-composer, .note-card {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    max-width: 640px;
-  }
-
-  .note-card {
+    gap: var(--gap-s);
+    border: 1.5px solid var(--line);
+    border-radius: var(--radius-card);
     background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    padding: 12px 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
   }
-
-  .note-content {
-    font-size: 13.5px;
-    line-height: 1.5;
-    white-space: pre-wrap;
-  }
-
-  .note-meta { font-size: 11.5px; color: var(--text-faint); }
-
-  .note-edit-textarea {
-    background: var(--surface-alt);
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-family: inherit;
-    font-size: 13.5px;
-    padding: 9px 10px;
-    border-radius: var(--radius-sm);
+  .note-composer { padding: 14px; }
+  .note-composer textarea {
+    width: 100%;
+    height: 56px;
+    padding: 2px 4px;
+    border: none;
+    background: transparent;
+    font-size: 16px;
+    line-height: 1.4;
+    resize: none;
     outline: none;
-    resize: vertical;
-    min-height: 60px;
   }
-  .note-edit-textarea:focus { border-color: var(--accent); }
+  .note-composer:focus-within { border-color: var(--ink); }
+  .note-row { display: flex; align-items: center; justify-content: space-between; gap: var(--gap-s); }
+  .note-row.start { justify-content: flex-start; flex-wrap: wrap; row-gap: 4px; }
+  .btn-small {
+    height: var(--touch);
+    padding: 0 20px;
+    border: none;
+    border-radius: var(--radius-btn);
+    background: var(--accent);
+    color: #FFFFFF;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-small:disabled { opacity: .6; cursor: default; }
+  .btn-plain {
+    min-width: var(--touch);
+    height: var(--touch);
+    padding: 0 12px;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .btn-plain.danger { margin-left: auto; padding-right: 4px; color: var(--danger); font-weight: 600; }
+  .tb-btn.recording { border-color: var(--danger); color: var(--danger); background: rgba(179, 38, 30, .08); }
+
+  .note-card { padding: 16px 18px; cursor: pointer; }
+  .note-content { font-size: 16px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .note-meta { font-size: 12px; color: var(--ink-muted); }
+  .note-card.editing { gap: var(--gap-m); padding: 14px; border-color: var(--ink); cursor: default; }
+  .note-edit-textarea {
+    width: 100%;
+    height: 88px;
+    padding: 10px 12px;
+    border: 1.5px solid var(--line);
+    border-radius: var(--radius-btn);
+    background: var(--bg);
+    font-size: 16px;
+    line-height: 1.4;
+    resize: vertical;
+    outline: none;
+  }
+  .note-edit-textarea:focus { border-color: var(--ink); }
 
   .list-head {
     display: flex;
@@ -1264,7 +1294,6 @@
   body.no-scroll { overflow: hidden; }
 
   /* ВРЕМЕННО: отступ под верхней панелью у старых экранов (новые на шагах 5 и 6) */
-  #notesView { padding-top: var(--gap-section); }
 
 
 </style>
@@ -1380,19 +1409,25 @@
       <div class="cal-day-list" id="calDayTasks"></div>
     </section>
 
-    <div id="notesView" style="display: none;">
-      <div class="composer">
-        <textarea id="noteInput" placeholder="Запиши мысль, идею или напоминание для себя…"></textarea>
-        <div class="composer-footer">
-          <span class="composer-hint">Enter — новая строка, кнопка — сохранить</span>
-          <div class="composer-buttons">
-            <button class="icon-btn" id="noteMicBtn" title="Голосовой ввод">🎤</button>
-            <button class="primary" id="noteAddBtn">Сохранить</button>
-          </div>
+    <section id="notesView" style="display: none;" aria-labelledby="notesTitle">
+      <div class="day-head">
+        <div class="day-head-text">
+          <h1 class="t-h1" id="notesTitle">Заметки</h1>
+          <div class="day-sub" id="notesSubtitle"></div>
         </div>
       </div>
-      <div class="notes-list" id="notesList"></div>
-    </div>
+      <div class="notes-list">
+        <div class="note-composer">
+          <label class="sr-only" for="noteInput">Новая заметка</label>
+          <textarea id="noteInput" placeholder="Запиши мысль, идею или напоминание для себя…"></textarea>
+          <div class="note-row">
+            <button class="tb-btn" id="noteMicBtn" aria-label="Наговорить заметку голосом"><svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+            <button class="btn-small" id="noteAddBtn">Сохранить</button>
+          </div>
+        </div>
+        <div class="notes-list" id="notesList" style="padding-top: 0;"></div>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -1992,6 +2027,7 @@ function switchPage(page) {
   document.getElementById('listView').style.display = page === 'list' ? '' : 'none';
   document.getElementById('calendarView').style.display = page === 'calendar' ? '' : 'none';
   document.getElementById('notesView').style.display = page === 'notes' ? '' : 'none';
+  document.getElementById('fabBtn').setAttribute('aria-label', page === 'notes' ? 'Добавить заметку' : 'Добавить задачу');
   if (page === 'notes') loadNotes();
   else renderCurrentPage();
 }
@@ -2669,7 +2705,7 @@ async function loadNotes() {
   try {
     const res = await fetch(`${BASE_URL}/notes`);
     if (!res.ok) throw new Error('bad status');
-    allNotes = await res.json();
+    allNotes = (await res.json()).filter(n => !pendingNoteDeletions[n.id]);
     setBackendStatus(true);
     renderNotes();
   } catch (e) {
@@ -2682,49 +2718,90 @@ function fmtNoteDate(d) {
   return dt.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
+function pluralNotes(n) {
+  if (n === 0) return 'нет заметок';
+  const a = n % 10, b = n % 100;
+  if (a === 1 && b !== 11) return n + ' заметка';
+  if (a >= 2 && a <= 4 && (b < 12 || b > 14)) return n + ' заметки';
+  return n + ' заметок';
+}
+
+// Просмотр: текст и дата, тап открывает редактирование на месте (макет Notes).
+// В режиме редактирования: «Сохранить», «Отмена» и «Удалить» (удаление с отменой 5 с).
 function noteCardEl(note) {
   const el = document.createElement('div');
   el.className = 'note-card';
 
   if (editingNoteId === note.id) {
+    el.classList.add('editing');
     const textarea = document.createElement('textarea');
     textarea.className = 'note-edit-textarea';
     textarea.value = note.content;
-    el.appendChild(textarea);
+    textarea.setAttribute('aria-label', 'Изменить заметку');
+    textarea.onkeydown = (e) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveNoteEdit(note.id, textarea.value);
+      if (e.key === 'Escape') { e.stopPropagation(); cancelNoteEdit(note.id); }
+    };
 
     const actions = document.createElement('div');
-    actions.className = 'card-actions';
-    actions.appendChild(actionBtn('Сохранить', () => saveNoteEdit(note.id, textarea.value), 'save'));
-    actions.appendChild(actionBtn('Отмена', () => { editingNoteId = null; renderNotes(); }));
-    el.appendChild(actions);
+    actions.className = 'note-row start';
+    const save = document.createElement('button');
+    save.className = 'btn-small';
+    save.textContent = 'Сохранить';
+    save.onclick = () => saveNoteEdit(note.id, textarea.value);
+    const cancel = document.createElement('button');
+    cancel.className = 'btn-plain';
+    cancel.textContent = 'Отмена';
+    cancel.onclick = () => cancelNoteEdit(note.id);
+    const remove = document.createElement('button');
+    remove.className = 'btn-plain danger';
+    remove.textContent = 'Удалить';
+    remove.onclick = () => { editingNoteId = null; deleteNote(note.id); };
+    actions.append(save, cancel, remove);
+    el.append(textarea, actions);
     return el;
   }
 
+  el.setAttribute('role', 'button');
+  el.tabIndex = 0;
+  el.dataset.focusKey = 'note-' + note.id;
+  const sr = document.createElement('span');
+  sr.className = 'sr-only';
+  sr.textContent = 'Изменить заметку: ';
   const content = document.createElement('div');
   content.className = 'note-content';
   content.textContent = note.content;
-  el.appendChild(content);
-
   const meta = document.createElement('div');
   meta.className = 'note-meta';
   meta.textContent = fmtNoteDate(note.updated_at || note.created_at);
-  el.appendChild(meta);
-
-  const actions = document.createElement('div');
-  actions.className = 'card-actions';
-  actions.appendChild(actionBtn('Изменить', () => { editingNoteId = note.id; renderNotes(); }));
-  actions.appendChild(actionBtn('Удалить', () => deleteNote(note.id), 'danger'));
-  el.appendChild(actions);
-
+  el.append(sr, content, meta);
+  const startEdit = () => {
+    editingNoteId = note.id;
+    renderNotes();
+    const area = document.querySelector('#notesList .note-edit-textarea');
+    if (area) { area.focus(); area.setSelectionRange(area.value.length, area.value.length); }
+  };
+  el.onclick = startEdit;
+  el.onkeydown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEdit(); }
+  };
   return el;
 }
 
+function cancelNoteEdit(id) {
+  editingNoteId = null;
+  renderNotes();
+  const card = document.querySelector(`[data-focus-key="note-${id}"]`);
+  if (card) card.focus({ preventScroll: true });
+}
+
 function renderNotes() {
+  document.getElementById('notesSubtitle').textContent = pluralNotes(allNotes.length);
   const container = document.getElementById('notesList');
   container.innerHTML = '';
   if (allNotes.length === 0) {
     const empty = document.createElement('div');
-    empty.className = 'empty-state';
+    empty.className = 'empty-dashed';
     empty.textContent = 'Заметок пока нет';
     container.appendChild(empty);
   } else {
@@ -2745,6 +2822,8 @@ async function saveNoteEdit(id, content) {
     editingNoteId = null;
     toast('Сохранено');
     await loadNotes();
+    const card = document.querySelector(`[data-focus-key="note-${id}"]`);
+    if (card) card.focus({ preventScroll: true });
   } catch (e) {
     toast('Не удалось сохранить заметку');
   }
