@@ -2,43 +2,132 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#FBFBFA" />
 <title>JulYera Agent</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=Unbounded:wght@500;600&display=swap" rel="stylesheet">
 <style>
+  /* ---------- Токены дизайна (design/DESIGN.md, раздел 3) ---------- */
   :root {
-    --bg: #12141A;
-    --surface: #1A1D26;
-    --surface-alt: #1F2330;
-    --border: #2A2F3D;
-    --text: #EDEEF2;
-    --text-dim: #8B93A7;
-    --text-faint: #5C6478;
-    --accent: #5B8DEF;
-    --accent-dim: #33456E;
-    --high: #F2545B;
-    --mid: #F2A93B;
-    --low: #4FBF8B;
-    --radius-sm: 6px;
-    --radius-md: 10px;
+    color-scheme: light;
+
+    /* Цвета */
+    --bg: #FBFBFA;
+    --surface: #FFFFFF;
+    --ink: #17181C;
+    --ink-muted: #5D5F69;
+    --ink-meta: #33353D;
+    --line: #E6E6E1;
+    --hairline: #EFEFEA;
+    --dashed: #D9D9D3;
+    --accent: #557546;
+    --danger: #B3261E;
+    --cat-work: #E2D47E;
+    --cat-unime: #DCE5FB;
+    --cat-study: #85AACB;
+    --cat-personal: #A9C89D;
+    --bar-off: rgba(23, 24, 28, 0.18);
+    --dock-text: #D5D6DC;
+    --scrim: rgba(23, 24, 28, 0.45);
+    --tag-bg: rgba(255, 255, 255, 0.6);
+    --highlight: rgba(255, 255, 255, 0.75);
+
+    /* Шрифты */
+    --font-display: 'Unbounded', system-ui, sans-serif;
+    --font-text: 'Onest', system-ui, -apple-system, sans-serif;
+
+    /* Отступы и размеры */
+    --gutter: 20px;
+    --gap-s: 8px;
+    --gap-m: 10px;
+    --gap-l: 12px;
+    --gap-section: 22px;
+    --gap-header: 28px;
+    --safe-top: 56px;
+    --touch: 44px;
+    --touch-l: 60px;
+
+    /* Радиусы */
+    --radius-btn: 14px;
+    --radius-input: 16px;
+    --radius-input-l: 18px;
+    --radius-card: 22px;
+    --radius-compact: 18px;
+    --radius-dock: 30px;
+    --radius-fab: 22px;
+    --radius-pill: 999px;
+
+    /* Анимации (раздел 9) */
+    --dur-fast: 120ms;
+    --dur-chip: 150ms;
+    --dur-swipe: 180ms;
+    --dur-base: 200ms;
+    --dur-menu: 250ms;
+
+    /* ВРЕМЕННО: старые имена переменных, пока экраны не переписаны на новые
+       компоненты. Удалить на шаге 8 вместе со старой вёрсткой. */
+    --surface-alt: var(--bg);
+    --border: var(--line);
+    --text: var(--ink);
+    --text-dim: var(--ink-muted);
+    --text-faint: var(--ink-muted);
+    --accent-dim: var(--hairline);
+    --high: var(--danger);
+    --mid: var(--cat-work);
+    --low: var(--cat-personal);
+    --radius-sm: 8px;
+    --radius-md: var(--radius-btn);
   }
 
   * { box-sizing: border-box; }
 
+  html { -webkit-text-size-adjust: 100%; }
+
   body {
     margin: 0;
     background: var(--bg);
-    color: var(--text);
-    font-family: 'Inter', -apple-system, sans-serif;
-    font-size: 14px;
-    line-height: 1.5;
+    color: var(--ink);
+    font-family: var(--font-text);
+    font-size: 16px;
+    line-height: 1.4;
     min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
   }
 
+  button, input, textarea, select { font: inherit; color: inherit; }
+
   h1, h2, h3, .font-display {
-    font-family: 'Sora', 'Inter', sans-serif;
+    font-family: var(--font-display);
+    font-weight: 600;
+  }
+
+  /* Типографика (раздел 3) */
+  .t-h1 { font-family: var(--font-display); font-weight: 600; font-size: 28px; line-height: 1.15; letter-spacing: -0.01em; }
+  .t-h1-month { font-family: var(--font-display); font-weight: 600; font-size: 24px; line-height: 1.2; }
+  .t-modal-title { font-family: var(--font-display); font-weight: 600; font-size: 18px; line-height: 1.25; }
+  .t-body { font-size: 16px; font-weight: 500; line-height: 1.25; }
+  .t-label { font-size: 14px; font-weight: 600; color: var(--ink-muted); }
+  .t-meta { font-size: 13px; font-weight: 400; color: var(--ink-meta); }
+  .t-caption { font-size: 12px; font-weight: 500; }
+
+  /* Текст только для скринридера (скрытая подпись приоритета и т.п.) */
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 
   .app {
@@ -57,7 +146,7 @@
   }
 
   .brand {
-    font-family: 'Sora', sans-serif;
+    font-family: var(--font-display);
     font-weight: 700;
     font-size: 18px;
     letter-spacing: -0.02em;
@@ -108,7 +197,7 @@
     gap: 10px;
   }
   .stat-row { display: flex; justify-content: space-between; align-items: baseline; }
-  .stat-num { font-family: 'Sora', sans-serif; font-weight: 600; font-size: 17px; }
+  .stat-num { font-family: var(--font-display); font-weight: 600; font-size: 17px; }
   .stat-label { color: var(--text-faint); font-size: 12.5px; }
 
   .backend-status {
@@ -161,7 +250,7 @@
   .composer-hint { color: var(--text-faint); font-size: 12px; }
 
   #micBtn { font-size: 16px; padding: 7px 11px; }
-  #micBtn.recording { border-color: var(--high); color: var(--high); background: rgba(242, 84, 91, .12); }
+  #micBtn.recording { border-color: var(--high); color: var(--high); background: rgba(179, 38, 30, .08); }
 
   button.primary {
     background: var(--accent);
@@ -181,6 +270,7 @@
   .page-tabs {
     display: flex;
     align-items: center;
+    flex-wrap: wrap; /* ВРЕМЕННО до шага 2: с шрифтом 16 px ряд не помещается в 360 px */
     gap: 6px;
     border-bottom: 1px solid var(--border);
     padding-bottom: 2px;
@@ -208,7 +298,7 @@
     margin-bottom: 12px;
   }
   .cal-month-label {
-    font-family: 'Sora', sans-serif;
+    font-family: var(--font-display);
     font-weight: 600;
     font-size: 15px;
     min-width: 140px;
@@ -338,7 +428,7 @@
     justify-content: space-between;
     margin-bottom: 4px;
   }
-  .list-title { font-family: 'Sora', sans-serif; font-weight: 600; font-size: 15px; }
+  .list-title { font-family: var(--font-display); font-weight: 600; font-size: 15px; }
   .list-count {
     color: var(--text-faint);
     font-size: 12.5px;
@@ -537,7 +627,7 @@
     display: none;
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, .55);
+    background: var(--scrim);
     z-index: 40;
   }
   .mobile-overlay.show { display: block; }
@@ -561,9 +651,8 @@
       transform: translateX(-100%);
       transition: transform .25s ease;
       overflow-y: auto;
-      box-shadow: 4px 0 24px rgba(0, 0, 0, .4);
     }
-    .sidebar.mobile-open { transform: translateX(0); }
+    .sidebar.mobile-open { transform: translateX(0); box-shadow: 4px 0 24px rgba(23, 24, 28, .12); }
     .stats { margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border); }
     .main { padding-top: 56px; }
     .task-list { max-width: none; }
