@@ -140,20 +140,21 @@
     min-height: 100vh;
   }
 
-  /* ---------- Sidebar (временно: старое меню-шторка, заменит MenuDrawer на шаге 4) ---------- */
+  /* ---------- MenuDrawer: меню-шторка (макет Menu) ---------- */
   .sidebar {
     position: fixed;
     top: 0;
     left: 0;
     height: 100vh;
+    height: 100dvh;
     width: min(304px, 85vw);
     z-index: 50;
     background: var(--bg);
-    border-right: 1px solid var(--border);
-    padding: 28px 20px;
+    border-right: 1px solid var(--line);
+    padding: calc(12px + env(safe-area-inset-top)) var(--gutter) calc(28px + env(safe-area-inset-bottom));
     display: flex;
     flex-direction: column;
-    gap: 28px;
+    gap: var(--gap-section);
     transform: translateX(-100%);
     /* visibility прячет закрытое меню от Tab и скринридера, но только после анимации */
     visibility: hidden;
@@ -164,9 +165,119 @@
     transform: translateX(0);
     visibility: visible;
     transition: transform var(--dur-menu) ease, visibility 0s;
-    box-shadow: 4px 0 24px rgba(23, 24, 28, .12);
+    box-shadow: 8px 0 32px rgba(23, 24, 28, 0.18);
   }
-  .sidebar-export { display: flex; flex-wrap: wrap; gap: 6px; }
+  .menu-head { display: flex; align-items: center; justify-content: space-between; gap: var(--gap-s); }
+  .menu-brand { font-family: var(--font-display); font-weight: 600; font-size: 18px; letter-spacing: -0.01em; }
+  .menu-stats {
+    display: flex;
+    gap: var(--gap-l);
+    padding: 16px;
+    border: 1.5px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+  }
+  .menu-stat { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .menu-stat-num { font-family: var(--font-display); font-weight: 600; font-size: 28px; line-height: 1.1; }
+  .menu-stat-label { font-size: 13px; line-height: 1.3; color: var(--ink-muted); }
+  .menu-nav {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1.5px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+  }
+  .menu-item {
+    height: 56px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border: none;
+    border-bottom: 1px solid var(--hairline);
+    background: transparent;
+    color: var(--ink);
+    font-size: 16px;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+  }
+  .menu-item:last-child { border-bottom: none; }
+  .menu-item svg {
+    width: 22px; height: 22px; flex: 0 0 auto;
+    fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .menu-status { margin-top: auto; display: flex; flex-direction: column; gap: var(--gap-m); font-size: 14px; color: var(--ink-muted); }
+  .menu-status-row { display: flex; align-items: center; gap: var(--gap-m); min-height: 22px; }
+  .menu-status-row a { color: var(--accent); font-weight: 600; }
+  /* Точка статуса: зелёная — подключено, красная — нет связи, пустой кружок — не подключено */
+  .status-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; border: 1.5px solid var(--ink-muted); }
+  .status-dot.ok { border-color: var(--accent); background: var(--accent); }
+  .status-dot.err { border-color: var(--danger); background: var(--danger); }
+  .menu-status-row.err { color: var(--danger); }
+
+  /* Точка на кнопке фильтров, когда включён любой фильтр */
+  .tb-btn { position: relative; }
+  .filter-dot {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px var(--surface);
+  }
+
+  /* Фильтры: выбранный «вид» и «Все» — тёмная заливка */
+  .filters-form { display: flex; flex-direction: column; gap: var(--gap-header); padding-top: 32px; }
+  .filters-form .form-section { gap: var(--gap-l); }
+  .choice-chip.solid { padding: 0 18px; }
+  .choice-chip.solid[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: #FFFFFF; }
+  .text-btn {
+    height: var(--touch);
+    padding: 0 4px;
+    border: none;
+    background: transparent;
+    color: var(--accent);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    justify-self: end;
+  }
+
+  /* Архив */
+  .archive-list { display: flex; flex-direction: column; gap: var(--gap-m); padding-top: 24px; }
+  .archive-row {
+    min-height: 72px;
+    display: flex;
+    align-items: center;
+    gap: var(--gap-m);
+    padding: 8px 8px 8px 16px;
+    border-radius: var(--radius-card);
+    background: var(--surface);
+  }
+  .archive-row.cat-Work { background: var(--cat-work); }
+  .archive-row.cat-UniMe { background: var(--cat-unime); }
+  .archive-row.cat-Study { background: var(--cat-study); }
+  .archive-row.cat-Personal { background: var(--cat-personal); }
+  .archive-row .row-title { text-decoration: line-through; color: var(--ink-meta); }
+  .restore-btn {
+    flex: 0 0 var(--touch);
+    width: var(--touch);
+    height: var(--touch);
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: var(--radius-btn);
+    background: var(--tag-bg);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .restore-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
   .brand {
     font-family: var(--font-display);
@@ -621,13 +732,15 @@
   @keyframes toast-countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 
   .mobile-overlay {
-    display: none;
     position: fixed;
     inset: 0;
     background: var(--scrim);
     z-index: 40;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--dur-base) ease;
   }
-  .mobile-overlay.show { display: block; }
+  .mobile-overlay.show { opacity: 1; pointer-events: auto; }
 
   /* ---------- TopBar ---------- */
   /* В макете сверху 56 px под системную строку телефона. В браузере её уже нет,
@@ -859,12 +972,15 @@
   }
   .sheet-head {
     display: grid;
-    grid-template-columns: var(--touch) 1fr var(--touch);
+    /* боковые колонки равные, чтобы заголовок стоял по центру даже с «Сбросить» справа */
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
     gap: var(--gap-s);
     padding-top: calc(12px + env(safe-area-inset-top));
   }
   .sheet-head .t-modal-title { margin: 0; text-align: center; }
+  .sheet-head > :first-child { justify-self: start; }
+  .sheet-head > :last-child { justify-self: end; }
   .sheet-footer {
     position: fixed;
     bottom: 0;
@@ -1169,46 +1285,44 @@
 <body>
 <div class="mobile-overlay" id="mobileOverlay"></div>
 <aside class="sidebar" id="sidebar" aria-label="Меню">
-  <div>
-    <div class="brand">JulYera Agent</div>
-    <div class="brand-sub">Учёба · Работа · Поиск</div>
+  <div class="menu-head">
+    <span class="menu-brand">JulYera Agent</span>
+    <button class="tb-btn" id="menuClose" aria-label="Закрыть меню"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
 
-  <div class="filter-group">
-    <div class="filter-label">Вид</div>
-    <div class="chip-row" id="viewChips"></div>
-  </div>
-
-  <div class="filter-group">
-    <div class="filter-label">Категория</div>
-    <div class="chip-row" id="categoryChips"></div>
-  </div>
-
-  <div class="filter-group">
-    <div class="filter-label">Приоритет</div>
-    <div class="chip-row" id="priorityChips"></div>
-  </div>
-
-  <div class="sidebar-export">
-    <button class="icon-btn" id="exportCsvBtn">Экспорт CSV</button>
-    <button class="icon-btn" id="exportPdfBtn">Печать / PDF</button>
-  </div>
-
-  <div class="stats">
-    <div class="stat-row">
-      <span class="stat-num" id="statTotal">0</span>
-      <span class="stat-label">активных задач</span>
+  <div class="menu-stats">
+    <div class="menu-stat">
+      <span class="menu-stat-num" id="statTotal">0</span>
+      <span class="menu-stat-label" id="statTotalLabel">активных задач</span>
     </div>
-    <div class="stat-row">
-      <span class="stat-num" id="statHigh">0</span>
-      <span class="stat-label">высокий приоритет</span>
+    <div class="menu-stat">
+      <span class="menu-stat-num" id="statHigh">0</span>
+      <span class="menu-stat-label">с высоким приоритетом</span>
     </div>
-    <div class="backend-status" id="backendStatus" style="margin-top: 4px;">
-      <span class="dot" id="statusDot"></span>
+  </div>
+
+  <nav class="menu-nav" aria-label="Разделы меню">
+    <button class="menu-item" id="menuArchive">
+      <svg viewBox="0 0 24 24"><path d="M4 7h16v4H4zM6 11v8h12v-8M10 15h4"/></svg>
+      Архив
+    </button>
+    <button class="menu-item" id="exportCsvBtn">
+      <svg viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14"/></svg>
+      Экспорт CSV
+    </button>
+    <button class="menu-item" id="exportPdfBtn">
+      <svg viewBox="0 0 24 24"><path d="M7 9V4h10v5M7 17H5v-6h14v6h-2M7 14h10v6H7z"/></svg>
+      Печать / PDF
+    </button>
+  </nav>
+
+  <div class="menu-status">
+    <div class="menu-status-row" id="backendStatus">
+      <span class="status-dot" id="statusDot"></span>
       <span id="statusText">Проверка backend…</span>
     </div>
-    <div class="backend-status" id="googleStatusRow" style="margin-top: 4px;">
-      <span class="dot" id="googleDot"></span>
+    <div class="menu-status-row" id="googleStatusRow">
+      <span class="status-dot" id="googleDot"></span>
       <span id="googleStatusText">Google Calendar…</span>
     </div>
   </div>
@@ -1219,9 +1333,13 @@
     <button class="tb-btn" id="menuBtn" aria-label="Меню">
       <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
     </button>
+    <button class="tb-btn" id="backBtn" aria-label="Назад к задачам" hidden>
+      <svg viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></svg>
+    </button>
     <div class="topbar-group">
       <button class="tb-btn" id="filtersBtn" aria-label="Фильтры по категории и приоритету">
         <svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
+        <span class="filter-dot" id="filterDot" hidden></span>
       </button>
     </div>
   </header>
@@ -1240,13 +1358,15 @@
         <div class="day-tasks" id="dayTasks"></div>
       </section>
 
-      <!-- ВРЕМЕННО: старый список для архива, до экрана Archive на шаге 4 -->
-      <section id="archiveView" hidden>
-        <div class="list-head" style="padding-top: var(--gap-section);">
-          <span class="list-title" id="listTitle">Архив (Done)</span>
-          <span class="list-count" id="listCount">0</span>
+      <!-- Архив (макет Archive) -->
+      <section id="archiveView" aria-labelledby="archiveTitle" hidden>
+        <div class="day-head">
+          <div class="day-head-text">
+            <h1 class="t-h1" id="archiveTitle">Архив</h1>
+            <div class="day-sub" id="archiveSubtitle"></div>
+          </div>
         </div>
-        <div class="task-list" id="taskList"></div>
+        <div class="archive-list" id="archiveList"></div>
       </section>
     </div>
 
@@ -1316,6 +1436,34 @@
       <svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
     </button>
     <button class="btn-primary" id="composerBtn">Добавить</button>
+  </div>
+</div>
+
+<!-- Экран «Фильтры» (макет Filters) -->
+<div class="sheet" id="filtersSheet" role="dialog" aria-modal="true" aria-labelledby="filtersTitle" hidden>
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <button class="tb-btn" id="filtersClose" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <h2 class="t-modal-title" id="filtersTitle">Фильтры</h2>
+      <button class="text-btn" id="filtersReset">Сбросить</button>
+    </div>
+    <div class="filters-form">
+      <section class="form-section">
+        <h3 class="form-label" id="filterViewLabel">Вид</h3>
+        <div class="chip-group" id="filterView" role="group" aria-labelledby="filterViewLabel"></div>
+      </section>
+      <section class="form-section">
+        <h3 class="form-label" id="filterCatLabel">Категория</h3>
+        <div class="chip-group" id="filterCategory" role="group" aria-labelledby="filterCatLabel"></div>
+      </section>
+      <section class="form-section">
+        <h3 class="form-label" id="filterPrioLabel">Приоритет</h3>
+        <div class="chip-group" id="filterPriority" role="group" aria-labelledby="filterPrioLabel"></div>
+      </section>
+    </div>
+  </div>
+  <div class="sheet-footer">
+    <button class="btn-primary" id="filtersApply">Показать</button>
   </div>
 </div>
 
@@ -1438,33 +1586,14 @@ function toast(msg, actionLabel, actionFn) {
   toast._t = setTimeout(() => el.classList.remove('show'), actionLabel ? 5000 : 2600);
 }
 
-function makeChip(label, active, onClick) {
-  const el = document.createElement('div');
-  el.className = 'chip' + (active ? ' active' : '');
-  el.textContent = label;
-  el.onclick = onClick;
-  return el;
-}
-
+// Состояние фильтров отражается в верхней панели: точка на кнопке фильтров,
+// «Назад» вместо ☰ на экране архива (раздел 5).
 function renderChips() {
-  const viewWrap = document.getElementById('viewChips');
-  viewWrap.innerHTML = '';
-  viewWrap.appendChild(makeChip('Активные', viewMode === 'active', () => { viewMode = 'active'; editingTaskId = null; renderChips(); switchPage('list'); closeMobileMenuIfOpen(); }));
-  viewWrap.appendChild(makeChip('Архив', viewMode === 'archive', () => { viewMode = 'archive'; editingTaskId = null; renderChips(); switchPage('list'); closeMobileMenuIfOpen(); }));
-
-  const catWrap = document.getElementById('categoryChips');
-  catWrap.innerHTML = '';
-  catWrap.appendChild(makeChip('Все', activeCategory === null, () => { activeCategory = null; renderChips(); loadTasks(); closeMobileMenuIfOpen(); }));
-  CATEGORIES.forEach(c => {
-    catWrap.appendChild(makeChip(CATEGORY_LABEL[c], activeCategory === c, () => { activeCategory = c; renderChips(); loadTasks(); closeMobileMenuIfOpen(); }));
-  });
-
-  const prWrap = document.getElementById('priorityChips');
-  prWrap.innerHTML = '';
-  prWrap.appendChild(makeChip('Все', activePriority === null, () => { activePriority = null; renderChips(); loadTasks(); closeMobileMenuIfOpen(); }));
-  PRIORITIES.forEach(p => {
-    prWrap.appendChild(makeChip(p, activePriority === p, () => { activePriority = p; renderChips(); loadTasks(); closeMobileMenuIfOpen(); }));
-  });
+  const archive = currentPage === 'list' && viewMode === 'archive';
+  document.getElementById('filterDot').hidden = !(activeCategory || activePriority);
+  document.getElementById('menuBtn').hidden = archive;
+  document.getElementById('backBtn').hidden = !archive;
+  document.getElementById('filtersBtn').hidden = currentPage !== 'list' || archive;
 }
 
 function closeMobileMenuIfOpen() {
@@ -1830,6 +1959,9 @@ function renderList() {
 function updateStats() {
   const activeTasks = allTasks.filter(t => t.status !== 'Done');
   document.getElementById('statTotal').textContent = activeTasks.length;
+  const n = activeTasks.length, a = n % 10, b = n % 100;
+  document.getElementById('statTotalLabel').textContent =
+    a === 1 && b !== 11 ? 'активная задача' : (a >= 2 && a <= 4 && (b < 12 || b > 14) ? 'активные задачи' : 'активных задач');
   document.getElementById('statHigh').textContent = activeTasks.filter(t => t.priority === 'High').length;
 }
 
@@ -1851,7 +1983,7 @@ function renderCurrentPage() {
     const archive = viewMode === 'archive';
     document.getElementById('dayView').hidden = archive;
     document.getElementById('archiveView').hidden = !archive;
-    if (archive) renderList();
+    if (archive) renderArchive();
     else renderMain();
   } else if (currentPage === 'calendar') {
     renderCalendar();
@@ -1866,7 +1998,7 @@ function switchPage(page) {
     if (active) btn.setAttribute('aria-current', 'page');
     else btn.removeAttribute('aria-current');
   });
-  document.getElementById('filtersBtn').hidden = page !== 'list';
+  renderChips();
   document.getElementById('listView').style.display = page === 'list' ? '' : 'none';
   document.getElementById('calendarView').style.display = page === 'calendar' ? '' : 'none';
   document.getElementById('notesView').style.display = page === 'notes' ? '' : 'none';
@@ -2351,6 +2483,73 @@ function renderMain() {
   }
 }
 
+// ---------- Архив (макет Archive) ----------
+const MONTH_SHORT = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+
+function pluralDone(n) {
+  if (n === 0) return 'нет выполненных задач';
+  const a = n % 10, b = n % 100;
+  if (a === 1 && b !== 11) return n + ' выполненная задача';
+  if (a >= 2 && a <= 4 && (b < 12 || b > 14)) return n + ' выполненные задачи';
+  return n + ' выполненных задач';
+}
+
+function renderArchive() {
+  // Новые сверху: по времени последнего изменения (когда задачу закрыли).
+  const done = allTasks.filter(t => t.status === 'Done')
+    .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+  document.getElementById('archiveSubtitle').textContent = pluralDone(done.length);
+  const list = document.getElementById('archiveList');
+  list.innerHTML = '';
+  if (!done.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-dashed';
+    empty.textContent = 'В архиве пока пусто';
+    list.appendChild(empty);
+    return;
+  }
+  done.forEach(task => {
+    const row = document.createElement('div');
+    row.className = `archive-row cat-${task.category}`;
+    const body = document.createElement('div');
+    body.className = 'row-body';
+    const title = document.createElement('div');
+    title.className = 'row-title';
+    title.textContent = task.task;
+    const meta = document.createElement('div');
+    meta.className = 'row-meta';
+    const when = document.createElement('span');
+    when.className = 'row-time';
+    const dt = task.deadline && parseNaiveDeadline(task.deadline);
+    when.textContent = dt ? `${dt.getDate()} ${MONTH_SHORT[dt.getMonth()]} · ${timeOf(task.deadline)}` : 'Без срока';
+    const cat = document.createElement('span');
+    cat.textContent = CATEGORY_LABEL[task.category] || task.category;
+    meta.append(when, cat);
+    body.append(title, meta);
+
+    const restore = document.createElement('button');
+    restore.className = 'restore-btn';
+    restore.dataset.focusKey = 'restore-' + task.id;
+    restore.setAttribute('aria-label', 'Вернуть в список: ' + task.task);
+    restore.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 7L5 11l4 4"/><path d="M5 11h9a5 5 0 0 1 0 10h-3"/></svg>';
+    restore.onclick = async () => {
+      restore.disabled = true;
+      await updateStatus(task.id, 'To Do');
+      // фокус на следующую кнопку «Вернуть», чтобы не потерять место в списке
+      const next = document.querySelector('#archiveList .restore-btn');
+      if (next) next.focus({ preventScroll: true });
+    };
+    row.append(body, restore);
+    list.appendChild(row);
+  });
+}
+
+document.getElementById('backBtn').onclick = () => {
+  viewMode = 'active';
+  switchPage('list');
+  document.getElementById('menuBtn').focus();
+};
+
 // На ноутбуке колесо мыши крутит полосу дней по горизонтали (тачпад и так листает вбок).
 document.getElementById('dayStrip').addEventListener('wheel', (e) => {
   const strip = e.currentTarget;
@@ -2462,7 +2661,10 @@ function renderCalendar() {
 }
 
 document.querySelectorAll('.dock-btn').forEach(btn => {
-  btn.onclick = () => switchPage(btn.dataset.page);
+  btn.onclick = () => {
+    if (btn.dataset.page === 'list') viewMode = 'active'; // «Задачи» уводит из архива к списку на день
+    switchPage(btn.dataset.page);
+  };
 });
 
 // ---------- Заметки ----------
@@ -2654,6 +2856,7 @@ function setBackendStatus(ok) {
   const text = document.getElementById('statusText');
   dot.classList.toggle('ok', ok);
   dot.classList.toggle('err', !ok);
+  document.getElementById('backendStatus').classList.toggle('err', !ok);
   text.textContent = ok ? 'Backend подключён' : 'Backend недоступен';
 }
 
@@ -2899,8 +3102,6 @@ function openPrintView() {
   setTimeout(() => win.print(), 300);
 }
 
-document.getElementById('exportCsvBtn').onclick = downloadCSV;
-document.getElementById('exportPdfBtn').onclick = openPrintView;
 
 // ---------- Меню (временно старая шторка; MenuDrawer и Filters на шаге 4) ----------
 const mobileOverlay = document.getElementById('mobileOverlay');
@@ -2910,15 +3111,111 @@ function openMobileMenu() {
   sidebarEl.classList.add('mobile-open');
   mobileOverlay.classList.add('show');
   setBackgroundInert(true);
+  document.getElementById('menuClose').focus();
 }
 function closeMobileMenu() {
+  if (!sidebarEl.classList.contains('mobile-open')) return;
   sidebarEl.classList.remove('mobile-open');
   mobileOverlay.classList.remove('show');
   setBackgroundInert(false);
+  const menuBtn = document.getElementById('menuBtn');
+  if (!menuBtn.hidden) menuBtn.focus();
 }
 document.getElementById('menuBtn').onclick = openMobileMenu;
-document.getElementById('filtersBtn').onclick = openMobileMenu;
+document.getElementById('menuClose').onclick = closeMobileMenu;
 mobileOverlay.onclick = closeMobileMenu;
+document.getElementById('menuArchive').onclick = () => {
+  viewMode = 'archive';
+  closeMobileMenu();
+  switchPage('list');
+  document.getElementById('backBtn').focus();
+};
+document.getElementById('exportCsvBtn').onclick = () => { closeMobileMenu(); downloadCSV(); };
+document.getElementById('exportPdfBtn').onclick = () => { closeMobileMenu(); openPrintView(); };
+
+// ---------- Экран «Фильтры» (макет Filters, раздел 5) ----------
+// Выбор копится в черновике; «Показать» применяет, крестик и Esc закрывают без изменений.
+const filtersSheet = document.getElementById('filtersSheet');
+let filterDraft = { view: 'active', category: null, priority: null };
+
+function renderFilters() {
+  const view = document.getElementById('filterView');
+  view.innerHTML = '';
+  [['active', 'Активные'], ['archive', 'Архив']].forEach(([value, label]) => {
+    const [btn, text] = choiceChipEl(label, filterDraft.view === value, 'solid',
+      () => { filterDraft.view = value; renderFilters(); });
+    btn.appendChild(text);
+    view.appendChild(btn);
+  });
+
+  const cats = document.getElementById('filterCategory');
+  cats.innerHTML = '';
+  [null, ...CATEGORIES].forEach(c => {
+    const [btn, text] = choiceChipEl(c ? CATEGORY_LABEL[c] : 'Все', filterDraft.category === c, c ? 'cat-' + c : 'solid',
+      () => { filterDraft.category = c; renderFilters(); });
+    if (c) {
+      const dot = document.createElement('span');
+      dot.className = 'cat-dot';
+      btn.appendChild(dot);
+    }
+    btn.appendChild(text);
+    cats.appendChild(btn);
+  });
+
+  const prios = document.getElementById('filterPriority');
+  prios.innerHTML = '';
+  [null, ...PRIORITIES].forEach(p => {
+    const [btn, text] = choiceChipEl(p || 'Все', filterDraft.priority === p, p ? 'prio' : 'solid',
+      () => { filterDraft.priority = p; renderFilters(); });
+    if (p) {
+      const bars = document.createElement('span');
+      bars.className = 'mini-bars';
+      bars.setAttribute('aria-hidden', 'true');
+      for (let i = 1; i <= 3; i++) {
+        const bar = document.createElement('span');
+        if (i <= PRIORITY_LEVEL[p]) bar.className = 'on';
+        bars.appendChild(bar);
+      }
+      btn.appendChild(bars);
+    }
+    btn.appendChild(text);
+    prios.appendChild(btn);
+  });
+}
+
+function openFilters() {
+  filterDraft = { view: viewMode, category: activeCategory, priority: activePriority };
+  renderFilters();
+  filtersSheet.hidden = false;
+  filtersSheet.scrollTop = 0;
+  document.body.classList.add('no-scroll');
+  setBackgroundInert(true);
+  document.getElementById('filtersClose').focus();
+}
+
+function closeFilters() {
+  filtersSheet.hidden = true;
+  document.body.classList.remove('no-scroll');
+  setBackgroundInert(false);
+  const btn = document.getElementById(viewMode === 'archive' ? 'backBtn' : 'filtersBtn');
+  if (!btn.hidden) btn.focus();
+}
+
+document.getElementById('filtersBtn').onclick = openFilters;
+document.getElementById('filtersClose').onclick = closeFilters;
+document.getElementById('filtersReset').onclick = () => {
+  filterDraft = { view: 'active', category: null, priority: null };
+  renderFilters();
+};
+document.getElementById('filtersApply').onclick = () => {
+  const reload = filterDraft.category !== activeCategory || filterDraft.priority !== activePriority;
+  viewMode = filterDraft.view;
+  activeCategory = filterDraft.category;
+  activePriority = filterDraft.priority;
+  closeFilters();
+  switchPage('list');
+  if (reload) loadTasks(); // категория и приоритет фильтруются на сервере
+};
 
 // Пока открыт модальный экран или меню, страница под ним недоступна для Tab и скринридера.
 function setBackgroundInert(on) {
@@ -3083,6 +3380,7 @@ document.getElementById('editStepInput').onkeydown = (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (!editSheet.hidden) closeEdit();
+  else if (!filtersSheet.hidden) closeFilters();
   else if (!newTaskSheet.hidden) closeNewTask();
   else if (sidebarEl.classList.contains('mobile-open')) closeMobileMenu();
   else if (openSwipe) closeSwipe();
