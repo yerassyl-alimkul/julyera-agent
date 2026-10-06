@@ -119,6 +119,9 @@
     overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
   }
 
+  /* Атрибут hidden всегда скрывает, даже если у элемента задан display. */
+  [hidden] { display: none !important; }
+
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   @media (prefers-reduced-motion: reduce) {
@@ -130,20 +133,40 @@
     }
   }
 
+  /* Одна колонка: на телефоне во всю ширину, на ноутбуке 480 px по центру (решение владельца). */
   .app {
-    display: grid;
-    grid-template-columns: 240px 1fr;
+    max-width: 480px;
+    margin: 0 auto;
     min-height: 100vh;
   }
 
-  /* ---------- Sidebar ---------- */
+  /* ---------- Sidebar (временно: старое меню-шторка, заменит MenuDrawer на шаге 4) ---------- */
   .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: min(304px, 85vw);
+    z-index: 50;
+    background: var(--bg);
     border-right: 1px solid var(--border);
     padding: 28px 20px;
     display: flex;
     flex-direction: column;
     gap: 28px;
+    transform: translateX(-100%);
+    /* visibility прячет закрытое меню от Tab и скринридера, но только после анимации */
+    visibility: hidden;
+    transition: transform var(--dur-menu) ease, visibility 0s linear var(--dur-menu);
+    overflow-y: auto;
   }
+  .sidebar.mobile-open {
+    transform: translateX(0);
+    visibility: visible;
+    transition: transform var(--dur-menu) ease, visibility 0s;
+    box-shadow: 4px 0 24px rgba(23, 24, 28, .12);
+  }
+  .sidebar-export { display: flex; flex-wrap: wrap; gap: 6px; }
 
   .brand {
     font-family: var(--font-display);
@@ -210,7 +233,8 @@
 
   /* ---------- Main ---------- */
   .main {
-    padding: 28px 32px;
+    /* Снизу место под нижнюю панель, чтобы последняя строка не пряталась под ней. */
+    padding: 0 var(--gutter) calc(120px + env(safe-area-inset-bottom));
     display: flex;
     flex-direction: column;
     gap: 24px;
@@ -267,30 +291,6 @@
   button.primary:hover { filter: brightness(1.1); }
   button.primary:disabled { opacity: .5; cursor: default; }
 
-  .page-tabs {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap; /* ВРЕМЕННО до шага 2: с шрифтом 16 px ряд не помещается в 360 px */
-    gap: 6px;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 2px;
-  }
-  .export-group { margin-left: auto; display: flex; gap: 6px; margin-bottom: 6px; }
-  .page-tab {
-    background: transparent;
-    border: none;
-    color: var(--text-dim);
-    font-family: inherit;
-    font-size: 13.5px;
-    font-weight: 500;
-    padding: 8px 4px 10px;
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -1px;
-  }
-  .page-tab:hover { color: var(--text); }
-  .page-tab.active { color: var(--text); border-bottom-color: var(--accent); }
-
   .cal-header {
     display: flex;
     align-items: center;
@@ -313,7 +313,7 @@
   .cal-calendar-col {
     flex: 1 1 560px;
     max-width: 640px;
-    min-width: 320px;
+    min-width: 0;
   }
   .cal-day-tasks-panel {
     flex: 1 1 300px;
@@ -323,7 +323,7 @@
 
   .cal-weekdays {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 6px;
     margin-bottom: 6px;
   }
@@ -336,7 +336,7 @@
 
   .cal-grid {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 6px;
   }
 
@@ -607,22 +607,6 @@
     padding: 0;
   }
 
-  .mobile-menu-btn {
-    display: none;
-    position: fixed;
-    top: 14px;
-    left: 14px;
-    z-index: 60;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-size: 18px;
-    width: 38px;
-    height: 38px;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-  }
-
   .mobile-overlay {
     display: none;
     position: fixed;
@@ -632,106 +616,323 @@
   }
   .mobile-overlay.show { display: block; }
 
-  @media (max-width: 880px) {
-    .app { grid-template-columns: 1fr; }
-    .mobile-menu-btn { display: block; }
-    .sidebar {
-      position: fixed;
-      top: 0;
-      left: 0;
-      height: 100vh;
-      width: 50%;
-      max-width: 260px;
-      z-index: 50;
-      background: var(--bg);
-      border-right: 1px solid var(--border);
-      border-bottom: none;
-      flex-direction: column;
-      flex-wrap: nowrap;
-      transform: translateX(-100%);
-      transition: transform .25s ease;
-      overflow-y: auto;
-    }
-    .sidebar.mobile-open { transform: translateX(0); box-shadow: 4px 0 24px rgba(23, 24, 28, .12); }
-    .stats { margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border); }
-    .main { padding-top: 56px; }
-    .task-list { max-width: none; }
+  /* ---------- TopBar ---------- */
+  /* В макете сверху 56 px под системную строку телефона. В браузере её уже нет,
+     поэтому оставляем небольшой отступ плюс безопасную зону (вырез, «чёлка»). */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: calc(12px + env(safe-area-inset-top)) var(--gutter) 0;
   }
+  .topbar-group { display: flex; gap: var(--gap-s); }
+  .tb-btn {
+    width: var(--touch);
+    height: var(--touch);
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-btn);
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .tb-btn svg {
+    width: 20px; height: 20px;
+    fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  }
+
+  /* ---------- Main: заголовок дня ---------- */
+  .day-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--gap-l);
+    padding-top: var(--gap-section);
+  }
+  .day-head-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .day-head .t-h1 { margin: 0; }
+  .day-sub { font-size: 15px; color: var(--ink-muted); }
+  .pill-btn {
+    flex: 0 0 auto;
+    height: var(--touch);
+    padding: 0 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-pill);
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* ---------- DayChip: полоса дней ---------- */
+  .day-strip {
+    position: relative; /* offsetLeft чипов считается от полосы */
+    display: flex;
+    gap: var(--gap-s);
+    margin: 18px calc(-1 * var(--gutter)) 0;
+    padding: 0 var(--gutter);
+    overflow-x: auto;
+    scroll-padding: 0 var(--gutter);
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .day-strip::-webkit-scrollbar { display: none; }
+  .day-chip {
+    flex: 0 0 52px;
+    height: 80px;
+    padding: 8px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-compact);
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+    transition: background-color var(--dur-chip) ease, color var(--dur-chip) ease, border-color var(--dur-chip) ease;
+  }
+  .day-chip.wide { flex: 0 0 auto; min-width: 64px; padding-left: 10px; padding-right: 10px; }
+  .day-chip.today { border: 1.5px solid var(--accent); }
+  .day-chip-wd { font-size: 12px; font-weight: 500; color: var(--ink-muted); white-space: nowrap; }
+  .day-chip-num { font-family: var(--font-display); font-weight: 600; font-size: 18px; line-height: 1; }
+  .day-chip-count { min-height: 14px; font-size: 11px; font-weight: 600; color: var(--ink-muted); }
+  .day-chip.overdue .day-chip-num { color: var(--danger); }
+  .day-chip.selected { background: var(--ink); border-color: var(--ink); color: #FFFFFF; }
+  .day-chip.selected .day-chip-wd { color: #C9CAD2; }
+  .day-chip.selected .day-chip-count,
+  .day-chip.selected.overdue .day-chip-num { color: #FFFFFF; }
+
+  /* ---------- TaskRow ---------- */
+  .day-tasks { display: flex; flex-direction: column; gap: var(--gap-m); padding-top: 20px; }
+  .task-row {
+    min-height: 72px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px 8px 8px;
+    border-radius: var(--radius-card);
+    background: var(--surface);
+  }
+  .task-row.cat-Work { background: var(--cat-work); }
+  .task-row.cat-UniMe { background: var(--cat-unime); }
+  .task-row.cat-Study { background: var(--cat-study); }
+  .task-row.cat-Personal { background: var(--cat-personal); }
+  .row-check {
+    flex: 0 0 var(--touch);
+    width: var(--touch);
+    height: var(--touch);
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+  }
+  .check-circle {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 2px solid var(--ink);
+    transition: transform var(--dur-fast) ease-out, background-color var(--dur-fast) ease-out;
+  }
+  .check-circle svg {
+    width: 12px; height: 12px;
+    fill: none; stroke: transparent; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .task-row.done .check-circle { background: var(--ink); transform: scale(1.12); }
+  .task-row.done .check-circle svg { stroke: #FFFFFF; }
+  .task-row.done .row-title { text-decoration: line-through; color: var(--ink-meta); }
+  .row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .row-title { font-size: 16px; font-weight: 500; line-height: 1.25; overflow-wrap: anywhere; }
+  .row-meta { font-size: 13px; line-height: 1.35; color: var(--ink-meta); }
+  .row-time { font-weight: 600; color: var(--ink); margin-right: var(--gap-s); }
+  .row-time.overdue { color: var(--danger); }
+
+  /* PriorityBars: 3 столбика, высоты 8 / 13 / 18 */
+  .prio-bars { position: relative; flex: 0 0 auto; height: 18px; display: flex; align-items: flex-end; gap: 3px; }
+  .prio-bars span[aria-hidden] { width: 4px; border-radius: 2px; background: var(--bar-off); }
+  .prio-bars span[aria-hidden]:nth-child(1) { height: 8px; }
+  .prio-bars span[aria-hidden]:nth-child(2) { height: 13px; }
+  .prio-bars span[aria-hidden]:nth-child(3) { height: 18px; }
+  .prio-bars span.on { background: var(--ink); }
+
+  .empty-dashed {
+    margin-top: var(--gap-l);
+    padding: 28px 20px;
+    border: 1.5px dashed var(--dashed);
+    border-radius: var(--radius-card);
+    text-align: center;
+    font-size: 15px;
+    line-height: 1.4;
+    color: var(--ink-muted);
+  }
+
+  /* ---------- Dock: нижняя панель и кнопка «+» ---------- */
+  .dock-wrap {
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(100%, 480px);
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: var(--gap-l);
+    padding: 12px var(--gutter) calc(16px + env(safe-area-inset-bottom));
+    background: var(--bg);
+    border-top: 1px solid var(--hairline);
+  }
+  .dock {
+    flex: 1;
+    height: var(--touch-l);
+    display: flex;
+    gap: 4px;
+    padding: 6px;
+    border-radius: var(--radius-dock);
+    background: var(--ink);
+  }
+  .dock-btn {
+    flex: 1;
+    min-width: var(--touch);
+    padding: 0;
+    border: none;
+    border-radius: 24px;
+    background: transparent;
+    color: var(--dock-text);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color var(--dur-chip) ease, color var(--dur-chip) ease;
+  }
+  .dock-btn.active { background: var(--surface); color: var(--ink); font-weight: 600; }
+  .fab {
+    flex: 0 0 var(--touch-l);
+    width: var(--touch-l);
+    height: var(--touch-l);
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: var(--radius-fab);
+    background: var(--accent);
+    color: #FFFFFF;
+    cursor: pointer;
+  }
+  .fab svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+
+  /* ---------- Экран «Новая задача» (временно: каркас, оформление на шаге 3) ---------- */
+  .sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    overflow-y: auto;
+    background: var(--bg);
+  }
+  .sheet[hidden] { display: none; }
+  .sheet-inner { max-width: 480px; margin: 0 auto; padding: 0 var(--gutter) var(--gutter); }
+  .sheet-head { display: flex; align-items: center; gap: var(--gap-l); padding: calc(12px + env(safe-area-inset-top)) 0 var(--gap-section); }
+  .sheet-head .t-modal-title { margin: 0; }
+  body.no-scroll { overflow: hidden; }
+
+  /* ВРЕМЕННО: отступ под верхней панелью у старых экранов (новые на шагах 5 и 6) */
+  #calendarView, #notesView { padding-top: var(--gap-section); }
+
+  .toast { bottom: calc(100px + env(safe-area-inset-bottom)); z-index: 80; }
+
 </style>
 </head>
 <body>
-<button class="mobile-menu-btn" id="mobileMenuBtn">☰</button>
 <div class="mobile-overlay" id="mobileOverlay"></div>
+<aside class="sidebar" id="sidebar" aria-label="Меню">
+  <div>
+    <div class="brand">JulYera Agent</div>
+    <div class="brand-sub">Учёба · Работа · Поиск</div>
+  </div>
+
+  <div class="filter-group">
+    <div class="filter-label">Вид</div>
+    <div class="chip-row" id="viewChips"></div>
+  </div>
+
+  <div class="filter-group">
+    <div class="filter-label">Категория</div>
+    <div class="chip-row" id="categoryChips"></div>
+  </div>
+
+  <div class="filter-group">
+    <div class="filter-label">Приоритет</div>
+    <div class="chip-row" id="priorityChips"></div>
+  </div>
+
+  <div class="sidebar-export">
+    <button class="icon-btn" id="exportCsvBtn">Экспорт CSV</button>
+    <button class="icon-btn" id="exportPdfBtn">Печать / PDF</button>
+  </div>
+
+  <div class="stats">
+    <div class="stat-row">
+      <span class="stat-num" id="statTotal">0</span>
+      <span class="stat-label">активных задач</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-num" id="statHigh">0</span>
+      <span class="stat-label">высокий приоритет</span>
+    </div>
+    <div class="backend-status" id="backendStatus" style="margin-top: 4px;">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">Проверка backend…</span>
+    </div>
+    <div class="backend-status" id="googleStatusRow" style="margin-top: 4px;">
+      <span class="dot" id="googleDot"></span>
+      <span id="googleStatusText">Google Calendar…</span>
+    </div>
+  </div>
+</aside>
+
 <div class="app">
-  <aside class="sidebar" id="sidebar">
-    <div>
-      <div class="brand">JulYera Agent</div>
-      <div class="brand-sub">Учёба · Работа · Поиск</div>
+  <header class="topbar">
+    <button class="tb-btn" id="menuBtn" aria-label="Меню">
+      <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+    </button>
+    <div class="topbar-group">
+      <button class="tb-btn" id="filtersBtn" aria-label="Фильтры по категории и приоритету">
+        <svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
+      </button>
     </div>
-
-    <div class="filter-group">
-      <div class="filter-label">Вид</div>
-      <div class="chip-row" id="viewChips"></div>
-    </div>
-
-    <div class="filter-group">
-      <div class="filter-label">Категория</div>
-      <div class="chip-row" id="categoryChips"></div>
-    </div>
-
-    <div class="filter-group">
-      <div class="filter-label">Приоритет</div>
-      <div class="chip-row" id="priorityChips"></div>
-    </div>
-
-    <div class="stats">
-      <div class="stat-row">
-        <span class="stat-num" id="statTotal">0</span>
-        <span class="stat-label">активных задач</span>
-      </div>
-      <div class="stat-row">
-        <span class="stat-num" id="statHigh">0</span>
-        <span class="stat-label">высокий приоритет</span>
-      </div>
-      <div class="backend-status" id="backendStatus" style="margin-top: 4px;">
-        <span class="dot" id="statusDot"></span>
-        <span id="statusText">Проверка backend…</span>
-      </div>
-      <div class="backend-status" id="googleStatusRow" style="margin-top: 4px;">
-        <span class="dot" id="googleDot"></span>
-        <span id="googleStatusText">Google Calendar…</span>
-      </div>
-    </div>
-  </aside>
+  </header>
 
   <main class="main">
-    <div class="composer">
-      <textarea id="composerInput" placeholder="Опиши задачу своими словами — я сам разберу категорию, приоритет и дедлайн (можно с временем, например «сегодня в 18:00»)…"></textarea>
-      <div class="composer-footer">
-        <span class="composer-hint">Enter — новая строка, кнопка — отправить</span>
-        <div class="composer-buttons">
-          <button class="icon-btn" id="micBtn" title="Голосовой ввод">🎤</button>
-          <button class="primary" id="composerBtn">Добавить</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="page-tabs">
-      <button class="page-tab active" id="tabList">Список</button>
-      <button class="page-tab" id="tabCalendar">Календарь</button>
-      <button class="page-tab" id="tabNotes">Заметки</button>
-      <div class="export-group">
-        <button class="icon-btn" id="exportCsvBtn">Экспорт CSV</button>
-        <button class="icon-btn" id="exportPdfBtn">Печать / PDF</button>
-      </div>
-    </div>
-
     <div id="listView">
-      <div class="list-head">
-        <span class="list-title" id="listTitle">To Do</span>
-        <span class="list-count" id="listCount">0</span>
-      </div>
-      <div class="task-list" id="taskList"></div>
+      <section id="dayView" aria-labelledby="dayTitle">
+        <div class="day-head">
+          <div class="day-head-text">
+            <h1 class="t-h1" id="dayTitle"></h1>
+            <div class="day-sub" id="daySubtitle"></div>
+          </div>
+          <button class="pill-btn" id="todayBtn" hidden>Сегодня</button>
+        </div>
+        <div class="day-strip" id="dayStrip" role="group" aria-label="Дни"></div>
+        <div class="day-tasks" id="dayTasks"></div>
+      </section>
+
+      <!-- ВРЕМЕННО: старый список для архива, до экрана Archive на шаге 4 -->
+      <section id="archiveView" hidden>
+        <div class="list-head" style="padding-top: var(--gap-section);">
+          <span class="list-title" id="listTitle">Архив (Done)</span>
+          <span class="list-count" id="listCount">0</span>
+        </div>
+        <div class="task-list" id="taskList"></div>
+      </section>
     </div>
 
     <div id="calendarView" style="display: none;">
@@ -768,6 +969,39 @@
       <div class="notes-list" id="notesList"></div>
     </div>
   </main>
+</div>
+
+<div class="dock-wrap">
+  <nav class="dock" aria-label="Разделы">
+    <button class="dock-btn active" data-page="list" aria-current="page">Задачи</button>
+    <button class="dock-btn" data-page="calendar">Календарь</button>
+    <button class="dock-btn" data-page="notes">Заметки</button>
+  </nav>
+  <button class="fab" id="fabBtn" aria-label="Добавить задачу">
+    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+  </button>
+</div>
+
+<!-- ВРЕМЕННО: каркас экрана NewTask со старым полем ввода, оформление на шаге 3 -->
+<div class="sheet" id="newTaskSheet" role="dialog" aria-modal="true" aria-labelledby="newTaskTitle" hidden>
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <button class="tb-btn" id="newTaskClose" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <h2 class="t-modal-title" id="newTaskTitle">Новая задача</h2>
+    </div>
+    <div class="composer">
+      <textarea id="composerInput" placeholder="Опиши задачу своими словами — я сам разберу категорию, приоритет и дедлайн (можно с временем, например «сегодня в 18:00»)…"></textarea>
+      <div class="composer-footer">
+        <span class="composer-hint">Enter — новая строка, кнопка — отправить</span>
+        <div class="composer-buttons">
+          <button class="icon-btn" id="micBtn" title="Голосовой ввод" aria-label="Голосовой ввод">🎤</button>
+          <button class="primary" id="composerBtn">Добавить</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast">
@@ -835,8 +1069,8 @@ function makeChip(label, active, onClick) {
 function renderChips() {
   const viewWrap = document.getElementById('viewChips');
   viewWrap.innerHTML = '';
-  viewWrap.appendChild(makeChip('Активные', viewMode === 'active', () => { viewMode = 'active'; editingTaskId = null; renderChips(); renderList(); closeMobileMenuIfOpen(); }));
-  viewWrap.appendChild(makeChip('Архив', viewMode === 'archive', () => { viewMode = 'archive'; editingTaskId = null; renderChips(); renderList(); closeMobileMenuIfOpen(); }));
+  viewWrap.appendChild(makeChip('Активные', viewMode === 'active', () => { viewMode = 'active'; editingTaskId = null; renderChips(); switchPage('list'); closeMobileMenuIfOpen(); }));
+  viewWrap.appendChild(makeChip('Архив', viewMode === 'archive', () => { viewMode = 'archive'; editingTaskId = null; renderChips(); switchPage('list'); closeMobileMenuIfOpen(); }));
 
   const catWrap = document.getElementById('categoryChips');
   catWrap.innerHTML = '';
@@ -1209,7 +1443,9 @@ function renderList() {
   } else {
     list.forEach(t => container.appendChild(cardEl(t)));
   }
+}
 
+function updateStats() {
   const activeTasks = allTasks.filter(t => t.status !== 'Done');
   document.getElementById('statTotal').textContent = activeTasks.length;
   document.getElementById('statHigh').textContent = activeTasks.filter(t => t.priority === 'High').length;
@@ -1227,21 +1463,290 @@ function dateKey(deadlineStr) {
 }
 
 function renderCurrentPage() {
-  if (currentPage === 'list') renderList();
-  else renderCalendar();
+  updateStats();
+  if (currentPage === 'list') {
+    const archive = viewMode === 'archive';
+    document.getElementById('dayView').hidden = archive;
+    document.getElementById('archiveView').hidden = !archive;
+    if (archive) renderList();
+    else renderMain();
+  } else if (currentPage === 'calendar') {
+    renderCalendar();
+  }
 }
 
 function switchPage(page) {
   currentPage = page;
-  document.getElementById('tabList').classList.toggle('active', page === 'list');
-  document.getElementById('tabCalendar').classList.toggle('active', page === 'calendar');
-  document.getElementById('tabNotes').classList.toggle('active', page === 'notes');
+  document.querySelectorAll('.dock-btn').forEach(btn => {
+    const active = btn.dataset.page === page;
+    btn.classList.toggle('active', active);
+    if (active) btn.setAttribute('aria-current', 'page');
+    else btn.removeAttribute('aria-current');
+  });
+  document.getElementById('filtersBtn').hidden = page !== 'list';
   document.getElementById('listView').style.display = page === 'list' ? '' : 'none';
   document.getElementById('calendarView').style.display = page === 'calendar' ? '' : 'none';
   document.getElementById('notesView').style.display = page === 'notes' ? '' : 'none';
   if (page === 'notes') loadNotes();
   else renderCurrentPage();
 }
+
+// ---------- Main: задачи на день (design/DESIGN.md, раздел 5) ----------
+const WEEKDAY_SHORT = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+const WEEKDAY_FULL = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+const MONTH_GENITIVE = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+const PRIORITY_LEVEL = { High: 3, Mid: 2, Low: 1 };
+const PRIORITY_TEXT = { High: 'Приоритет: высокий', Mid: 'Приоритет: средний', Low: 'Приоритет: низкий' };
+const STRIP_DAYS_AHEAD = 14; // сплошные дни от сегодня; дальше только дни с задачами
+const DAY_OVERDUE = 'overdue';
+const DAY_NODATE = 'nodate';
+
+let selectedDay = null; // DAY_OVERDUE | DAY_NODATE | 'YYYY-MM-DD'; null — сегодня
+let stripNeedsScroll = true; // прокрутить полосу к выбранному дню при следующей отрисовке
+
+// Ключ "YYYY-MM-DD" локальной даты (не toISOString: тот дал бы дату по UTC).
+function localDateKey(dt) {
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
+
+function keyToDate(key) {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function pluralTasks(n) {
+  if (n === 0) return 'нет задач';
+  const a = n % 10, b = n % 100;
+  if (a === 1 && b !== 11) return n + ' задача';
+  if (a >= 2 && a <= 4 && (b < 12 || b > 14)) return n + ' задачи';
+  return n + ' задач';
+}
+
+// «2 из 3 шагов», «1 из 1 шага», «0 из 21 шага»
+function stepsText(done, total) {
+  const word = (total % 10 === 1 && total % 100 !== 11) ? 'шага' : 'шагов';
+  return `${done} из ${total} ${word}`;
+}
+
+function timeOf(deadline) {
+  const dt = parseNaiveDeadline(deadline);
+  return dt ? `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}` : '';
+}
+
+// Сравнение дедлайнов как строк «голых» часов: формат у всех одинаковый.
+function byDeadline(a, b) {
+  return (a.deadline || '').slice(0, 16).localeCompare((b.deadline || '').slice(0, 16));
+}
+
+function groupActiveTasks() {
+  const today = localDateKey(new Date());
+  const groups = { overdue: [], nodate: [], byDay: {} };
+  allTasks.filter(t => t.status !== 'Done').forEach(t => {
+    if (!t.deadline) { groups.nodate.push(t); return; }
+    const key = dateKey(t.deadline);
+    if (key < today) groups.overdue.push(t);
+    else (groups.byDay[key] = groups.byDay[key] || []).push(t);
+  });
+  groups.overdue.sort(byDeadline);
+  Object.values(groups.byDay).forEach(list => list.sort(byDeadline));
+  return { today, groups };
+}
+
+function stripDayKeys(today, byDay) {
+  const keys = [];
+  const start = keyToDate(today);
+  for (let i = 0; i < STRIP_DAYS_AHEAD; i++) {
+    keys.push(localDateKey(new Date(start.getFullYear(), start.getMonth(), start.getDate() + i)));
+  }
+  const last = keys[keys.length - 1];
+  Object.keys(byDay).filter(k => k > last).sort().forEach(k => keys.push(k));
+  return keys;
+}
+
+function dayChipEl({ key, wd, num, count, label, extraClass }) {
+  const btn = document.createElement('button');
+  btn.className = 'day-chip' + (extraClass ? ' ' + extraClass : '');
+  btn.dataset.day = key;
+  btn.setAttribute('aria-pressed', String(key === selectedDay));
+  btn.setAttribute('aria-label', label);
+  if (key === selectedDay) btn.classList.add('selected');
+  btn.innerHTML = '<span class="day-chip-wd"></span><span class="day-chip-num"></span><span class="day-chip-count"></span>';
+  btn.querySelector('.day-chip-wd').textContent = wd;
+  btn.querySelector('.day-chip-num').textContent = num;
+  btn.querySelector('.day-chip-count').textContent = count;
+  btn.onclick = () => selectDay(key);
+  return btn;
+}
+
+function selectDay(key) {
+  selectedDay = key;
+  stripNeedsScroll = true; // докрутить, если чип был виден только краем
+  renderMain();
+}
+
+function taskRowEl(task, mode) {
+  const row = document.createElement('div');
+  row.className = `task-row cat-${task.category}`;
+  row.dataset.id = task.id;
+
+  const check = document.createElement('button');
+  check.className = 'row-check';
+  check.setAttribute('aria-label', 'Отметить выполненной: ' + task.task);
+  check.innerHTML = '<span class="check-circle"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>';
+  check.onclick = () => completeTask(task.id, row, check);
+
+  const body = document.createElement('div');
+  body.className = 'row-body';
+  const title = document.createElement('div');
+  title.className = 'row-title';
+  title.textContent = task.task;
+
+  const meta = document.createElement('div');
+  meta.className = 'row-meta';
+  const time = document.createElement('span');
+  time.className = 'row-time';
+  if (mode === DAY_NODATE) {
+    time.textContent = 'Без срока';
+  } else if (mode === DAY_OVERDUE) {
+    const dt = parseNaiveDeadline(task.deadline);
+    time.textContent = `${dt.getDate()} ${MONTH_GENITIVE[dt.getMonth()]}, ${timeOf(task.deadline)}`;
+    time.classList.add('overdue');
+  } else {
+    time.textContent = timeOf(task.deadline);
+  }
+  const rest = [CATEGORY_LABEL[task.category] || task.category];
+  const steps = allSubtasks.filter(s => s.task_id === task.id);
+  if (steps.length) rest.push(stepsText(steps.filter(s => s.is_done).length, steps.length));
+  (task.tags || []).forEach(tag => rest.push('#' + tag));
+  const restEl = document.createElement('span');
+  restEl.textContent = rest.join(' · ');
+  meta.append(time, restEl);
+  body.append(title, meta);
+
+  const bars = document.createElement('div');
+  bars.className = 'prio-bars';
+  const level = PRIORITY_LEVEL[task.priority] || 0;
+  for (let i = 1; i <= 3; i++) {
+    const bar = document.createElement('span');
+    bar.setAttribute('aria-hidden', 'true');
+    if (i <= level) bar.className = 'on';
+    bars.appendChild(bar);
+  }
+  const prioText = document.createElement('span');
+  prioText.className = 'sr-only';
+  prioText.textContent = PRIORITY_TEXT[task.priority] || '';
+  bars.appendChild(prioText);
+
+  row.append(check, body, bars);
+  return row;
+}
+
+async function completeTask(id, row, check) {
+  if (check.disabled) return;
+  check.disabled = true;
+  row.classList.add('done');
+  // Короткая пауза, чтобы отметка была видна, затем строка уходит в архив.
+  await new Promise(r => setTimeout(r, 250));
+  await updateStatus(id, 'Done');
+  if (document.body.contains(row)) { // не получилось — вернуть строку в прежний вид
+    row.classList.remove('done');
+    check.disabled = false;
+  }
+}
+
+function renderMain() {
+  const { today, groups } = groupActiveTasks();
+  const dayKeys = stripDayKeys(today, groups.byDay);
+
+  // Выбранный день мог исчезнуть (например, все просроченные закрыли) — вернуться к сегодня.
+  const valid = (selectedDay === DAY_OVERDUE && groups.overdue.length)
+    || selectedDay === DAY_NODATE
+    || dayKeys.includes(selectedDay);
+  if (!valid) { selectedDay = today; stripNeedsScroll = true; }
+
+  // Полоса дней: «Просрочено» (если есть), «Без даты», дни по возрастанию.
+  const strip = document.getElementById('dayStrip');
+  const scrollLeft = strip.scrollLeft;
+  strip.innerHTML = '';
+  if (groups.overdue.length) {
+    strip.appendChild(dayChipEl({
+      key: DAY_OVERDUE, wd: 'Просрочено', num: String(groups.overdue.length), count: '',
+      label: `Просрочено, ${pluralTasks(groups.overdue.length)}`, extraClass: 'wide overdue',
+    }));
+  }
+  strip.appendChild(dayChipEl({
+    key: DAY_NODATE, wd: 'Без даты', num: '–', count: groups.nodate.length ? String(groups.nodate.length) : '',
+    label: `Без даты, ${pluralTasks(groups.nodate.length)}`, extraClass: 'wide',
+  }));
+  dayKeys.forEach(key => {
+    const dt = keyToDate(key);
+    const n = (groups.byDay[key] || []).length;
+    strip.appendChild(dayChipEl({
+      key, wd: WEEKDAY_SHORT[dt.getDay()], num: String(dt.getDate()), count: n ? String(n) : '',
+      label: `${WEEKDAY_FULL[dt.getDay()]}, ${dt.getDate()} ${MONTH_GENITIVE[dt.getMonth()]}, ${pluralTasks(n)}`,
+      extraClass: key === today ? 'today' : '',
+    }));
+  });
+  strip.scrollLeft = scrollLeft;
+  if (stripNeedsScroll) {
+    stripNeedsScroll = false;
+    // Минимальная прокрутка: чип должен быть виден целиком с полем 20 px по краям.
+    const chip = strip.querySelector('.day-chip.selected');
+    const gutter = 20;
+    if (chip) {
+      const left = chip.offsetLeft - gutter;
+      const right = chip.offsetLeft + chip.offsetWidth + gutter - strip.clientWidth;
+      if (strip.scrollLeft > left) strip.scrollLeft = left;
+      else if (strip.scrollLeft < right) strip.scrollLeft = right;
+    }
+  }
+
+  // Заголовок и подзаголовок
+  let title, subtitle, tasks, mode;
+  if (selectedDay === DAY_OVERDUE) {
+    tasks = groups.overdue; mode = DAY_OVERDUE;
+    title = 'Просрочено'; subtitle = pluralTasks(tasks.length);
+  } else if (selectedDay === DAY_NODATE) {
+    tasks = groups.nodate; mode = DAY_NODATE;
+    title = 'Без даты'; subtitle = pluralTasks(tasks.length);
+  } else {
+    const dt = keyToDate(selectedDay);
+    tasks = groups.byDay[selectedDay] || []; mode = 'day';
+    title = WEEKDAY_FULL[dt.getDay()];
+    subtitle = [selectedDay === today ? 'Сегодня' : '', `${dt.getDate()} ${MONTH_GENITIVE[dt.getMonth()]}`, pluralTasks(tasks.length)]
+      .filter(Boolean).join(' · ');
+  }
+  document.getElementById('dayTitle').textContent = title;
+  document.getElementById('daySubtitle').textContent = subtitle;
+  document.getElementById('todayBtn').hidden = selectedDay === today;
+
+  // Список задач выбранного дня
+  const list = document.getElementById('dayTasks');
+  list.innerHTML = '';
+  if (!tasks.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-dashed';
+    empty.textContent = 'На этот день задач нет';
+    list.appendChild(empty);
+  } else {
+    tasks.forEach(t => list.appendChild(taskRowEl(t, mode)));
+  }
+}
+
+// На ноутбуке колесо мыши крутит полосу дней по горизонтали (тачпад и так листает вбок).
+document.getElementById('dayStrip').addEventListener('wheel', (e) => {
+  const strip = e.currentTarget;
+  if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || strip.scrollWidth <= strip.clientWidth) return;
+  strip.scrollLeft += e.deltaY;
+  e.preventDefault();
+}, { passive: false });
+
+document.getElementById('todayBtn').onclick = () => {
+  selectedDay = localDateKey(new Date());
+  renderMain();
+  // Сегодня идёт сразу после «Просрочено» и «Без даты»: полоса возвращается в начало.
+  document.getElementById('dayStrip').scrollLeft = 0;
+};
 
 const MONTH_NAMES_RU = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
 
@@ -1338,9 +1843,9 @@ function renderCalendar() {
   }
 }
 
-document.getElementById('tabList').onclick = () => switchPage('list');
-document.getElementById('tabCalendar').onclick = () => switchPage('calendar');
-document.getElementById('tabNotes').onclick = () => switchPage('notes');
+document.querySelectorAll('.dock-btn').forEach(btn => {
+  btn.onclick = () => switchPage(btn.dataset.page);
+});
 
 // ---------- Заметки ----------
 
@@ -1516,7 +2021,7 @@ async function loadTasks() {
       fetch(`${BASE_URL}/subtasks`),
     ]);
     if (!tasksRes.ok) throw new Error('bad status');
-    allTasks = await tasksRes.json();
+    allTasks = (await tasksRes.json()).filter(t => !pendingDeletions[t.id]);
     allSubtasks = subtasksRes.ok ? await subtasksRes.json() : [];
     setBackendStatus(true);
     renderCurrentPage();
@@ -1623,7 +2128,15 @@ async function submitComposer() {
     if (!res.ok) throw new Error('bad status');
     const created = await res.json();
     input.value = '';
+    closeNewTask();
     toast(`Добавлено задач: ${created.length}`);
+    if (created.length) {
+      selectedDay = created[0].deadline ? dateKey(created[0].deadline) : DAY_NODATE;
+      stripNeedsScroll = true;
+    }
+    viewMode = 'active';
+    renderChips();
+    switchPage('list');
     await loadTasks();
   } catch (e) {
     toast('Не удалось разобрать текст');
@@ -1770,8 +2283,7 @@ function openPrintView() {
 document.getElementById('exportCsvBtn').onclick = downloadCSV;
 document.getElementById('exportPdfBtn').onclick = openPrintView;
 
-// ---------- Мобильное меню (бургер) ----------
-const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+// ---------- Меню (временно старая шторка; MenuDrawer и Filters на шаге 4) ----------
 const mobileOverlay = document.getElementById('mobileOverlay');
 const sidebarEl = document.getElementById('sidebar');
 
@@ -1783,10 +2295,37 @@ function closeMobileMenu() {
   sidebarEl.classList.remove('mobile-open');
   mobileOverlay.classList.remove('show');
 }
-mobileMenuBtn.onclick = () => {
-  sidebarEl.classList.contains('mobile-open') ? closeMobileMenu() : openMobileMenu();
-};
+document.getElementById('menuBtn').onclick = openMobileMenu;
+document.getElementById('filtersBtn').onclick = openMobileMenu;
 mobileOverlay.onclick = closeMobileMenu;
+
+// ---------- Экран «Новая задача» и кнопка «+» ----------
+const newTaskSheet = document.getElementById('newTaskSheet');
+let sheetReturnFocus = null;
+
+function openNewTask() {
+  sheetReturnFocus = document.activeElement;
+  newTaskSheet.hidden = false;
+  document.body.classList.add('no-scroll');
+  document.getElementById('composerInput').focus();
+}
+function closeNewTask() {
+  newTaskSheet.hidden = true;
+  document.body.classList.remove('no-scroll');
+  if (sheetReturnFocus) sheetReturnFocus.focus();
+}
+document.getElementById('newTaskClose').onclick = closeNewTask;
+document.getElementById('fabBtn').onclick = () => {
+  // На вкладке «Заметки» «+» ведёт в поле новой заметки (раздел 5).
+  if (currentPage === 'notes') document.getElementById('noteInput').focus();
+  else openNewTask();
+};
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (!newTaskSheet.hidden) closeNewTask();
+  else if (sidebarEl.classList.contains('mobile-open')) closeMobileMenu();
+});
 
 renderChips();
 loadTasks();
