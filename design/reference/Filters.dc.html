@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Фильтры</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=Unbounded:wght@500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font-family:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; background: #FBFBFA; color: #17181C; font-family: 'Onest', system-ui, sans-serif">
+
+<div style="display: flex; align-items: center; justify-content: space-between; padding: 56px 20px 0 20px">
+<button aria-label="Закрыть" style="width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border: 1px solid #E6E6E1; border-radius: 14px; background: #FFFFFF; color: #17181C">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+</button>
+<h1 style="margin: 0; font-family: 'Unbounded', system-ui, sans-serif; font-weight: 600; font-size: 18px; line-height: 1.2">Фильтры</h1>
+<button onClick="{{ reset }}" style="height: 44px; padding: 0 4px; border: none; background: transparent; color: #557546; font-size: 15px; font-weight: 600">Сбросить</button>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 28px; padding: 32px 20px 0 20px">
+
+<section style="display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 14px; font-weight: 600; color: #5D5F69">Вид</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{views}}" as="v" hint-placeholder-count="2">
+<button onClick="{{ v.pick }}" aria-pressed="{{ v.on }}" style="height: 44px; padding: 0 18px; border-radius: 22px; border: 1.5px solid {{v.border}}; background: {{v.bg}}; color: {{v.fg}}; font-size: 15px; font-weight: {{v.weight}}">{{v.label}}</button>
+</sc-for>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 14px; font-weight: 600; color: #5D5F69">Категория</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{cats}}" as="c" hint-placeholder-count="5">
+<button onClick="{{ c.pick }}" aria-pressed="{{ c.on }}" style="height: 44px; padding: 0 16px; display: flex; align-items: center; gap: 8px; border-radius: 22px; border: 1.5px solid {{c.border}}; background: {{c.bg}}; color: {{c.fg}}; font-size: 15px; font-weight: {{c.weight}}">
+<sc-if value="{{c.hasDot}}" hint-placeholder-val="{{ true }}">
+<span style="width: 12px; height: 12px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid #17181C; background: {{c.dot}}"></span>
+</sc-if>
+<span>{{c.label}}</span>
+</button>
+</sc-for>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 14px; font-weight: 600; color: #5D5F69">Приоритет</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{prios}}" as="p" hint-placeholder-count="4">
+<button onClick="{{ p.pick }}" aria-pressed="{{ p.on }}" style="height: 44px; padding: 0 16px; display: flex; align-items: center; gap: 10px; border-radius: 22px; border: 1.5px solid {{p.border}}; background: {{p.bg}}; color: {{p.fg}}; font-size: 15px; font-weight: {{p.weight}}">
+<sc-if value="{{p.hasBars}}" hint-placeholder-val="{{ true }}">
+<span style="display: flex; align-items: flex-end; gap: 2px; height: 14px">
+<span style="width: 3px; height: 6px; border-radius: 1.5px; background: {{p.b1}}"></span>
+<span style="width: 3px; height: 10px; border-radius: 1.5px; background: {{p.b2}}"></span>
+<span style="width: 3px; height: 14px; border-radius: 1.5px; background: {{p.b3}}"></span>
+</span>
+</sc-if>
+<span>{{p.label}}</span>
+</button>
+</sc-for>
+</div>
+</section>
+
+</div>
+
+<div style="position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 20px 28px 20px; background: #FBFBFA; border-top: 1px solid #EFEFEA">
+<button style="width: 100%; height: 60px; padding: 0; border: none; border-radius: 22px; background: #557546; color: #FFFFFF; font-size: 16px; font-weight: 600">Показать</button>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = this.state || {};
+    const view = st.view || 0;
+    const cat = st.cat || 0;
+    const prio = st.prio || 0;
+
+    const INK = '#17181C';
+    const WHITE = '#FFFFFF';
+    const LINE = '#E6E6E1';
+
+    const VIEWS = ['Активные', 'Архив'];
+    const CATS = [
+      { label: 'Все' },
+      { label: 'Study', color: '#85AACB' },
+      { label: 'Work', color: '#E2D47E' },
+      { label: 'Personal', color: '#A9C89D' },
+      { label: 'UniMe', color: '#DCE5FB' }
+    ];
+    const PRIOS = [
+      { label: 'Все', level: 0 },
+      { label: 'High', level: 3 },
+      { label: 'Mid', level: 2 },
+      { label: 'Low', level: 1 }
+    ];
+
+    const views = VIEWS.map((label, i) => {
+      const on = i === view;
+      return {
+        label: label,
+        on: on,
+        bg: on ? INK : WHITE,
+        border: on ? INK : LINE,
+        fg: on ? WHITE : INK,
+        weight: on ? 600 : 500,
+        pick: () => this.setState({ view: i })
+      };
+    });
+
+    const cats = CATS.map((c, i) => {
+      const on = i === cat;
+      const isAll = !c.color;
+      return {
+        label: c.label,
+        on: on,
+        hasDot: !isAll,
+        dot: c.color || WHITE,
+        bg: on ? (isAll ? INK : c.color) : WHITE,
+        border: on ? INK : LINE,
+        fg: on && isAll ? WHITE : INK,
+        weight: on ? 600 : 500,
+        pick: () => this.setState({ cat: i })
+      };
+    });
+
+    const prios = PRIOS.map((p, i) => {
+      const on = i === prio;
+      const barOn = on && p.level === 0 ? WHITE : INK;
+      const barOff = 'rgba(23, 24, 28, 0.18)';
+      return {
+        label: p.label,
+        on: on,
+        hasBars: p.level > 0,
+        b1: p.level >= 1 ? INK : barOff,
+        b2: p.level >= 2 ? INK : barOff,
+        b3: p.level >= 3 ? INK : barOff,
+        bg: on ? (p.level === 0 ? INK : '#EFEFEA') : WHITE,
+        border: on ? INK : LINE,
+        fg: on && p.level === 0 ? WHITE : INK,
+        weight: on ? 600 : 500,
+        pick: () => this.setState({ prio: i })
+      };
+    });
+
+    return {
+      views: views,
+      cats: cats,
+      prios: prios,
+      reset: () => this.setState({ view: 0, cat: 0, prio: 0 })
+    };
+  }
+}
+</script>
+</body>
+</html>

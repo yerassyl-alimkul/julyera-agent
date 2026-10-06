@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Заметки</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=Unbounded:wght@500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font-family:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; background: #FBFBFA; color: #17181C; font-family: 'Onest', system-ui, sans-serif">
+
+<div style="display: flex; align-items: center; justify-content: space-between; padding: 56px 20px 0 20px">
+<button aria-label="Меню" style="width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border: 1px solid #E6E6E1; border-radius: 14px; background: #FFFFFF; color: #17181C">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+</button>
+<button aria-label="Поиск" style="width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border: 1px solid #E6E6E1; border-radius: 14px; background: #FFFFFF; color: #17181C">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+</button>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 4px; padding: 22px 20px 0 20px">
+<h1 style="margin: 0; font-family: 'Unbounded', system-ui, sans-serif; font-weight: 600; font-size: 28px; line-height: 1.15; letter-spacing: -0.01em">Заметки</h1>
+<div style="font-size: 15px; color: #5D5F69">3 заметки</div>
+</div>
+
+<div style="flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 20px 20px 0 20px; overflow: hidden">
+
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 14px; border: 1.5px solid #E6E6E1; border-radius: 22px; background: #FFFFFF">
+<label for="note-new" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap">Новая заметка</label>
+<textarea id="note-new" placeholder="Запиши мысль, идею или напоминание для себя…" style="width: 100%; height: 56px; box-sizing: border-box; padding: 2px 4px; border: none; background: transparent; color: #17181C; font-family: inherit; font-size: 16px; line-height: 1.4; resize: none; outline: none"></textarea>
+<div style="display: flex; align-items: center; justify-content: space-between">
+<button aria-label="Наговорить заметку голосом" style="width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border: 1px solid #E6E6E1; border-radius: 14px; background: #FFFFFF; color: #17181C">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+</button>
+<button style="height: 44px; padding: 0 20px; border: none; border-radius: 14px; background: #557546; color: #FFFFFF; font-size: 15px; font-weight: 600">Сохранить</button>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 16px 18px; border: 1.5px solid #E6E6E1; border-radius: 22px; background: #FFFFFF">
+<div style="font-size: 16px; line-height: 1.45">Идея: утренняя сводка в Telegram с тремя главными задачами дня.</div>
+<div style="font-size: 12px; color: #5D5F69">6 окт., 14:20</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1.5px solid #17181C; border-radius: 22px; background: #FFFFFF">
+<label for="note-edit" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap">Изменить заметку</label>
+<textarea id="note-edit" style="width: 100%; height: 88px; box-sizing: border-box; padding: 10px 12px; border: 1.5px solid #E6E6E1; border-radius: 14px; background: #FBFBFA; color: #17181C; font-family: inherit; font-size: 16px; line-height: 1.4; resize: none; outline: none">Спросить у куратора про дедлайн по статистике и формат отчёта.</textarea>
+<div style="display: flex; align-items: center; gap: 8px">
+<button style="height: 44px; padding: 0 20px; border: none; border-radius: 14px; background: #557546; color: #FFFFFF; font-size: 15px; font-weight: 600">Сохранить</button>
+<button style="height: 44px; padding: 0 16px; border: none; background: transparent; color: #17181C; font-size: 15px; font-weight: 500">Отмена</button>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 16px 18px; border: 1.5px solid #E6E6E1; border-radius: 22px; background: #FFFFFF">
+<div style="font-size: 16px; line-height: 1.45">Список в магазин: рис, яйца, кофе, мандарины.</div>
+<div style="font-size: 12px; color: #5D5F69">3 окт., 10:40</div>
+</div>
+
+</div>
+
+<div style="position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 12px; padding: 14px 20px 28px 20px; background: #FBFBFA; border-top: 1px solid #EFEFEA">
+<nav aria-label="Разделы" style="flex: 1; height: 60px; box-sizing: border-box; display: flex; gap: 4px; padding: 6px; border-radius: 30px; background: #17181C">
+<button style="flex: 1; min-width: 44px; padding: 0; border: none; border-radius: 24px; background: transparent; color: #D5D6DC; font-size: 14px; font-weight: 500">Задачи</button>
+<button style="flex: 1; min-width: 44px; padding: 0; border: none; border-radius: 24px; background: transparent; color: #D5D6DC; font-size: 14px; font-weight: 500">Календарь</button>
+<button style="flex: 1; min-width: 44px; padding: 0; border: none; border-radius: 24px; background: #FFFFFF; color: #17181C; font-size: 14px; font-weight: 600">Заметки</button>
+</nav>
+<button aria-label="Добавить заметку" style="flex: 0 0 60px; width: 60px; height: 60px; padding: 0; display: flex; align-items: center; justify-content: center; border: none; border-radius: 22px; background: #557546; color: #FFFFFF">
+<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2.2; stroke-linecap: round"><path d="M12 5v14M5 12h14"/></svg>
+</button>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

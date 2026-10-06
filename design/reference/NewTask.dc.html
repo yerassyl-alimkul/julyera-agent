@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Новая задача</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=Unbounded:wght@500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font-family:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; background: #FBFBFA; color: #17181C; font-family: 'Onest', system-ui, sans-serif">
+
+<div style="display: flex; align-items: center; justify-content: space-between; padding: 56px 20px 0 20px">
+<button aria-label="Закрыть" style="width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border: 1px solid #E6E6E1; border-radius: 14px; background: #FFFFFF; color: #17181C">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+</button>
+<h1 style="margin: 0; font-family: 'Unbounded', system-ui, sans-serif; font-weight: 600; font-size: 18px; line-height: 1.2">Новая задача</h1>
+<div style="width: 44px; height: 44px"></div>
+</div>
+
+<div style="padding: 32px 20px 0 20px">
+<label for="task-text" style="display: block; margin-bottom: 10px; font-size: 14px; font-weight: 500; color: #5D5F69">Опиши задачу своими словами</label>
+<textarea id="task-text" style="width: 100%; height: 200px; box-sizing: border-box; padding: 18px; border: 1.5px solid #17181C; border-radius: 22px; background: #FFFFFF; color: #17181C; font-family: inherit; font-size: 20px; line-height: 1.4; resize: none; outline: none">Сдать отчёт по проекту завтра в 18:00 #работа</textarea>
+<p style="margin: 12px 0 0 0; font-size: 14px; line-height: 1.45; color: #5D5F69">Дату и время можно писать словами («завтра в 18:00»), теги через решётку («#экзамен»). Категорию и приоритет приложение определит само.</p>
+</div>
+
+<div style="position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 12px; padding: 14px 20px 28px 20px; background: #FBFBFA; border-top: 1px solid #EFEFEA">
+<button aria-label="Наговорить задачу голосом" style="flex: 0 0 60px; width: 60px; height: 60px; padding: 0; display: flex; align-items: center; justify-content: center; border: 1.5px solid #17181C; border-radius: 22px; background: #FFFFFF; color: #17181C">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+</button>
+<button style="flex: 1; height: 60px; padding: 0; border: none; border-radius: 22px; background: #557546; color: #FFFFFF; font-size: 16px; font-weight: 600">Добавить</button>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

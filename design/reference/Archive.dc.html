@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Архив</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=Unbounded:wght@500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font-family:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; background: #FBFBFA; color: #17181C; font-family: 'Onest', system-ui, sans-serif">
+
+<div style="display: flex; align-items: center; justify-content: space-between; padding: 56px 20px 0 20px">
+<button aria-label="Назад к задачам" style="width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border: 1px solid #E6E6E1; border-radius: 14px; background: #FFFFFF; color: #17181C">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M14.5 6l-6 6 6 6"/></svg>
+</button>
+<button aria-label="Поиск" style="width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border: 1px solid #E6E6E1; border-radius: 14px; background: #FFFFFF; color: #17181C">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+</button>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 4px; padding: 22px 20px 0 20px">
+<h1 style="margin: 0; font-family: 'Unbounded', system-ui, sans-serif; font-weight: 600; font-size: 28px; line-height: 1.15; letter-spacing: -0.01em">Архив</h1>
+<div style="font-size: 15px; color: #5D5F69">{{subtitle}}</div>
+</div>
+
+<div style="flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 24px 20px 0 20px; overflow: hidden">
+<sc-if value="{{isEmpty}}" hint-placeholder-val="{{ false }}">
+<div style="margin-top: 12px; padding: 28px 20px; border: 1.5px dashed #D9D9D3; border-radius: 22px; text-align: center; font-size: 15px; color: #5D5F69">В архиве пока пусто</div>
+</sc-if>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="6">
+<div style="min-height: 72px; box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 16px; border-radius: 22px; background: {{r.bg}}">
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+<div style="font-size: 16px; font-weight: 500; line-height: 1.25; text-decoration: line-through; color: #33353D">{{r.title}}</div>
+<div style="display: flex; gap: 8px; font-size: 13px; color: #33353D">
+<span style="font-weight: 600; color: #17181C">{{r.when}}</span>
+<span>{{r.cat}}</span>
+</div>
+</div>
+<button onClick="{{ r.restore }}" aria-label="{{ r.label }}" style="flex: 0 0 44px; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border: none; border-radius: 14px; background: rgba(255, 255, 255, 0.6); color: #17181C">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M9 7L5 11l4 4"/><path d="M5 11h9a5 5 0 0 1 0 10h-3"/></svg>
+</button>
+</div>
+</sc-for>
+</div>
+
+<div style="position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 12px; padding: 14px 20px 28px 20px; background: #FBFBFA; border-top: 1px solid #EFEFEA">
+<nav aria-label="Разделы" style="flex: 1; height: 60px; box-sizing: border-box; display: flex; gap: 4px; padding: 6px; border-radius: 30px; background: #17181C">
+<button style="flex: 1; min-width: 44px; padding: 0; border: none; border-radius: 24px; background: #FFFFFF; color: #17181C; font-size: 14px; font-weight: 600">Задачи</button>
+<button style="flex: 1; min-width: 44px; padding: 0; border: none; border-radius: 24px; background: transparent; color: #D5D6DC; font-size: 14px; font-weight: 500">Календарь</button>
+<button style="flex: 1; min-width: 44px; padding: 0; border: none; border-radius: 24px; background: transparent; color: #D5D6DC; font-size: 14px; font-weight: 500">Заметки</button>
+</nav>
+<button aria-label="Добавить задачу" style="flex: 0 0 60px; width: 60px; height: 60px; padding: 0; display: flex; align-items: center; justify-content: center; border: none; border-radius: 22px; background: #557546; color: #FFFFFF">
+<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2.2; stroke-linecap: round"><path d="M12 5v14M5 12h14"/></svg>
+</button>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = this.state || {};
+    const gone = st.gone || {};
+
+    const CATS = {
+      Work: '#E2D47E',
+      UniMe: '#DCE5FB',
+      Study: '#85AACB',
+      Personal: '#A9C89D'
+    };
+
+    const ALL = [
+      { title: 'Сделать 10 отжиманий', when: '5 окт · 21:00', cat: 'Personal' },
+      { title: 'Приготовить ужин', when: '5 окт · 19:00', cat: 'Personal' },
+      { title: 'Сдать конспект по статистике', when: '4 окт · 12:00', cat: 'UniMe' },
+      { title: 'Созвон по проекту', when: '3 окт · 15:00', cat: 'Work' },
+      { title: 'Купить продукты', when: '2 окт · 18:30', cat: 'Personal' },
+      { title: 'Итальянский, 30 минут', when: '1 окт · 20:00', cat: 'Study' }
+    ];
+
+    const rows = [];
+    ALL.forEach((t, i) => {
+      if (gone[i]) return;
+      rows.push({
+        title: t.title,
+        when: t.when,
+        cat: t.cat,
+        bg: CATS[t.cat],
+        label: 'Вернуть в список: ' + t.title,
+        restore: () => this.setState({ gone: Object.assign({}, gone, { [i]: true }) })
+      });
+    });
+
+    const n = rows.length;
+    const a = n % 10;
+    const b = n % 100;
+    let subtitle;
+    if (n === 0) subtitle = 'нет выполненных задач';
+    else if (a === 1 && b !== 11) subtitle = n + ' выполненная задача';
+    else if (a >= 2 && a <= 4 && (b < 12 || b > 14)) subtitle = n + ' выполненные задачи';
+    else subtitle = n + ' выполненных задач';
+
+    return { rows: rows, subtitle: subtitle, isEmpty: n === 0 };
+  }
+}
+</script>
+</body>
+</html>

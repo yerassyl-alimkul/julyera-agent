@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Поиск</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=Unbounded:wght@500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font-family:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; background: #FBFBFA; color: #17181C; font-family: 'Onest', system-ui, sans-serif">
+
+<div style="display: flex; align-items: center; gap: 10px; padding: 56px 20px 0 20px">
+<button aria-label="Закрыть поиск" style="flex: 0 0 44px; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border: 1px solid #E6E6E1; border-radius: 14px; background: #FFFFFF; color: #17181C">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M14.5 6l-6 6 6 6"/></svg>
+</button>
+<div style="flex: 1; min-width: 0; height: 48px; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 0 4px 0 14px; border: 1.5px solid #17181C; border-radius: 16px; background: #FFFFFF">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5D5F69" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+<label for="search-field" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap">Поиск по задачам</label>
+<input id="search-field" type="text" value="отчёт" style="flex: 1; min-width: 0; height: 44px; padding: 0; border: none; background: transparent; color: #17181C; font-family: inherit; font-size: 17px; outline: none">
+<button aria-label="Очистить запрос" style="flex: 0 0 44px; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border: none; background: transparent; color: #5D5F69">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2; stroke-linecap: round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+</button>
+</div>
+</div>
+
+<div style="padding: 22px 20px 0 20px; font-size: 14px; color: #5D5F69">Найдено 2 задачи</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 14px 20px 0 20px">
+
+<div style="min-height: 72px; box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 22px; background: #E2D47E">
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+<div style="font-size: 16px; font-weight: 500; line-height: 1.25">Подготовить <span style="padding: 0 3px; border-radius: 5px; background: rgba(255, 255, 255, 0.75)">отчёт</span> по проекту</div>
+<div style="display: flex; gap: 8px; font-size: 13px; color: #33353D">
+<span style="font-weight: 600; color: #17181C">6 октября, 15:30</span>
+<span>Work</span>
+</div>
+</div>
+<div style="position: relative; flex: 0 0 auto; height: 18px; display: flex; align-items: flex-end; gap: 3px">
+<span style="width: 4px; height: 8px; border-radius: 2px; background: #17181C"></span>
+<span style="width: 4px; height: 13px; border-radius: 2px; background: #17181C"></span>
+<span style="width: 4px; height: 18px; border-radius: 2px; background: rgba(23, 24, 28, 0.18)"></span>
+<span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap">Приоритет: средний</span>
+</div>
+</div>
+
+<div style="min-height: 72px; box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 22px; background: #DCE5FB">
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+<div style="font-size: 16px; font-weight: 500; line-height: 1.25">Сдать черновик <span style="padding: 0 3px; border-radius: 5px; background: rgba(255, 255, 255, 0.75)">отчёт</span>а</div>
+<div style="display: flex; gap: 8px; font-size: 13px; color: #33353D">
+<span style="font-weight: 600; color: #17181C">12 октября, 16:00</span>
+<span>UniMe</span>
+</div>
+</div>
+<div style="position: relative; flex: 0 0 auto; height: 18px; display: flex; align-items: flex-end; gap: 3px">
+<span style="width: 4px; height: 8px; border-radius: 2px; background: #17181C"></span>
+<span style="width: 4px; height: 13px; border-radius: 2px; background: #17181C"></span>
+<span style="width: 4px; height: 18px; border-radius: 2px; background: rgba(23, 24, 28, 0.18)"></span>
+<span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap">Приоритет: средний</span>
+</div>
+</div>
+
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Меню</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=Unbounded:wght@500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font-family:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; background: #FBFBFA; color: #17181C; font-family: 'Onest', system-ui, sans-serif">
+
+<dc-import name="Main" hint-size="390px,844px"></dc-import>
+
+<div style="position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: rgba(23, 24, 28, 0.45)"></div>
+
+<aside aria-label="Меню" style="position: absolute; left: 0; top: 0; bottom: 0; width: 304px; box-sizing: border-box; display: flex; flex-direction: column; gap: 22px; padding: 56px 20px 28px 20px; background: #FBFBFA; border-right: 1px solid #E6E6E1; box-shadow: 8px 0 32px rgba(23, 24, 28, 0.18)">
+
+<div style="display: flex; align-items: center; justify-content: space-between">
+<span style="font-family: 'Unbounded', system-ui, sans-serif; font-weight: 600; font-size: 18px; letter-spacing: -0.01em">JulYera Agent</span>
+<button aria-label="Закрыть меню" style="width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border: 1px solid #E6E6E1; border-radius: 14px; background: #FFFFFF; color: #17181C">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+</button>
+</div>
+
+<div style="display: flex; gap: 12px; padding: 16px; border: 1.5px solid #E6E6E1; border-radius: 22px; background: #FFFFFF">
+<div style="flex: 1; display: flex; flex-direction: column; gap: 4px">
+<span style="font-family: 'Unbounded', system-ui, sans-serif; font-weight: 600; font-size: 28px; line-height: 1.1">7</span>
+<span style="font-size: 13px; line-height: 1.3; color: #5D5F69">активных задач</span>
+</div>
+<div style="flex: 1; display: flex; flex-direction: column; gap: 4px">
+<span style="font-family: 'Unbounded', system-ui, sans-serif; font-weight: 600; font-size: 28px; line-height: 1.1">3</span>
+<span style="font-size: 13px; line-height: 1.3; color: #5D5F69">с высоким приоритетом</span>
+</div>
+</div>
+
+<nav aria-label="Разделы меню" style="display: flex; flex-direction: column; border: 1.5px solid #E6E6E1; border-radius: 22px; background: #FFFFFF; overflow: hidden">
+<button style="height: 56px; padding: 0 16px; display: flex; align-items: center; gap: 14px; border: none; border-bottom: 1px solid #EFEFEA; background: transparent; color: #17181C; font-size: 16px; font-weight: 500; text-align: left">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M4 7h16v4H4zM6 11v8h12v-8M10 15h4"/></svg>
+Архив
+</button>
+<button style="height: 56px; padding: 0 16px; display: flex; align-items: center; gap: 14px; border: none; border-bottom: 1px solid #EFEFEA; background: transparent; color: #17181C; font-size: 16px; font-weight: 500; text-align: left">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14"/></svg>
+Экспорт CSV
+</button>
+<button style="height: 56px; padding: 0 16px; display: flex; align-items: center; gap: 14px; border: none; background: transparent; color: #17181C; font-size: 16px; font-weight: 500; text-align: left">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M7 9V4h10v5M7 17H5v-6h14v6h-2M7 14h10v6H7z"/></svg>
+Печать / PDF
+</button>
+</nav>
+
+<div style="flex: 1"></div>
+
+<div style="display: flex; flex-direction: column; gap: 10px; font-size: 14px; color: #5D5F69">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="width: 8px; height: 8px; border-radius: 50%; background: #557546"></span>
+<span>Backend подключён</span>
+</div>
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="width: 8px; height: 8px; border-radius: 50%; background: #557546"></span>
+<span>Google Calendar подключён</span>
+</div>
+</div>
+
+</aside>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

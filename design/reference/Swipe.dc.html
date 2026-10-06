@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Действия по свайпу</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=Unbounded:wght@500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font-family:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; background: #FBFBFA; color: #17181C; font-family: 'Onest', system-ui, sans-serif">
+
+<div style="display: flex; align-items: center; justify-content: space-between; padding: 56px 20px 0 20px">
+<button aria-label="Меню" style="width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border: 1px solid #E6E6E1; border-radius: 14px; background: #FFFFFF; color: #17181C">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+</button>
+<div style="display: flex; gap: 8px">
+<button aria-label="Поиск" style="width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border: 1px solid #E6E6E1; border-radius: 14px; background: #FFFFFF; color: #17181C">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+</button>
+<button aria-label="Фильтры по категории и приоритету" style="width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border: 1px solid #E6E6E1; border-radius: 14px; background: #FFFFFF; color: #17181C">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
+</button>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 4px; padding: 22px 20px 0 20px">
+<h1 style="margin: 0; font-family: 'Unbounded', system-ui, sans-serif; font-weight: 600; font-size: 28px; line-height: 1.15; letter-spacing: -0.01em">Вторник</h1>
+<div style="font-size: 15px; color: #5D5F69">Сегодня · 6 октября · 5 задач</div>
+</div>
+
+<div style="padding: 18px 0 0 20px">
+<div style="display: flex; gap: 8px; overflow: hidden">
+<sc-for list="{{days}}" as="d" hint-placeholder-count="8">
+<button aria-label="{{ d.aria }}" style="flex: 0 0 {{d.w}}; height: 80px; box-sizing: border-box; padding: 8px 0; display: flex; flex-direction: column; align-items: center; justify-content: space-between; border-radius: 18px; border: 1px solid {{d.border}}; background: {{d.bg}}; color: {{d.fg}}">
+<span style="font-size: 12px; font-weight: 500; color: {{d.wdColor}}">{{d.wd}}</span>
+<span style="font-family: 'Unbounded', system-ui, sans-serif; font-weight: 600; font-size: 18px">{{d.num}}</span>
+<span style="min-height: 14px; font-size: 11px; font-weight: 600; color: {{d.countColor}}">{{d.countText}}</span>
+</button>
+</sc-for>
+</div>
+</div>
+
+<div style="flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 20px 20px 0 20px; overflow: hidden">
+<sc-for list="{{tasks}}" as="t" hint-placeholder-count="5">
+<div style="display: flex; align-items: stretch; gap: 8px; margin-left: {{t.shift}}">
+<div style="flex: 0 0 350px; min-height: 72px; box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 8px 16px 8px 8px; border-radius: 22px; background: {{t.bg}}">
+<button aria-label="{{ t.checkLabel }}" style="flex: 0 0 44px; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border: none; background: transparent">
+<span style="width: 24px; height: 24px; box-sizing: border-box; border-radius: 50%; border: 2px solid #17181C"></span>
+</button>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+<div style="font-size: 16px; font-weight: 500; line-height: 1.25">{{t.title}}</div>
+<div style="display: flex; gap: 8px; font-size: 13px; color: #33353D">
+<span style="font-weight: 600; color: #17181C">{{t.time}}</span>
+<span>{{t.rest}}</span>
+</div>
+</div>
+<div style="position: relative; flex: 0 0 auto; height: 18px; display: flex; align-items: flex-end; gap: 3px">
+<span style="width: 4px; height: 8px; border-radius: 2px; background: {{t.p1}}"></span>
+<span style="width: 4px; height: 13px; border-radius: 2px; background: {{t.p2}}"></span>
+<span style="width: 4px; height: 18px; border-radius: 2px; background: {{t.p3}}"></span>
+<span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap">{{t.priorityText}}</span>
+</div>
+</div>
+<sc-if value="{{t.swiped}}" hint-placeholder-val="{{ false }}">
+<div style="flex: 0 0 132px; display: flex; gap: 8px">
+<button aria-label="Изменить задачу" style="flex: 1; padding: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; border: none; border-radius: 22px; background: #17181C; color: #FFFFFF; font-size: 12px; font-weight: 600">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg>
+Изменить
+</button>
+<button aria-label="Удалить задачу" style="flex: 1; padding: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; border: none; border-radius: 22px; background: #B3261E; color: #FFFFFF; font-size: 12px; font-weight: 600">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/></svg>
+Удалить
+</button>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+
+<div style="position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 12px; padding: 14px 20px 28px 20px; background: #FBFBFA; border-top: 1px solid #EFEFEA">
+<nav aria-label="Разделы" style="flex: 1; height: 60px; box-sizing: border-box; display: flex; gap: 4px; padding: 6px; border-radius: 30px; background: #17181C">
+<button style="flex: 1; min-width: 44px; padding: 0; border: none; border-radius: 24px; background: #FFFFFF; color: #17181C; font-size: 14px; font-weight: 600">Задачи</button>
+<button style="flex: 1; min-width: 44px; padding: 0; border: none; border-radius: 24px; background: transparent; color: #D5D6DC; font-size: 14px; font-weight: 500">Календарь</button>
+<button style="flex: 1; min-width: 44px; padding: 0; border: none; border-radius: 24px; background: transparent; color: #D5D6DC; font-size: 14px; font-weight: 500">Заметки</button>
+</nav>
+<button aria-label="Добавить задачу" style="flex: 0 0 60px; width: 60px; height: 60px; padding: 0; display: flex; align-items: center; justify-content: center; border: none; border-radius: 22px; background: #557546; color: #FFFFFF">
+<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2.2; stroke-linecap: round"><path d="M12 5v14M5 12h14"/></svg>
+</button>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const CATS = {
+      Work: '#E2D47E',
+      UniMe: '#DCE5FB',
+      Study: '#85AACB',
+      Personal: '#A9C89D'
+    };
+    const PRIO = { High: 3, Mid: 2, Low: 1 };
+    const PRIO_TEXT = { High: 'Приоритет: высокий', Mid: 'Приоритет: средний', Low: 'Приоритет: низкий' };
+    const SWIPED = 1;
+
+    const LIST = [
+      { time: '09:00', title: 'Сдать домашку по кластеризации', cat: 'UniMe', prio: 'High', extra: '2 из 3 шагов' },
+      { time: '12:00', title: 'Покушать в мензе', cat: 'Personal', prio: 'Mid' },
+      { time: '15:30', title: 'Подготовить отчёт по проекту', cat: 'Work', prio: 'Mid', extra: '#отчёт' },
+      { time: '19:00', title: 'Практика по SQL', cat: 'Study', prio: 'Low' },
+      { time: '21:00', title: 'Протестировать микрофон', cat: 'Personal', prio: 'High' }
+    ];
+
+    const DAYS = [
+      { wd: 'Без даты', num: '–', n: 2, w: '64px' },
+      { wd: 'Пн', num: '5', n: 2 },
+      { wd: 'Вт', num: '6', n: 5 },
+      { wd: 'Ср', num: '7', n: 1 },
+      { wd: 'Чт', num: '8', n: 3 },
+      { wd: 'Пт', num: '9', n: 0 },
+      { wd: 'Сб', num: '10', n: 1 },
+      { wd: 'Вс', num: '11', n: 0 },
+      { wd: 'Пн', num: '12', n: 2 }
+    ];
+
+    const days = DAYS.map((d, i) => {
+      const active = i === 2;
+      return {
+        wd: d.wd,
+        num: d.num,
+        w: d.w || '52px',
+        countText: d.n > 0 ? String(d.n) : '',
+        aria: d.wd + ', ' + (d.w ? '' : d.num + ' октября, ') + 'задач: ' + d.n,
+        bg: active ? '#17181C' : '#FFFFFF',
+        border: active ? '#17181C' : '#E6E6E1',
+        fg: active ? '#FFFFFF' : '#17181C',
+        wdColor: active ? '#C9CAD2' : '#5D5F69',
+        countColor: active ? '#FFFFFF' : '#5D5F69'
+      };
+    });
+
+    const on = '#17181C';
+    const off = 'rgba(23, 24, 28, 0.18)';
+    const tasks = LIST.map((t, i) => {
+      const level = PRIO[t.prio];
+      return {
+        title: t.title,
+        time: t.time,
+        rest: t.cat + (t.extra ? ' · ' + t.extra : ''),
+        bg: CATS[t.cat],
+        p1: level >= 1 ? on : off,
+        p2: level >= 2 ? on : off,
+        p3: level >= 3 ? on : off,
+        priorityText: PRIO_TEXT[t.prio],
+        checkLabel: 'Отметить выполненной: ' + t.title,
+        swiped: i === SWIPED,
+        shift: i === SWIPED ? '-140px' : '0px'
+      };
+    });
+
+    return { days: days, tasks: tasks };
+  }
+}
+</script>
+</body>
+</html>
