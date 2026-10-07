@@ -213,7 +213,10 @@ async def web_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     await update.message.reply_text(
         "Личная ссылка для браузера (никому её не пересылай: по ней открываются твои задачи):\n"
-        f"{APP_URL}?key={user['access_key']}",
+        f"{APP_URL}?key={user['access_key']}\n\n"
+        "Как поставить иконку на телефон:\n"
+        "iPhone — открой ссылку в Safari (⋯ → «Открыть в Safari»), затем «Поделиться» → «На экран Домой».\n"
+        "Android — открой в Chrome, затем ⋮ → «Добавить на главный экран».",
         disable_web_page_preview=True,
     )
 

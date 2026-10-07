@@ -4,6 +4,14 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#FBFBFA" />
+<!-- Установка на экран Домой. У manifest нет start_url: иконка открывает адрес, с которого её добавили,
+     то есть личную ссылку с ?key=… (у иконки на iPhone своя память, ключ из Safari она не видит). -->
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="JulYera" />
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <title>JulYera Agent</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1523,7 +1531,8 @@ const BASE_URL = localStorage.getItem('task_agent_backend_url')
 
 // ---------- Вход: Telegram Mini App или личный ключ из /web ----------
 // В Mini App Telegram сам передаёт подписанные данные пользователя (initData), их шлём в заголовке.
-// Вне Telegram — ключ из ссылки /web (?key=...): сохраняем и убираем из адресной строки.
+// Вне Telegram — ключ из ссылки /web (?key=...): сохраняем и держим в адресной строке, чтобы
+// «На экран Домой» запомнил личную ссылку. Если ключ есть только в памяти — возвращаем его в адрес.
 const tg = window.Telegram && window.Telegram.WebApp;
 const inTelegram = !!(tg && tg.initData);
 const ACCESS_KEY_STORAGE = 'task_agent_access_key';
@@ -1534,11 +1543,12 @@ if (!inTelegram) {
   if (fromUrl) {
     accessKey = fromUrl;
     try { localStorage.setItem(ACCESS_KEY_STORAGE, fromUrl); } catch (e) { /* приватный режим */ }
-    params.delete('key');
-    const rest = params.toString();
-    history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
   } else {
     try { accessKey = localStorage.getItem(ACCESS_KEY_STORAGE); } catch (e) { accessKey = null; }
+    if (accessKey) {
+      params.set('key', accessKey);
+      history.replaceState(null, '', location.pathname + '?' + params.toString() + location.hash);
+    }
   }
 }
 
@@ -1614,6 +1624,12 @@ async function api(path, options = {}) {
     if (!inTelegram && accessKey) {  // ключ устарел или неверный — больше его не шлём
       accessKey = null;
       try { localStorage.removeItem(ACCESS_KEY_STORAGE); } catch (e) { /* ничего */ }
+      const params = new URLSearchParams(location.search);
+      if (params.has('key')) {  // и из адреса, чтобы неверный ключ не подхватился снова
+        params.delete('key');
+        const rest = params.toString();
+        history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
+      }
     }
     showAuthGate(inTelegram ? 'stale' : 'login', code);
   } else if (res.status === 403) {
