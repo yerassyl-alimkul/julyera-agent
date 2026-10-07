@@ -1,0 +1,508 @@
+"""
+Проверка изоляции данных между пользователями (критерии приёмки задачи multi-user).
+
+Режимы:
+    python scripts/isolation_check.py
+        Локально: настоящий main.py и сервисы, база в памяти (scripts/fake_supabase.py),
+        без сети и без настоящих ключей. Проверяет всё: HTTP, бота, напоминания, Google, секреты.
+
+    python scripts/isolation_check.py --base-url https://julyera-agent.onrender.com
+        Против работающего сервиса: только HTTP-проверки изоляции на настоящей базе.
+        Нужны SUPABASE_URL, SUPABASE_KEY (service_role) и TELEGRAM_BOT_TOKEN в окружении или .env.
+        Создаёт двух временных пользователей и в конце удаляет их вместе с их задачами и заметками.
+        Бота, напоминания и Google в этом режиме не трогает: там ушли бы настоящие сообщения.
+
+Ключи, токены и подписи в консоль не выводятся. Код выхода 1, если хоть одна проверка не прошла.
+"""
+import argparse
+import asyncio
+import json
+import os
+import re
+import secrets
+import subprocess
+import sys
+import time
+import types
+from types import SimpleNamespace
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+results: list[tuple[bool, str]] = []
+
+
+def check(name: str, ok: bool, detail: str = "") -> bool:
+    results.append((bool(ok), name))
+    print(("  ✓ " if ok else "  ✗ ") + name + ("" if ok or not detail else f"  ({detail})"))
+    return bool(ok)
+
+
+def section(title: str) -> None:
+    print(f"\n{title}")
+
+
+# ---------------------------------------------------------------- окружение
+
+def setup_local():
+    """Фейковое окружение до импорта приложения: база в памяти, случайные тестовые секреты."""
+    from fake_supabase import FakeSupabase
+
+    os.environ.update({
+        "SUPABASE_URL": "https://fake.supabase.co",
+        # не настоящий ключ: JWT-образная строка, которую принимает конструктор клиента
+        "SUPABASE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmb28iOiJiYXIifQ.abc",
+        "GROQ_API_KEY": "fake",
+        "TELEGRAM_BOT_TOKEN": f"{secrets.randbelow(10**9)}:{secrets.token_urlsafe(26)}",
+        "REMINDERS_SECRET": secrets.token_urlsafe(16),
+        "OAUTH_STATE_SECRET": secrets.token_urlsafe(32),
+        "GOOGLE_CLIENT_ID": "fake-client-id",
+        "GOOGLE_CLIENT_SECRET": "fake-client-secret",
+        "GOOGLE_REDIRECT_URI": "http://testserver/google/callback",
+    })
+    os.environ.pop("WEBHOOK_BASE_URL", None)
+    db = FakeSupabase()
+    database = types.ModuleType("database")
+    database.supabase = db
+    sys.modules["database"] = database
+    return db
+
+
+def fake_parse(raw_text, source_hint=None):
+    """Вместо Groq: каждая строка текста — задача без даты."""
+    return [{"task": line.strip(), "category": "Personal", "priority": "Mid", "tags": []}
+            for line in raw_text.splitlines() if line.strip()]
+
+
+# ---------------------------------------------------------------- заголовки входа
+
+def init_data_headers(tg_id, token, name="Тест", auth_date=None, tamper=False):
+    from telegram_auth import sign_init_data
+
+    fields = {
+        "query_id": "AAH" + secrets.token_hex(6),
+        "user": json.dumps({"id": tg_id, "first_name": name}, ensure_ascii=False, separators=(",", ":")),
+        "auth_date": int(time.time() if auth_date is None else auth_date),
+    }
+    signed = sign_init_data(fields, token)
+    if tamper:  # подменяем Telegram-id после подписи
+        signed = signed.replace(f"%22id%22%3A{tg_id}", f"%22id%22%3A{tg_id + 1}")
+    return {"X-Telegram-Init-Data": signed}
+
+
+def key_headers(user):
+    return {"X-Access-Key": user["access_key"]}
+
+
+# ---------------------------------------------------------------- HTTP-проверки (оба режима)
+
+def http_checks(client, token, A, B, owner, unknown_tg_id, count_users_with_tg):
+    hA = init_data_headers(A["telegram_user_id"], token, "Тест A")
+    hB = init_data_headers(B["telegram_user_id"], token, "Тест B")
+
+    section("Вход")
+    for path in ["/tasks", "/subtasks", "/notes", "/google/status"]:
+        check(f"без заголовков {path} → 401", client.get(path).status_code == 401)
+    check("/health открывается без заголовков", client.get("/health").status_code == 200)
+    root = client.get("/")
+    check("главная страница открывается без заголовков", root.status_code == 200 and "<html" in root.text.lower())
+
+    tg = A["telegram_user_id"]
+    check("initData с изменённым полем → 401",
+          client.get("/tasks", headers=init_data_headers(tg, token, tamper=True)).status_code == 401)
+    other_token = f"{secrets.randbelow(10**9)}:{secrets.token_urlsafe(26)}"
+    check("initData с подписью другого токена → 401",
+          client.get("/tasks", headers=init_data_headers(tg, other_token)).status_code == 401)
+    check("initData старше 24 часов → 401",
+          client.get("/tasks", headers=init_data_headers(tg, token, auth_date=time.time() - 25 * 3600)).status_code == 401)
+    check("неверный X-Access-Key → 401",
+          client.get("/tasks", headers={"X-Access-Key": secrets.token_hex(32)}).status_code == 401)
+
+    before = count_users_with_tg(unknown_tg_id)
+    r = client.get("/tasks", headers=init_data_headers(unknown_tg_id, token, "Незнакомец"))
+    detail = r.json().get("detail") if r.headers.get("content-type", "").startswith("application/json") else None
+    check("верный initData незнакомого человека → 403 not_approved",
+          r.status_code == 403 and isinstance(detail, dict) and detail.get("code") == "not_approved")
+    check("…и в базе ничего не создано", count_users_with_tg(unknown_tg_id) == before == 0)
+
+    section("Задачи")
+    ta = client.post("/tasks", headers=hA, json={"task": "Задача A (изоляция)", "category": "Work"}).json()
+    tasks_b = client.get("/tasks", headers=hB).json()
+    check("задача A не видна в GET /tasks у B", all(t["id"] != ta["id"] for t in tasks_b))
+    check("задача A видна самому A", any(t["id"] == ta["id"] for t in client.get("/tasks", headers=hA).json()))
+    check("GET /tasks/{чужая} → 404", client.get(f"/tasks/{ta['id']}", headers=hB).status_code == 404)
+    check("PATCH /tasks/{чужая} → 404",
+          client.patch(f"/tasks/{ta['id']}", headers=hB, json={"task": "взлом", "status": "Done"}).status_code == 404)
+    check("DELETE /tasks/{чужая} → 404", client.delete(f"/tasks/{ta['id']}", headers=hB).status_code == 404)
+    after = client.get(f"/tasks/{ta['id']}", headers=hA)
+    check("…и задача A не изменилась", after.status_code == 200
+          and after.json()["task"] == "Задача A (изоляция)" and after.json()["status"] == "To Do")
+
+    section("Подзадачи")
+    sa = client.post(f"/tasks/{ta['id']}/subtasks", headers=hA, json={"content": "Шаг A"}).json()
+    check("POST /tasks/{чужая}/subtasks → 404",
+          client.post(f"/tasks/{ta['id']}/subtasks", headers=hB, json={"content": "чужой шаг"}).status_code == 404)
+    check("GET /subtasks у B без подзадач A",
+          all(s["id"] != sa["id"] for s in client.get("/subtasks", headers=hB).json()))
+    check("PATCH /subtasks/{чужая} → 404",
+          client.patch(f"/subtasks/{sa['id']}", headers=hB, json={"is_done": True}).status_code == 404)
+    check("DELETE /subtasks/{чужая} → 404", client.delete(f"/subtasks/{sa['id']}", headers=hB).status_code == 404)
+    subs_a = [s for s in client.get("/subtasks", headers=hA).json() if s["id"] == sa["id"]]
+    check("…и подзадача A на месте и не отмечена", len(subs_a) == 1 and subs_a[0]["is_done"] is False)
+
+    section("Заметки")
+    na = client.post("/notes", headers=hA, json={"content": "Заметка A"}).json()
+    check("заметка A не видна в GET /notes у B", all(n["id"] != na["id"] for n in client.get("/notes", headers=hB).json()))
+    check("PATCH /notes/{чужая} → 404",
+          client.patch(f"/notes/{na['id']}", headers=hB, json={"content": "взлом"}).status_code == 404)
+    check("DELETE /notes/{чужая} → 404", client.delete(f"/notes/{na['id']}", headers=hB).status_code == 404)
+    notes_a = [n for n in client.get("/notes", headers=hA).json() if n["id"] == na["id"]]
+    check("…и заметка A не изменилась", len(notes_a) == 1 and notes_a[0]["content"] == "Заметка A")
+
+    section("user_id от клиента игнорируется")
+    tb = client.post("/tasks", headers=hB, json={"task": "Задача B с чужим user_id", "category": "Work", "user_id": A["id"]})
+    tb_id = tb.json().get("id")
+    check("POST /tasks с user_id=A от B создаёт задачу у B",
+          tb.status_code == 201 and any(t["id"] == tb_id for t in client.get("/tasks", headers=hB).json())
+          and all(t["id"] != tb_id for t in client.get("/tasks", headers=hA).json()))
+    client.patch(f"/tasks/{tb_id}", headers=hB, json={"user_id": A["id"], "task": "Задача B (после PATCH)"})
+    check("PATCH с user_id=A не передаёт задачу A",
+          all(t["id"] != tb_id for t in client.get("/tasks", headers=hA).json())
+          and any(t["id"] == tb_id for t in client.get("/tasks", headers=hB).json()))
+    nb = client.post("/notes", headers=hB, json={"content": "Заметка B", "user_id": A["id"]}).json()
+    check("POST /notes с user_id=A от B создаёт заметку у B",
+          all(n["id"] != nb["id"] for n in client.get("/notes", headers=hA).json()))
+
+    section("Вход по ключу из /web")
+    via_key = client.get("/tasks", headers=key_headers(A))
+    ids = {t["id"] for t in via_key.json()} if via_key.status_code == 200 else set()
+    check("X-Access-Key A открывает только задачи A", via_key.status_code == 200 and ta["id"] in ids and tb_id not in ids)
+
+    section("Повторяющиеся задачи")
+    rec = client.post("/tasks", headers=hA, json={
+        "task": "Повтор A", "category": "Personal", "deadline": "2026-10-10T09:00:00",
+        "is_recurring": True, "recurrence_pattern": "weekly"}).json()
+    client.patch(f"/tasks/{rec['id']}", headers=hA, json={"status": "Done"})
+    next_a = [t for t in client.get("/tasks", headers=hA).json() if t["task"] == "Повтор A" and t["status"] == "To Do"]
+    check("закрытие повторяющейся задачи создаёт следующую у того же пользователя",
+          len(next_a) == 1 and next_a[0]["deadline"].startswith("2026-10-17"))
+    check("…и у B её нет", all(t["task"] != "Повтор A" for t in client.get("/tasks", headers=hB).json()))
+
+    return {"task_a": ta, "task_b_id": tb_id}
+
+
+# ---------------------------------------------------------------- статические проверки
+
+def static_checks():
+    section("Код и репозиторий")
+    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    bad = re.findall(r"new Date\([^)]*deadline[^)]*\)", html)
+    check("в index.html нет new Date(…deadline…), время через parseNaiveDeadline",
+          not bad and "function parseNaiveDeadline" in html)
+    patterns = [
+        r"eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}",  # JWT (service_role и т.п.)
+        r"[0-9]{8,10}:AA[A-Za-z0-9_-]{30,}",                                 # токен Telegram-бота
+        r"gsk_[A-Za-z0-9]{20,}",                                              # ключ Groq
+        r"GOCSPX-[A-Za-z0-9_-]{10,}",                                         # секрет Google OAuth
+        r"sb_secret_[A-Za-z0-9_-]{10,}",                                      # секретный ключ Supabase
+    ]
+    out = subprocess.run(["git", "grep", "-nIE", "|".join(patterns)], cwd=ROOT, capture_output=True, text=True)
+    # Единственное разрешённое совпадение — заведомо фейковый JWT {"foo":"bar"} для тестов.
+    hits = [line.split(":", 2)[:2] for line in out.stdout.splitlines()
+            if "eyJmb28iOiJiYXIifQ" not in line]
+    check("в репозитории нет токенов и ключей (git grep)", not hits,
+          "найдено в: " + ", ".join(":".join(h) for h in hits))  # печатаем только файл:строку
+
+
+# ---------------------------------------------------------------- локальный режим: бот, напоминания, Google
+
+class FakeBot:
+    def __init__(self):
+        self.sent = []
+
+    async def send_message(self, chat_id, text, reply_markup=None, **_):
+        self.sent.append(SimpleNamespace(chat_id=chat_id, text=text, markup=reply_markup))
+
+    async def get_chat(self, chat_id):
+        return SimpleNamespace(first_name="Жена", last_name=None)
+
+
+def tg_update(tg_id, text=None, callback_data=None, first_name="Тест"):
+    replies, answers, edits = [], [], []
+
+    async def reply_text(t, **kw):
+        replies.append(SimpleNamespace(text=t, markup=kw.get("reply_markup")))
+
+    async def send_action(_):
+        return None
+
+    async def answer(t=None, show_alert=False):
+        answers.append(t)
+
+    async def edit_message_text(t, **_):
+        edits.append(t)
+
+    user = SimpleNamespace(id=tg_id, first_name=first_name, last_name=None, username=None)
+    query = None
+    if callback_data:
+        query = SimpleNamespace(from_user=user, data=callback_data, answer=answer, edit_message_text=edit_message_text,
+                                message=SimpleNamespace(text="Запрос доступа: Жена, Telegram-id 3003."))
+    message = SimpleNamespace(text=text, reply_text=reply_text, chat=SimpleNamespace(send_action=send_action), voice=None)
+    return SimpleNamespace(effective_user=user, effective_chat=SimpleNamespace(id=tg_id), message=message,
+                           callback_query=query, replies=replies, answers=answers, edits=edits)
+
+
+def telegram_checks(db, client, owner, A):
+    import telegram_handlers as h
+    import users_service
+
+    run = asyncio.run
+    section("Telegram")
+    ctx = SimpleNamespace(bot=FakeBot())
+    stranger = 3003
+    tasks_before = len(db.tables.get("tasks", []))
+    u = tg_update(stranger, text="Купить слона")
+    run(h.handle_text(u, ctx))
+    check("сообщение из неизвестного чата ничего не создаёт",
+          len(db.tables.get("tasks", [])) == tasks_before and "Нет доступа" in u.replies[-1].text)
+
+    u = tg_update(stranger, text="/start", first_name="Жена")
+    run(h.start(u, ctx))
+    to_owner = [m for m in ctx.bot.sent if m.chat_id == owner["telegram_user_id"]]
+    check("/start от незнакомца шлёт владельцу запрос с кнопками",
+          len(to_owner) == 1 and "Разрешить" in str(to_owner[0].markup) and "Запрос отправлен" in u.replies[-1].text)
+    run(h.start(tg_update(stranger, text="/start"), ctx))
+    check("повторный /start в течение часа не шлёт второй запрос",
+          len([m for m in ctx.bot.sent if m.chat_id == owner["telegram_user_id"]]) == 1)
+
+    u = tg_update(A["telegram_user_id"], callback_data=f"approve:{stranger}")
+    run(h.access_decision(u, ctx))
+    check("«Разрешить» не от админа отклоняется", users_service.get_by_telegram_id(stranger) is None and u.answers)
+
+    u = tg_update(owner["telegram_user_id"], callback_data=f"approve:{stranger}")
+    run(h.access_decision(u, ctx))
+    wife = users_service.get_by_telegram_id(stranger)
+    got_button = [m for m in ctx.bot.sent if m.chat_id == stranger and "web_app" in str(m.markup)]
+    check("«Разрешить» от админа создаёт пользователя и шлёт ему кнопку приложения",
+          wife is not None and wife["name"] == "Жена" and got_button and "Разрешено" in u.edits[-1])
+    run(h.access_decision(tg_update(owner["telegram_user_id"], callback_data=f"approve:{stranger}"), ctx))
+    check("повторное «Разрешить» ничего не дублирует",
+          len([x for x in db.tables["users"] if x.get("telegram_user_id") == stranger]) == 1)
+
+    u = tg_update(stranger, text="Записаться к врачу")
+    run(h.handle_text(u, ctx))
+    wife_tasks = [t for t in db.tables["tasks"] if t["task"] == "Записаться к врачу"]
+    check("задача из её чата создаётся у неё",
+          len(wife_tasks) == 1 and wife_tasks[0]["user_id"] == wife["id"])
+    hA = key_headers(A)
+    check("…и не видна другим",
+          all(t["task"] != "Записаться к врачу" for t in client.get("/tasks", headers=hA).json()))
+    u = tg_update(stranger, text="/list")
+    run(h.list_tasks_handler(u, ctx))
+    listing = u.replies[-1].text
+    check("/list показывает только её задачи", "Записаться к врачу" in listing and "Задача A" not in listing)
+
+    u = tg_update(stranger, text="/web")
+    run(h.web_link(u, ctx))
+    m = re.search(r"\?key=([0-9a-f]+)", u.replies[-1].text)
+    via_link = client.get("/tasks", headers={"X-Access-Key": m.group(1)}) if m else None
+    check("/web присылает ссылку, которая открывает только её данные",
+          via_link is not None and via_link.status_code == 200
+          and {t["task"] for t in via_link.json()} == {"Записаться к врачу"})
+    return wife
+
+
+def reminder_checks(client, A, B, wife):
+    import main
+    import users_service
+
+    section("Напоминания")
+    today = time.strftime("%Y-%m-%d")
+    hA, hB = key_headers(A), key_headers(B)
+    client.post("/tasks", headers=hA, json={"task": "Напомнить A", "category": "Work", "deadline": f"{today}T18:00:00"})
+    client.post("/tasks", headers=hB, json={"task": "Напомнить B", "category": "Work", "deadline": f"{today}T19:00:00"})
+    client.post("/tasks", headers=hA, json={"task": "Далёкая A", "category": "Work", "deadline": "2030-01-01T09:00:00"})
+    users_service.link_chat(A["telegram_user_id"], A["id"])
+    users_service.link_chat(B["telegram_user_id"], B["id"])
+
+    sent = []
+
+    async def fake_send(_client, chat_id, text):
+        sent.append((chat_id, text))
+        return True
+
+    real = main._send_telegram_message
+    main._send_telegram_message = fake_send
+    try:
+        r = client.post("/internal/reminders/run", headers={"X-Reminder-Secret": os.environ["REMINDERS_SECRET"]})
+    finally:
+        main._send_telegram_message = real
+    to_a = "\n".join(t for c, t in sent if c == A["telegram_user_id"])
+    to_b = "\n".join(t for c, t in sent if c == B["telegram_user_id"])
+    check("напоминания: каждому только его задачи со сроком в ближайшие 2 дня",
+          r.status_code == 200 and "Напомнить A" in to_a and "Напомнить B" not in to_a
+          and "Напомнить B" in to_b and "Напомнить A" not in to_b and "Далёкая A" not in to_a)
+    check("напоминание без секрета → 403", client.post("/internal/reminders/run").status_code == 403)
+
+
+def google_checks(db, client, A, B):
+    import google_calendar_service as gcal
+
+    section("Google Calendar")
+    state = gcal.make_state(A["id"])
+    check("state подписан и раскрывается в user_id", gcal.verify_state(state) == A["id"])
+    forged = state.replace(A["id"], B["id"], 1)
+    check("подделанный state отклоняется", gcal.verify_state(forged) is None)
+    check("state старше 10 минут отклоняется", gcal.verify_state(state, now=time.time() + 601) is None)
+    r = client.get("/google/callback", params={"code": "x", "state": forged})
+    check("callback с подделанным state не сохраняет токен",
+          r.status_code == 400 and not db.tables.get("google_credentials"))
+    url = client.get("/google/auth-url", headers=key_headers(A)).json().get("url", "")
+    check("/google/auth-url отдаёт адрес Google со state текущего пользователя",
+          url.startswith("https://accounts.google.com/") and "state=" in url)
+    check("/google/auth-url без входа → 401", client.get("/google/auth-url").status_code == 401)
+
+    # Токены двух пользователей; клиент Google подменён: запоминаем, чьим токеном пишется событие.
+    future = "2030-01-01T00:00:00+00:00"
+    db.tables["google_credentials"] = [
+        {"user_id": A["id"], "access_token": "token-A", "refresh_token": "r-A", "token_expiry": future},
+        {"user_id": B["id"], "access_token": "token-B", "refresh_token": "r-B", "token_expiry": future},
+    ]
+    used = []
+    broken = set()
+
+    class Exec:
+        def __init__(self, token):
+            self.token = token
+
+        def execute(self):
+            if self.token in broken:
+                raise RuntimeError("Google недоступен")
+            used.append(self.token)
+            return {"id": f"evt-{self.token}-{len(used)}"}
+
+    def fake_build(*_, credentials=None, **__):
+        token = credentials.token
+        events = SimpleNamespace(insert=lambda **kw: Exec(token), update=lambda **kw: Exec(token),
+                                 delete=lambda **kw: Exec(token))
+        return SimpleNamespace(events=lambda: events)
+
+    real_build = gcal.build
+    gcal.build = fake_build
+    try:
+        client.post("/tasks", headers=key_headers(A), json={"task": "Событие A", "category": "Work",
+                                                            "deadline": "2030-01-02T09:00:00"})
+        client.post("/tasks", headers=key_headers(B), json={"task": "Событие B", "category": "Work",
+                                                            "deadline": "2030-01-02T10:00:00"})
+        check("события пишутся токеном своего пользователя", used == ["token-A", "token-B"])
+        broken.add("token-A")
+        r = client.post("/tasks", headers=key_headers(A), json={"task": "При сбое Google", "category": "Work",
+                                                                "deadline": "2030-01-03T09:00:00"})
+        rb = client.post("/tasks", headers=key_headers(B), json={"task": "У B всё хорошо", "category": "Work",
+                                                                 "deadline": "2030-01-03T10:00:00"})
+        check("ошибка календаря у A не ломает задачи (ни у A, ни у B)",
+              r.status_code == 201 and rb.status_code == 201 and used[-1] == "token-B")
+    finally:
+        gcal.build = real_build
+    status_a = client.get("/google/status", headers=key_headers(A)).json()
+    check("/google/status показывает статус текущего пользователя", status_a.get("connected") is True)
+
+
+# ---------------------------------------------------------------- запуск
+
+def run_local():
+    db = setup_local()
+    from fastapi.testclient import TestClient
+
+    import main
+    import task_service
+    import users_service
+
+    task_service.parse_text_to_tasks = fake_parse
+    token = os.environ["TELEGRAM_BOT_TOKEN"]
+
+    # Владелец с уже существующей задачей (как после миграции) и два тестовых пользователя.
+    owner = users_service.create_user("Yera", 1001)
+    db.tables["users"][0]["is_admin"] = True
+    owner["is_admin"] = True
+    db.tables.setdefault("tasks", []).append({**__import__("fake_supabase").DEFAULTS["tasks"](),
+                                              "user_id": owner["id"], "task": "Старая задача Yera",
+                                              "category": "UniMe", "deadline": "2026-10-01T09:00:00+00:00"})
+    A = users_service.create_user("Тест A", 2001)
+    B = users_service.create_user("Тест B", 2002)
+    # без with: lifespan (вебхук Telegram) не запускается; ошибки сервера — ответ 500, а не падение скрипта
+    client = TestClient(main.app, raise_server_exceptions=False)
+
+    def count_users_with_tg(tg_id):
+        return len([u for u in db.tables["users"] if u.get("telegram_user_id") == tg_id])
+
+    print("Локальная проверка (база в памяти, без сети)")
+    http_checks(client, token, A, B, owner, 999001, count_users_with_tg)
+    section("Существующие данные")
+    owner_tasks = client.get("/tasks", headers=key_headers(owner)).json()
+    check("задачи Yera на месте и видны только ему", [t["task"] for t in owner_tasks] == ["Старая задача Yera"])
+    wife = telegram_checks(db, client, owner, A)
+    reminder_checks(client, A, B, wife)
+    google_checks(db, client, A, B)
+    static_checks()
+
+
+def run_remote(base_url):
+    import httpx
+    from dotenv import load_dotenv
+
+    load_dotenv(os.path.join(ROOT, ".env"))
+    for name in ("SUPABASE_URL", "SUPABASE_KEY", "TELEGRAM_BOT_TOKEN"):
+        if not os.environ.get(name):
+            sys.exit(f"Нужна переменная {name} (значение не печатается)")
+    from database import supabase
+    import users_service
+
+    token = os.environ["TELEGRAM_BOT_TOKEN"]
+    base_tg = 9_000_000_000 + secrets.randbelow(10**6) * 10
+    created = []
+    print(f"Проверка против {base_url} (временные пользователи будут удалены)")
+    try:
+        A = users_service.create_user("isolation-check A", base_tg + 1)
+        created.append(A)
+        B = users_service.create_user("isolation-check B", base_tg + 2)
+        created.append(B)
+        owner = next((u for u in users_service.list_admins()), None)
+
+        def count_users_with_tg(tg_id):
+            return len(supabase.table("users").select("id").eq("telegram_user_id", tg_id).execute().data)
+
+        with httpx.Client(base_url=base_url, timeout=90) as client:
+            client.get("/health")  # разбудить сервер на Render
+            http_checks(client, token, A, B, owner, base_tg + 3, count_users_with_tg)
+        section("Существующие данные")
+        n = len(supabase.table("tasks").select("id").eq("user_id", owner["id"]).execute().data) if owner else 0
+        check(f"у владельца есть задачи ({n})", n > 0)
+        check("у владельца заполнен telegram_user_id", bool(owner and owner.get("telegram_user_id")))
+    finally:
+        for user in created:
+            supabase.table("tasks").delete().eq("user_id", user["id"]).execute()  # подзадачи удалятся каскадом
+            supabase.table("notes").delete().eq("user_id", user["id"]).execute()
+            supabase.table("telegram_chats").delete().eq("user_id", user["id"]).execute()
+            supabase.table("google_credentials").delete().eq("user_id", user["id"]).execute()
+            supabase.table("users").delete().eq("id", user["id"]).execute()
+        print(f"\nВременные пользователи удалены: {len(created)}")
+    static_checks()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--base-url", help="адрес работающего сервиса; без него — локальная проверка")
+    args = parser.parse_args()
+    if args.base_url:
+        run_remote(args.base_url.rstrip("/"))
+    else:
+        run_local()
+    failed = [name for ok, name in results if not ok]
+    print(f"\nИтого: {len(results) - len(failed)} из {len(results)} проверок пройдено.")
+    sys.exit(1 if failed else 0)
+
+
+if __name__ == "__main__":
+    main()

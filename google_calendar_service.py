@@ -5,9 +5,15 @@
 
 Двусторонний импорт изменений ИЗ Google Calendar обратно в задачи —
 отдельный следующий шаг, здесь его пока нет.
+
+У каждого пользователя свой календарь: токены хранятся в google_credentials по user_id,
+и события задачи пишутся только в календарь её владельца.
 """
+import hashlib
+import hmac
 import logging
 import os
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -23,6 +29,9 @@ logger = logging.getLogger(__name__)
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
 GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI")
+# Секрет для подписи state при подключении календаря (случайная строка от 32 символов, задаётся на Render).
+OAUTH_STATE_SECRET = os.environ.get("OAUTH_STATE_SECRET")
+STATE_TTL_SECONDS = 600  # подписанная метка в state живёт 10 минут
 
 SCOPES = ["https://www.googleapis.com/auth/calendar.events"]
 CREDENTIALS_TABLE = "google_credentials"
@@ -47,25 +56,56 @@ def is_configured() -> bool:
     return bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET and GOOGLE_REDIRECT_URI)
 
 
-def build_auth_url() -> str:
+def _state_signature(payload: str) -> str:
+    return hmac.new(OAUTH_STATE_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+
+
+def make_state(user_id: str, now: Optional[float] = None) -> str:
+    """Подписанная короткоживущая метка «кто подключает календарь»: user_id.срок.подпись.
+    Сам ключ доступа в Google не передаётся."""
+    if not OAUTH_STATE_SECRET:
+        raise RuntimeError("OAUTH_STATE_SECRET не задан")
+    expires = int((time.time() if now is None else now) + STATE_TTL_SECONDS)
+    payload = f"{user_id}.{expires}"
+    return f"{payload}.{_state_signature(payload)}"
+
+
+def verify_state(state: Optional[str], now: Optional[float] = None) -> Optional[str]:
+    """Возвращает user_id из state, если подпись верна и срок не истёк, иначе None."""
+    if not OAUTH_STATE_SECRET or not state:
+        return None
+    try:
+        user_id, expires, signature = state.rsplit(".", 2)
+        expires_at = int(expires)
+    except ValueError:
+        return None
+    if not hmac.compare_digest(_state_signature(f"{user_id}.{expires}"), signature):
+        return None
+    if (time.time() if now is None else now) > expires_at:
+        return None
+    return user_id
+
+
+def build_auth_url(user_id: str) -> str:
     flow = Flow.from_client_config(_client_config(), scopes=SCOPES, redirect_uri=GOOGLE_REDIRECT_URI)
     auth_url, _ = flow.authorization_url(
         access_type="offline",
         prompt="consent",  # гарантирует, что Google вернёт refresh_token
         include_granted_scopes="true",
+        state=make_state(user_id),
     )
     return auth_url
 
 
-def exchange_code(code: str) -> None:
+def exchange_code(code: str, user_id: str) -> None:
     flow = Flow.from_client_config(_client_config(), scopes=SCOPES, redirect_uri=GOOGLE_REDIRECT_URI)
     flow.fetch_token(code=code)
-    _save_credentials(flow.credentials)
+    _save_credentials(flow.credentials, user_id)
 
 
-def _save_credentials(creds: Credentials) -> None:
+def _save_credentials(creds: Credentials, user_id: str) -> None:
     data = {
-        "id": 1,
+        "user_id": user_id,
         "access_token": creds.token,
         "token_expiry": creds.expiry.isoformat() if creds.expiry else None,
         "updated_at": datetime.utcnow().isoformat(),
@@ -78,13 +118,13 @@ def _save_credentials(creds: Credentials) -> None:
     supabase.table(CREDENTIALS_TABLE).upsert(data).execute()
 
 
-def is_connected() -> bool:
-    result = supabase.table(CREDENTIALS_TABLE).select("id").eq("id", 1).execute()
+def is_connected(user_id: str) -> bool:
+    result = supabase.table(CREDENTIALS_TABLE).select("user_id").eq("user_id", user_id).execute()
     return bool(result.data)
 
 
-def _load_credentials() -> Optional[Credentials]:
-    result = supabase.table(CREDENTIALS_TABLE).select("*").eq("id", 1).execute()
+def _load_credentials(user_id: str) -> Optional[Credentials]:
+    result = supabase.table(CREDENTIALS_TABLE).select("*").eq("user_id", user_id).execute()
     if not result.data:
         return None
     row = result.data[0]
@@ -106,15 +146,15 @@ def _load_credentials() -> Optional[Credentials]:
     )
     if not creds.valid:
         creds.refresh(GoogleRequest())
-        _save_credentials(creds)
+        _save_credentials(creds, user_id)
     return creds
 
 
-def _get_service():
-    if not is_configured():
+def _get_service(user_id: str):
+    if not is_configured() or not user_id:
         return None
     try:
-        creds = _load_credentials()
+        creds = _load_credentials(user_id)
     except Exception:
         logger.exception("Не удалось загрузить/обновить Google-креды")
         return None
@@ -132,7 +172,7 @@ def _event_body(task: dict) -> dict:
     emoji_p = PRIORITY_EMOJI.get(task.get("priority"), "")
     start_dt = datetime.fromisoformat(task["deadline"])
     # В нашей системе дедлайн хранится и везде показывается как "голая" стена
-    # часов (12:00 значит 12:00 по Алматы, без реального UTC-пересчёта), но
+    # часов (12:00 значит 12:00 по времени владельца, Europe/Rome, без UTC-пересчёта), но
     # Supabase иногда возвращает строку с суффиксом +00:00. Google Calendar,
     # в отличие от бота и веб-интерфейса, ЧЕСТНО пересчитывает время по этому
     # смещению — поэтому убираем его и передаём зону отдельным полем timeZone.
@@ -147,9 +187,9 @@ def _event_body(task: dict) -> dict:
     }
 
 
-def sync_task_upsert(task: dict) -> Optional[str]:
+def sync_task_upsert(task: dict, user_id: str) -> Optional[str]:
     """
-    Создаёт или обновляет событие в Google Calendar для задачи.
+    Создаёт или обновляет событие в Google Calendar пользователя user_id для его задачи.
     Возвращает актуальный google_event_id, либо прежний/None, если
     синхронизация невозможна (Google не подключён, нет дедлайна и т.п.) —
     это не считается ошибкой, задача всё равно продолжает жить в нашей базе.
@@ -157,7 +197,7 @@ def sync_task_upsert(task: dict) -> Optional[str]:
     if not task.get("deadline"):
         return task.get("google_event_id")
 
-    service = _get_service()
+    service = _get_service(user_id)
     if not service:
         return task.get("google_event_id")
 
@@ -177,10 +217,10 @@ def sync_task_upsert(task: dict) -> Optional[str]:
         return event_id
 
 
-def sync_task_delete(event_id: Optional[str]) -> None:
+def sync_task_delete(event_id: Optional[str], user_id: str) -> None:
     if not event_id:
         return
-    service = _get_service()
+    service = _get_service(user_id)
     if not service:
         return
     try:
