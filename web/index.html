@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#FBFBFA" />
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <title>JulYera Agent</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,6 +13,11 @@
   /* ---------- Токены дизайна (design/DESIGN.md, раздел 3) ---------- */
   :root {
     color-scheme: light;
+
+    /* Безопасные отступы сверху и снизу. В Telegram Mini App их переопределяет JS
+       по safeAreaInset + contentSafeAreaInset из SDK, в браузере работают env(). */
+    --app-inset-top: env(safe-area-inset-top, 0px);
+    --app-inset-bottom: env(safe-area-inset-bottom, 0px);
 
     /* Цвета */
     --bg: #FBFBFA;
@@ -137,7 +143,7 @@
     z-index: 50;
     background: var(--bg);
     border-right: 1px solid var(--line);
-    padding: calc(12px + env(safe-area-inset-top)) var(--gutter) calc(28px + env(safe-area-inset-bottom));
+    padding: calc(12px + var(--app-inset-top)) var(--gutter) calc(28px + var(--app-inset-bottom));
     display: flex;
     flex-direction: column;
     gap: var(--gap-section);
@@ -268,7 +274,7 @@
   /* ---------- Main ---------- */
   .main {
     /* Снизу место под нижнюю панель, чтобы последняя строка не пряталась под ней. */
-    padding: 0 var(--gutter) calc(120px + env(safe-area-inset-bottom));
+    padding: 0 var(--gutter) calc(120px + var(--app-inset-bottom));
     display: flex;
     flex-direction: column;
     gap: 24px;
@@ -281,7 +287,7 @@
     display: flex;
     align-items: center;
     gap: var(--gap-m);
-    padding-top: calc(12px + env(safe-area-inset-top));
+    padding-top: calc(12px + var(--app-inset-top));
   }
   .search-box {
     flex: 1;
@@ -500,7 +506,7 @@
   .toast {
     position: fixed;
     left: 50%;
-    bottom: calc(116px + env(safe-area-inset-bottom));
+    bottom: calc(116px + var(--app-inset-bottom));
     width: min(100% - 2 * var(--gutter), 480px - 2 * var(--gutter));
     z-index: 80;
     overflow: hidden;
@@ -557,7 +563,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: calc(12px + env(safe-area-inset-top)) var(--gutter) 0;
+    padding: calc(12px + var(--app-inset-top)) var(--gutter) 0;
   }
   .topbar-group { display: flex; gap: var(--gap-s); }
   .tb-btn {
@@ -721,7 +727,7 @@
     display: flex;
     align-items: center;
     gap: var(--gap-l);
-    padding: 12px var(--gutter) calc(16px + env(safe-area-inset-bottom));
+    padding: 12px var(--gutter) calc(16px + var(--app-inset-bottom));
     background: var(--bg);
     border-top: 1px solid var(--hairline);
   }
@@ -776,7 +782,7 @@
     max-width: 480px;
     margin: 0 auto;
     /* снизу место под закреплённую панель с главной кнопкой */
-    padding: 0 var(--gutter) calc(120px + env(safe-area-inset-bottom));
+    padding: 0 var(--gutter) calc(120px + var(--app-inset-bottom));
   }
   .sheet-head {
     display: grid;
@@ -784,7 +790,7 @@
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
     gap: var(--gap-s);
-    padding-top: calc(12px + env(safe-area-inset-top));
+    padding-top: calc(12px + var(--app-inset-top));
   }
   .sheet-head .t-modal-title { margin: 0; text-align: center; }
   .sheet-head > :first-child { justify-self: start; }
@@ -798,7 +804,7 @@
     display: flex;
     align-items: center;
     gap: var(--gap-l);
-    padding: 14px var(--gutter) calc(16px + env(safe-area-inset-bottom));
+    padding: 14px var(--gutter) calc(16px + var(--app-inset-bottom));
     background: var(--bg);
     border-top: 1px solid var(--hairline);
   }
@@ -1084,6 +1090,23 @@
 
   body.no-scroll { overflow: hidden; }
 
+  /* ---------- Экран входа: нет доступа или ждём одобрения владельца ---------- */
+  .auth-gate {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: calc(var(--gutter) + var(--app-inset-top)) var(--gutter) calc(var(--gutter) + var(--app-inset-bottom));
+    background: var(--bg);
+    text-align: center;
+  }
+  .auth-gate-inner { max-width: 360px; display: flex; flex-direction: column; gap: var(--gap-l); }
+  .auth-gate .t-h1-month { margin: 0; }
+  .auth-gate p { margin: 0; font-size: 16px; line-height: 1.45; color: var(--ink-muted); }
+  .menu-note { margin: 0; padding: 0 4px; font-size: 13px; line-height: 1.4; color: var(--ink-muted); }
+
   /* ---------- Загрузка (раздел 8): заглушки со слабой пульсацией ---------- */
   .skeleton {
     height: 72px;
@@ -1105,6 +1128,12 @@
 </style>
 </head>
 <body>
+<div class="auth-gate" id="authGate" role="alert" hidden>
+  <div class="auth-gate-inner">
+    <h1 class="t-h1-month" id="authGateTitle"></h1>
+    <p id="authGateText"></p>
+  </div>
+</div>
 <div class="mobile-overlay" id="mobileOverlay"></div>
 <aside class="sidebar" id="sidebar" aria-label="Меню">
   <div class="menu-head">
@@ -1137,6 +1166,7 @@
       Печать / PDF
     </button>
   </nav>
+  <p class="menu-note" id="exportNote" hidden>Экспорт CSV и печать работают в браузере: пришлите боту /web, он даст личную ссылку.</p>
 
   <div class="menu-status">
     <div class="menu-status-row" id="backendStatus">
@@ -1260,7 +1290,7 @@
     <div class="newtask-body">
       <label class="newtask-label" for="composerInput">Опиши задачу своими словами</label>
       <textarea class="newtask-input" id="composerInput"></textarea>
-      <p class="newtask-hint">Дату и время можно писать словами («завтра в 18:00»), теги через решётку («#экзамен»). Категорию и приоритет приложение определит само.</p>
+      <p class="newtask-hint">Дату и время можно писать словами («завтра в 18:00»), теги через решётку («#экзамен»). Категорию и приоритет приложение определит само.<span id="micBtnHint" hidden> Голосом удобнее через бота: просто отправьте ему голосовое сообщение.</span></p>
     </div>
   </div>
   <div class="sheet-footer">
@@ -1389,6 +1419,94 @@
 const BASE_URL = localStorage.getItem('task_agent_backend_url')
   || (location.protocol.startsWith('http') ? location.origin : 'https://julyera-agent.onrender.com');
 
+// ---------- Вход: Telegram Mini App или личный ключ из /web ----------
+// В Mini App Telegram сам передаёт подписанные данные пользователя (initData), их шлём в заголовке.
+// Вне Telegram — ключ из ссылки /web (?key=...): сохраняем и убираем из адресной строки.
+const tg = window.Telegram && window.Telegram.WebApp;
+const inTelegram = !!(tg && tg.initData);
+const ACCESS_KEY_STORAGE = 'task_agent_access_key';
+let accessKey = null;
+if (!inTelegram) {
+  const params = new URLSearchParams(location.search);
+  const fromUrl = params.get('key');
+  if (fromUrl) {
+    accessKey = fromUrl;
+    try { localStorage.setItem(ACCESS_KEY_STORAGE, fromUrl); } catch (e) { /* приватный режим */ }
+    params.delete('key');
+    const rest = params.toString();
+    history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
+  } else {
+    try { accessKey = localStorage.getItem(ACCESS_KEY_STORAGE); } catch (e) { accessKey = null; }
+  }
+}
+
+function authHeaders(extra) {
+  const headers = Object.assign({}, extra);
+  if (inTelegram) headers['X-Telegram-Init-Data'] = tg.initData;
+  else if (accessKey) headers['X-Access-Key'] = accessKey;
+  return headers;
+}
+
+let authGateShown = false;
+
+function showAuthGate(kind) {
+  const gate = document.getElementById('authGate');
+  document.getElementById('authGateTitle').textContent =
+    kind === 'pending' ? 'Ждём одобрения владельца' : 'Откройте приложение из Telegram';
+  document.getElementById('authGateText').textContent = kind === 'pending'
+    ? 'Если ещё не писали боту, отправьте ему /start — владельцу придёт запрос. Как только он разрешит доступ, приложение откроется само.'
+    : 'Нажмите кнопку «Открыть» в чате с ботом. Для браузера пришлите боту /web — он даст личную ссылку.';
+  gate.hidden = false;
+  authGateShown = true;
+}
+
+// Все запросы к серверу идут через api(): он добавляет заголовок входа и показывает
+// экран входа на 401 / 403 not_approved. Когда доступ появится, экран уберёт следующий удачный запрос.
+async function api(path, options = {}) {
+  const res = await fetch(`${BASE_URL}${path}`, Object.assign({}, options, { headers: authHeaders(options.headers) }));
+  if (res.status === 401) {
+    if (!inTelegram && accessKey) {  // ключ устарел или неверный — больше его не шлём
+      accessKey = null;
+      try { localStorage.removeItem(ACCESS_KEY_STORAGE); } catch (e) { /* ничего */ }
+    }
+    showAuthGate('login');
+  } else if (res.status === 403) {
+    let code = null;
+    try { code = ((await res.clone().json()).detail || {}).code; } catch (e) { code = null; }
+    if (code === 'not_approved') showAuthGate('pending');
+  } else if (res.ok && authGateShown) {
+    authGateShown = false;
+    document.getElementById('authGate').hidden = true;
+  }
+  return res;
+}
+
+// ---------- Telegram Mini App: цвета, отступы, жесты ----------
+if (inTelegram) {
+  const callTg = (name, ...args) => {
+    try { if (typeof tg[name] === 'function') tg[name](...args); } catch (e) { /* метод есть не во всех версиях */ }
+  };
+  callTg('ready');
+  callTg('expand');
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#FBFBFA';
+  callTg('setHeaderColor', bg);
+  callTg('setBackgroundColor', bg);
+  callTg('setBottomBarColor', bg);
+  callTg('disableVerticalSwipes'); // иначе прокрутка списка вниз может свернуть приложение
+  const applyInsets = () => {
+    // safeAreaInset — вырез и системные панели, contentSafeAreaInset — элементы самого Telegram.
+    const safe = tg.safeAreaInset, content = tg.contentSafeAreaInset;
+    if (!safe && !content) return; // старые версии Telegram: остаются env()
+    const top = ((safe && safe.top) || 0) + ((content && content.top) || 0);
+    const bottom = ((safe && safe.bottom) || 0) + ((content && content.bottom) || 0);
+    document.documentElement.style.setProperty('--app-inset-top', `${top}px`);
+    document.documentElement.style.setProperty('--app-inset-bottom', `${bottom}px`);
+  };
+  applyInsets();
+  ['safeAreaChanged', 'contentSafeAreaChanged', 'viewportChanged', 'fullscreenChanged']
+    .forEach(ev => { try { tg.onEvent(ev, applyInsets); } catch (e) { /* событие есть не везде */ } });
+}
+
 const CATEGORIES = ['Study', 'Work', 'Personal', 'UniMe'];
 const PRIORITIES = ['High', 'Mid', 'Low'];
 const CATEGORY_LABEL = { Study: 'Study', Work: 'Work', Personal: 'Personal', UniMe: 'UniMe' };
@@ -1485,7 +1603,7 @@ async function toggleSubtask(id, isDone) {
   if (sub) sub.is_done = isDone; // оптимистично, без ожидания ответа
   renderCurrentPage();
   try {
-    const res = await fetch(`${BASE_URL}/subtasks/${id}`, {
+    const res = await api(`/subtasks/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_done: isDone }),
@@ -1499,7 +1617,7 @@ async function toggleSubtask(id, isDone) {
 
 async function addSubtask(taskId, content) {
   try {
-    const res = await fetch(`${BASE_URL}/tasks/${taskId}/subtasks`, {
+    const res = await api(`/tasks/${taskId}/subtasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content }),
@@ -1517,7 +1635,7 @@ async function deleteSubtask(id) {
   allSubtasks = allSubtasks.filter(s => s.id !== id);
   renderCurrentPage();
   try {
-    const res = await fetch(`${BASE_URL}/subtasks/${id}`, { method: 'DELETE' });
+    const res = await api(`/subtasks/${id}`, { method: 'DELETE' });
     if (!res.ok && res.status !== 204) throw new Error('bad status');
   } catch (e) {
     toast('Не удалось удалить подзадачу');
@@ -1539,7 +1657,7 @@ async function saveEdit(id, fields) {
     tags: fields.tags.value.split(',').map(t => t.trim().replace(/^#+/, '')).filter(Boolean),
   };
   try {
-    const res = await fetch(`${BASE_URL}/tasks/${id}`, {
+    const res = await api(`/tasks/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -2280,7 +2398,7 @@ document.querySelectorAll('.dock-btn').forEach(btn => {
 
 async function loadNotes() {
   try {
-    const res = await fetch(`${BASE_URL}/notes`);
+    const res = await api(`/notes`);
     if (!res.ok) throw new Error('bad status');
     allNotes = (await res.json()).filter(n => !pendingNoteDeletions[n.id]);
     setBackendStatus(true);
@@ -2390,7 +2508,7 @@ async function saveNoteEdit(id, content) {
   const trimmed = content.trim();
   if (!trimmed) { toast('Заметка не может быть пустой'); return; }
   try {
-    const res = await fetch(`${BASE_URL}/notes/${id}`, {
+    const res = await api(`/notes/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: trimmed }),
@@ -2418,7 +2536,7 @@ function deleteNote(id) {
   const timeoutId = setTimeout(async () => {
     delete pendingNoteDeletions[id];
     try {
-      const res = await fetch(`${BASE_URL}/notes/${id}`, { method: 'DELETE' });
+      const res = await api(`/notes/${id}`, { method: 'DELETE' });
       if (!res.ok && res.status !== 204) throw new Error('bad status');
     } catch (e) {
       toast('Не удалось удалить заметку — попробуй ещё раз');
@@ -2447,7 +2565,7 @@ async function submitNote() {
 
   btn.disabled = true;
   try {
-    const res = await fetch(`${BASE_URL}/notes`, {
+    const res = await api(`/notes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content }),
@@ -2510,8 +2628,8 @@ async function loadTasks() {
   if (activePriority) params.set('priority', activePriority);
   try {
     const [tasksRes, subtasksRes] = await Promise.all([
-      fetch(`${BASE_URL}/tasks?${params.toString()}`),
-      fetch(`${BASE_URL}/subtasks`),
+      api(`/tasks?${params.toString()}`),
+      api(`/subtasks`),
     ]);
     if (!tasksRes.ok) throw new Error('bad status');
     allTasks = (await tasksRes.json()).filter(t => !pendingDeletions[t.id]);
@@ -2535,11 +2653,48 @@ function setBackendStatus(ok) {
   text.textContent = ok ? 'Backend подключён' : 'Backend недоступен';
 }
 
+// Подключение Google Calendar. Переход по ссылке не передаёт заголовок входа, поэтому адрес
+// согласия (с подписанным state на 10 минут) заранее берём у сервера через /google/auth-url.
+// В Telegram открываем во внешнем браузере: Google не пускает вход во встроенном.
+let googleAuthUrl = null;
+let googleAuthUrlAt = 0;
+
+async function prefetchGoogleAuthUrl() {
+  try {
+    const res = await api('/google/auth-url');
+    if (!res.ok) return;
+    googleAuthUrl = (await res.json()).url;
+    googleAuthUrlAt = Date.now();
+  } catch (e) { googleAuthUrl = null; }
+}
+
+async function connectGoogle() {
+  const fresh = googleAuthUrl && Date.now() - googleAuthUrlAt < 8 * 60 * 1000;
+  if (fresh) { // открываем сразу, прямо в обработчике нажатия
+    if (inTelegram) tg.openLink(googleAuthUrl);
+    else window.open(googleAuthUrl, '_blank');
+    googleAuthUrl = null; // state одноразовый по смыслу: следующий раз возьмём новый
+    prefetchGoogleAuthUrl();
+    return;
+  }
+  const win = inTelegram ? null : window.open('', '_blank'); // до await, иначе окно заблокируют
+  await prefetchGoogleAuthUrl();
+  if (!googleAuthUrl) {
+    if (win) win.close();
+    toast('Не удалось начать подключение Google Calendar');
+    return;
+  }
+  if (inTelegram) tg.openLink(googleAuthUrl);
+  else if (win) win.location = googleAuthUrl;
+  else location.href = googleAuthUrl;
+  googleAuthUrl = null;
+}
+
 async function checkGoogleStatus() {
   const dot = document.getElementById('googleDot');
   const text = document.getElementById('googleStatusText');
   try {
-    const res = await fetch(`${BASE_URL}/google/status`);
+    const res = await api(`/google/status`);
     if (!res.ok) throw new Error('bad status');
     const data = await res.json();
     if (data.connected) {
@@ -2549,11 +2704,11 @@ async function checkGoogleStatus() {
       dot.classList.remove('ok', 'err');
       text.innerHTML = '';
       const link = document.createElement('a');
-      link.href = `${BASE_URL}/google/auth`;
-      link.target = '_blank';
-      link.style.color = 'var(--accent)';
+      link.href = '#';
       link.textContent = 'Подключить Google Calendar';
+      link.onclick = (e) => { e.preventDefault(); connectGoogle(); };
       text.appendChild(link);
+      prefetchGoogleAuthUrl();
     }
   } catch (e) {
     dot.classList.remove('ok'); dot.classList.add('err');
@@ -2563,7 +2718,7 @@ async function checkGoogleStatus() {
 
 async function updateStatus(id, status) {
   try {
-    const res = await fetch(`${BASE_URL}/tasks/${id}`, {
+    const res = await api(`/tasks/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
@@ -2588,7 +2743,7 @@ function deleteTask(id) {
     delete pendingDeletions[id];
     if (searchPool) searchPool = searchPool.filter(t => t.id !== id);
     try {
-      const res = await fetch(`${BASE_URL}/tasks/${id}`, { method: 'DELETE' });
+      const res = await api(`/tasks/${id}`, { method: 'DELETE' });
       if (!res.ok && res.status !== 204) throw new Error('bad status');
     } catch (e) {
       toast('Не удалось удалить задачу — попробуй ещё раз');
@@ -2618,7 +2773,7 @@ async function submitComposer() {
   btn.disabled = true;
   btn.textContent = 'Разбираю…';
   try {
-    const res = await fetch(`${BASE_URL}/tasks/parse`, {
+    const res = await api(`/tasks/parse`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }),
@@ -2664,8 +2819,13 @@ function setupVoiceInput(buttonId, textareaId) {
   const textarea = document.getElementById(textareaId);
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
+  const hideMic = () => {
+    btn.style.display = 'none';
+    const hint = document.getElementById(buttonId + 'Hint');
+    if (hint) hint.hidden = false;
+  };
   if (!SpeechRecognition) {
-    btn.style.display = 'none'; // браузер не поддерживает — просто прячем кнопку
+    hideMic(); // браузер (или Telegram) не поддерживает — прячем кнопку
     return;
   }
 
@@ -2682,8 +2842,14 @@ function setupVoiceInput(buttonId, textareaId) {
     textarea.value = textarea.value.trim() + sep + transcript;
   };
 
-  recognition.onerror = () => {
-    toast('Не удалось распознать речь');
+  recognition.onerror = (event) => {
+    // Во встроенном браузере Telegram API может быть, но микрофон недоступен.
+    if (['not-allowed', 'service-not-allowed', 'audio-capture'].includes(event.error)) {
+      hideMic();
+      toast('Микрофон здесь недоступен. Отправьте голосовое сообщение боту');
+    } else {
+      toast('Не удалось распознать речь');
+    }
   };
 
   recognition.onend = () => {
@@ -2816,6 +2982,11 @@ document.getElementById('menuArchive').onclick = () => {
   document.getElementById('backBtn').focus();
 };
 document.getElementById('exportCsvBtn').onclick = () => { closeMobileMenu(); downloadCSV(); };
+if (inTelegram) {
+  document.getElementById('exportCsvBtn').hidden = true;
+  document.getElementById('exportPdfBtn').hidden = true;
+  document.getElementById('exportNote').hidden = false;
+}
 document.getElementById('exportPdfBtn').onclick = () => { closeMobileMenu(); openPrintView(); };
 
 // ---------- Экран «Фильтры» (макет Filters, раздел 5) ----------
@@ -3024,7 +3195,7 @@ function renderSearch() {
 
 async function refreshSearchPool() {
   try {
-    const res = await fetch(`${BASE_URL}/tasks`);
+    const res = await api(`/tasks`);
     if (!res.ok) throw new Error('bad status');
     searchPool = await res.json();
   } catch (e) {

@@ -74,3 +74,46 @@ alter table tasks add constraint tasks_category_check
 alter table tasks drop constraint tasks_category_check;
 alter table tasks add constraint tasks_category_check
   check (category in ('Study', 'Work', 'Personal', 'UniMe'));
+
+-- Несколько пользователей (Yera и допущенные им люди). Перед запуском проверить фактические
+-- имена ограничений google_credentials (google_credentials_pkey, singleton_row):
+--   select conname from pg_constraint where conrelid = 'google_credentials'::regclass;
+-- Все существующие данные закрепляются за Yera. Новых людей создаёт бот после одобрения владельцем.
+create table users (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  telegram_user_id bigint unique,
+  is_admin boolean not null default false,
+  access_key text not null unique
+    default replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''),
+  created_at timestamptz default now()
+);
+insert into users (name, is_admin) values ('Yera', true);
+
+-- в личном чате chat_id совпадает с Telegram-id пользователя
+update users set telegram_user_id =
+  (select chat_id from telegram_chats order by created_at limit 1)
+  where name = 'Yera';
+
+alter table tasks add column user_id uuid references users(id);
+alter table notes add column user_id uuid references users(id);
+alter table telegram_chats add column user_id uuid references users(id);
+update tasks set user_id = (select id from users where name = 'Yera');
+update notes set user_id = (select id from users where name = 'Yera');
+update telegram_chats set user_id = (select id from users where name = 'Yera');
+alter table tasks alter column user_id set not null;
+alter table notes alter column user_id set not null;
+alter table telegram_chats alter column user_id set not null;
+create index tasks_user_idx on tasks(user_id);
+create index notes_user_idx on notes(user_id);
+create index telegram_chats_user_idx on telegram_chats(user_id);
+
+alter table google_credentials drop constraint singleton_row;
+alter table google_credentials add column user_id uuid references users(id);
+update google_credentials set user_id = (select id from users where name = 'Yera');
+alter table google_credentials drop constraint google_credentials_pkey;
+alter table google_credentials drop column id;
+alter table google_credentials add primary key (user_id);
+
+-- Проверка после запуска: у Yera должен быть заполнен telegram_user_id.
+--   select name, telegram_user_id, is_admin from users;

@@ -13,11 +13,42 @@ from typing import Optional
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 WEB_DIR = os.path.join(os.path.dirname(__file__), "..", "web")
 
 app = FastAPI(title="Task Agent mock")
+
+# Вход упрощён: заголовки не проверяются, кроме особых ключей для проверки экранов входа.
+#   X-Access-Key: expired → 401 (как неверный ключ), pending → 403 not_approved.
+# /__mock/last-auth говорит, какой заголовок входа пришёл последним (только вид, без значения).
+LAST_AUTH = {"kind": None}
+API_PREFIXES = ("/tasks", "/subtasks", "/notes", "/google/status", "/google/auth-url")
+
+
+@app.middleware("http")
+async def fake_auth(request: Request, call_next):
+    if request.url.path.startswith(API_PREFIXES):
+        key = request.headers.get("x-access-key")
+        LAST_AUTH["kind"] = ("init-data" if request.headers.get("x-telegram-init-data")
+                             else "access-key" if key else None)
+        if key == "expired":
+            return JSONResponse({"detail": "Неверный ключ доступа"}, status_code=401)
+        if key == "pending":
+            return JSONResponse({"detail": {"code": "not_approved", "message": "Доступ ещё не одобрен"}},
+                                status_code=403)
+    return await call_next(request)
+
+
+@app.get("/__mock/last-auth")
+def last_auth():
+    return LAST_AUTH
+
+
+@app.get("/google/auth-url")
+def google_auth_url():
+    return {"url": "https://accounts.google.com/o/oauth2/auth?state=mock"}
 
 TASKS: dict[str, dict] = {}
 SUBTASKS: dict[str, dict] = {}
