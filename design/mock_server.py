@@ -24,7 +24,7 @@ app = FastAPI(title="Task Agent mock")
 #   X-Access-Key: expired → 401 (как неверный ключ), pending → 403 not_approved.
 # /__mock/last-auth говорит, какой заголовок входа пришёл последним (только вид, без значения).
 LAST_AUTH = {"kind": None}
-API_PREFIXES = ("/tasks", "/subtasks", "/notes", "/google/status", "/google/auth-url")
+API_PREFIXES = ("/tasks", "/subtasks", "/notes", "/categories", "/google/status", "/google/auth-url")
 
 
 @app.middleware("http")
@@ -50,6 +50,8 @@ def last_auth():
 def google_auth_url():
     return {"url": "https://accounts.google.com/o/oauth2/auth?state=mock"}
 
+CATEGORIES: dict[str, dict] = {}
+PALETTE = ["#85AACB", "#E2D47E", "#A9C89D", "#DCE5FB", "#F2B8A2", "#D9C2EC", "#F4C8D8", "#B9E0DA"]
 TASKS: dict[str, dict] = {}
 SUBTASKS: dict[str, dict] = {}
 NOTES: dict[str, dict] = {}
@@ -82,6 +84,10 @@ def _add_task(task, category, days=None, hhmm="23:59", priority="Mid", status="T
 
 
 def seed() -> None:
+    for order, (name, color) in enumerate([("Study", "#85AACB"), ("Work", "#E2D47E"),
+                                           ("Personal", "#A9C89D"), ("UniMe", "#DCE5FB")]):
+        cid = str(uuid.uuid4())
+        CATEGORIES[cid] = {"id": cid, "name": name, "color": color, "sort_order": order, "created_at": _now()}
     _add_task("Сдать отчёт по продажам за сентябрь", "Work", -2, "18:00", "High", tags=["отчёт"])
     _add_task("Записаться к стоматологу", "Personal", -1, "10:00", "Mid")
     _add_task("Лабораторная по статистике: регрессия и проверка гипотез", "UniMe", 0, "09:00", "High",
@@ -115,6 +121,81 @@ def _get(store: dict, key: str) -> dict:
 @app.get("/health")
 def health():
     return {"status": "ok", "telegram_webhook": False}
+
+
+def _cats():
+    return sorted(CATEGORIES.values(), key=lambda c: c["sort_order"])
+
+
+def _cat_error(status, code, message):
+    return JSONResponse({"detail": {"code": code, "message": message}}, status_code=status)
+
+
+@app.get("/categories")
+def list_categories():
+    return _cats()
+
+
+@app.get("/categories/palette")
+def category_palette():
+    return {"colors": PALETTE}
+
+
+@app.post("/categories", status_code=201)
+async def create_category(request: Request):
+    body = await request.json()
+    name, color = (body.get("name") or "").strip(), (body.get("color") or "").upper()
+    if not 1 <= len(name) <= 30 or color not in PALETTE:
+        return _cat_error(422, "bad_input", "Неверное название или цвет")
+    if any(c["name"].lower() == name.lower() for c in CATEGORIES.values()):
+        return _cat_error(409, "duplicate", "Категория с таким названием уже есть")
+    cid = str(uuid.uuid4())
+    CATEGORIES[cid] = {"id": cid, "name": name, "color": color, "sort_order": len(CATEGORIES), "created_at": _now()}
+    return CATEGORIES[cid]
+
+
+@app.put("/categories/order")
+async def reorder_categories(request: Request):
+    ids = (await request.json())["ids"]
+    if sorted(ids) != sorted(CATEGORIES):
+        return _cat_error(422, "bad_order", "Нужен полный список категорий")
+    for order, cid in enumerate(ids):
+        CATEGORIES[cid]["sort_order"] = order
+    return _cats()
+
+
+@app.patch("/categories/{category_id}")
+async def update_category(category_id: str, request: Request):
+    cat = _get(CATEGORIES, category_id)
+    body = await request.json()
+    if body.get("name") is not None:
+        name = body["name"].strip()
+        if any(c["name"].lower() == name.lower() and c["id"] != category_id for c in CATEGORIES.values()):
+            return _cat_error(409, "duplicate", "Категория с таким названием уже есть")
+        for t in TASKS.values():
+            if t["category"] == cat["name"]:
+                t["category"] = name
+        cat["name"] = name
+    if body.get("color") is not None:
+        if body["color"].upper() not in PALETTE:
+            return _cat_error(422, "bad_color", "Цвет нужно выбрать из палитры")
+        cat["color"] = body["color"].upper()
+    return cat
+
+
+@app.delete("/categories/{category_id}", status_code=204)
+def delete_category(category_id: str, move_to: Optional[str] = None):
+    cat = _get(CATEGORIES, category_id)
+    if len(CATEGORIES) <= 1:
+        return _cat_error(409, "last_category", "Последнюю категорию удалить нельзя")
+    tasks = [t for t in TASKS.values() if t["category"] == cat["name"]]
+    if tasks and not move_to:
+        return _cat_error(409, "has_tasks", f"В категории задач: {len(tasks)}. Укажите, куда их перенести")
+    if tasks:
+        target = _get(CATEGORIES, move_to)
+        for t in tasks:
+            t["category"] = target["name"]
+    del CATEGORIES[category_id]
 
 
 @app.get("/google/status")

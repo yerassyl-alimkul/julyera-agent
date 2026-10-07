@@ -36,7 +36,7 @@
 - `main.py`: все HTTP-маршруты, зависимость входа `current_user`, webhook Telegram, раздача статики.
 - `telegram_auth.py`: проверка подписи initData Telegram Mini App. `users_service.py`: пользователи и их чаты.
 - `task_service.py`: логика задач (создание, обновление, повторяющиеся, напоминания, синхронизация с календарём).
-- `notes_service.py`, `subtasks_service.py`: CRUD заметок и подзадач.
+- `notes_service.py`, `subtasks_service.py`: CRUD заметок и подзадач. `categories_service.py`: свои категории пользователя.
 - `google_calendar_service.py`: OAuth и события календаря.
 - `groq_client.py`: промпт `SYSTEM_PROMPT`, разбор текста, распознавание голоса.
 - `telegram_handlers.py`: обработчики бота (`/start`, `/list`, текст, голос), общие для polling и webhook.
@@ -67,7 +67,10 @@
 - `users`: `id`, `name`, `telegram_user_id` (уникальный), `is_admin`, `access_key` (для ссылки `/web`).
   У `tasks`, `notes`, `telegram_chats` есть `user_id`; у `google_credentials` первичный ключ `user_id`
   (раньше одна строка `id = 1`). Миграция записана в конце `schema.sql`.
-- `tasks`: `task`, `category` (Study | Work | Personal | UniMe), `source`, `deadline` (timestamptz), `priority` (High | Mid | Low),
+- `categories`: `user_id`, `name`, `color` (из палитры `categories_service.PALETTE`), `sort_order`; уникальность
+  `(user_id, lower(name))`. Переименование — SQL-функция `rename_category` (меняет и задачи), вызывать её может
+  только `service_role`.
+- `tasks`: `task`, `category` (название категории пользователя текстом, без CHECK), `source`, `deadline` (timestamptz), `priority` (High | Mid | Low),
   `status` (To Do | In Progress | Done), `note`, `is_recurring`, `recurrence_pattern`, `tags` (text[]), `google_event_id`.
 - `subtasks` (связь с `tasks` каскадом, своей колонки `user_id` нет), `notes`, `telegram_chats` (для напоминаний),
   `google_credentials` (по строке на пользователя).
@@ -90,6 +93,10 @@
 - Google Calendar у каждого свой: токены по `user_id`, в `state` подписанная метка `user_id` на 10 минут
   (`make_state` / `verify_state`). Фронтенд берёт адрес через `/google/auth-url` и открывает его во внешнем браузере.
 - Напоминания идут каждому пользователю в его чаты и только с его задачами.
+- Категории у каждого свои: название 1–30 символов, уникально без учёта регистра; цвет только из палитры (8 цветов);
+  хотя бы одна категория всегда есть (новому при одобрении — «Общее»), первая по порядку — запасная для парсера.
+  `POST/PATCH /tasks` с чужой или несуществующей категорией → 422; удаление категории с задачами требует `move_to`
+  (иначе 409). Парсер получает названия категорий пользователя, неизвестный ответ модели заменяется запасной.
 
 ## Договорённости, которые нельзя ломать
 
@@ -143,6 +150,9 @@
 - Все запросы к серверу только через `api(path, options)`: она добавляет заголовок входа и показывает экран
   «Откройте приложение из Telegram» (401) или «Ждём одобрения владельца» (403); удачный запрос его убирает.
   Прямой `fetch(BASE_URL…)` не добавляй.
+- Категории приходят из `GET /categories`; цвет строки задаётся переменной `--row-bg` (`paintRow`), цвет чипа —
+  `--chip-color`. Классов по названиям категорий нет. Экран «Категории» в меню: цвет из палитры, название, порядок,
+  добавление, удаление с выбором, куда перенести задачи.
 - Telegram Mini App: `telegram-web-app.js`, `ready`/`expand`, цвета шапки и фона из `--bg`, `disableVerticalSwipes`.
   Отступы `--app-inset-top`/`--app-inset-bottom` берутся из `safeAreaInset` + `contentSafeAreaInset`, в браузере из `env()`.
   Внутри Telegram экспорт CSV и печать скрыты (подсказка про `/web`), микрофон скрыт, если нет Web Speech API.

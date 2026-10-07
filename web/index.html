@@ -250,10 +250,6 @@
     border-radius: var(--radius-card);
     background: var(--surface);
   }
-  .archive-row.cat-Work { background: var(--cat-work); }
-  .archive-row.cat-UniMe { background: var(--cat-unime); }
-  .archive-row.cat-Study { background: var(--cat-study); }
-  .archive-row.cat-Personal { background: var(--cat-personal); }
   .archive-row .row-title { text-decoration: line-through; color: var(--ink-meta); }
   .restore-btn {
     flex: 0 0 var(--touch);
@@ -346,10 +342,6 @@
     text-align: left;
     cursor: pointer;
   }
-  .search-row.cat-Work { background: var(--cat-work); }
-  .search-row.cat-UniMe { background: var(--cat-unime); }
-  .search-row.cat-Study { background: var(--cat-study); }
-  .search-row.cat-Personal { background: var(--cat-personal); }
   .search-row.done .row-title { text-decoration: line-through; color: var(--ink-meta); }
   /* Отрицательные поля компенсируют padding: фон шире слова, но буквы не раздвигаются. */
   mark.hl { margin: 0 -2px; padding: 0 2px; border-radius: 5px; background: var(--highlight); color: inherit; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
@@ -415,10 +407,6 @@
     text-align: left;
     cursor: pointer;
   }
-  .compact-row.cat-Work { background: var(--cat-work); }
-  .compact-row.cat-UniMe { background: var(--cat-unime); }
-  .compact-row.cat-Study { background: var(--cat-study); }
-  .compact-row.cat-Personal { background: var(--cat-personal); }
   .compact-time { flex: 0 0 42px; font-size: 13px; font-weight: 600; }
   .compact-title {
     flex: 1;
@@ -658,10 +646,6 @@
     border-radius: var(--radius-card);
     background: var(--surface);
   }
-  .task-row.cat-Work { background: var(--cat-work); }
-  .task-row.cat-UniMe { background: var(--cat-unime); }
-  .task-row.cat-Study { background: var(--cat-study); }
-  .task-row.cat-Personal { background: var(--cat-personal); }
   .row-check {
     flex: 0 0 var(--touch);
     width: var(--touch);
@@ -918,11 +902,9 @@
   }
   .choice-chip[aria-pressed="true"] { border-color: var(--ink); font-weight: 600; }
   .choice-chip.prio[aria-pressed="true"] { background: var(--hairline); }
-  .cat-dot { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--ink); }
-  .cat-Work .cat-dot, .choice-chip.cat-Work[aria-pressed="true"] { background: var(--cat-work); }
-  .cat-UniMe .cat-dot, .choice-chip.cat-UniMe[aria-pressed="true"] { background: var(--cat-unime); }
-  .cat-Study .cat-dot, .choice-chip.cat-Study[aria-pressed="true"] { background: var(--cat-study); }
-  .cat-Personal .cat-dot, .choice-chip.cat-Personal[aria-pressed="true"] { background: var(--cat-personal); }
+  /* Цвет категории приходит из /categories: --chip-color у чипа, --row-bg у строки задачи */
+  .cat-dot { width: 12px; height: 12px; flex: 0 0 auto; border-radius: 50%; border: 1.5px solid var(--ink); background: var(--chip-color, var(--surface)); }
+  .choice-chip.cat[aria-pressed="true"] { background: var(--chip-color, var(--surface)); }
   .mini-bars { display: flex; align-items: flex-end; gap: 2px; height: 14px; }
   .mini-bars span { width: 3px; border-radius: 1.5px; background: var(--bar-off); }
   .mini-bars span:nth-child(1) { height: 6px; }
@@ -1090,6 +1072,63 @@
 
   body.no-scroll { overflow: hidden; }
 
+  /* Строки задач закрашены цветом своей категории (переменная задаётся в JS из /categories) */
+  .task-row, .archive-row, .compact-row, .search-row { background: var(--row-bg, var(--surface)); }
+
+  /* ---------- Экран «Категории» ---------- */
+  .cat-list { display: flex; flex-direction: column; gap: var(--gap-m); padding-top: var(--gap-header); }
+  .cat-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-s);
+    padding: 8px;
+    border: 1.5px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+  }
+  .cat-card-row { display: flex; align-items: center; gap: 4px; }
+  .cat-swatch-btn, .icon-plain {
+    flex: 0 0 var(--touch);
+    width: var(--touch);
+    height: var(--touch);
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: var(--radius-btn);
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .icon-plain:disabled { color: var(--dashed); cursor: default; }
+  .icon-plain.danger { color: var(--danger); }
+  .icon-plain svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .swatch {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1.5px solid var(--ink);
+    background: var(--chip-color);
+  }
+  .cat-name {
+    flex: 1;
+    min-width: 0;
+    height: var(--touch);
+    padding: 0 8px;
+    border: 1.5px solid transparent;
+    border-radius: var(--radius-btn);
+    background: transparent;
+    font-size: 16px;
+    font-weight: 500;
+    outline: none;
+  }
+  .cat-name:focus { border-color: var(--ink); background: var(--bg); }
+  .palette { display: grid; grid-template-columns: repeat(4, var(--touch)); justify-content: space-between; gap: var(--gap-s); }
+  .palette .cat-swatch-btn[aria-checked="true"] .swatch { box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--ink); }
+  .cat-move { display: flex; flex-direction: column; gap: var(--gap-s); padding: 4px 4px 4px; }
+  .cat-move p { margin: 0; font-size: 14px; line-height: 1.4; color: var(--ink-muted); }
+
   /* ---------- Экран входа: нет доступа или ждём одобрения владельца ---------- */
   .auth-gate {
     position: fixed;
@@ -1195,6 +1234,10 @@
     <button class="menu-item" id="menuArchive">
       <svg viewBox="0 0 24 24"><path d="M4 7h16v4H4zM6 11v8h12v-8M10 15h4"/></svg>
       Архив
+    </button>
+    <button class="menu-item" id="menuCategories">
+      <svg viewBox="0 0 24 24"><path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="8.5" r="1.5"/></svg>
+      Категории
     </button>
     <button class="menu-item" id="exportCsvBtn">
       <svg viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14"/></svg>
@@ -1358,6 +1401,26 @@
     </div>
     <div class="search-count" id="searchCount" role="status" aria-live="polite"></div>
     <div class="search-list" id="searchResults"></div>
+  </div>
+</div>
+
+<!-- Экран «Категории»: свои названия, цвета из палитры и порядок -->
+<div class="sheet" id="categoriesSheet" role="dialog" aria-modal="true" aria-labelledby="categoriesTitle" hidden>
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <button class="tb-btn" id="categoriesClose" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <h2 class="t-modal-title" id="categoriesTitle">Категории</h2>
+      <span></span>
+    </div>
+    <div class="cat-list" id="catList"></div>
+    <section class="form-section" style="padding-top: var(--gap-section);">
+      <label class="form-label" for="catNewName">Новая категория</label>
+      <input class="field" id="catNewName" type="text" maxlength="30" autocomplete="off" placeholder="Название">
+      <div class="palette" id="catNewPalette" role="radiogroup" aria-label="Цвет новой категории"></div>
+    </section>
+  </div>
+  <div class="sheet-footer">
+    <button class="btn-primary" id="catAdd">Добавить категорию</button>
   </div>
 </div>
 
@@ -1596,9 +1659,30 @@ if (inTelegram) {
     .forEach(ev => { try { tg.onEvent(ev, applyInsets); } catch (e) { /* событие есть не везде */ } });
 }
 
-const CATEGORIES = ['Study', 'Work', 'Personal', 'UniMe'];
 const PRIORITIES = ['High', 'Mid', 'Low'];
-const CATEGORY_LABEL = { Study: 'Study', Work: 'Work', Personal: 'Personal', UniMe: 'UniMe' };
+
+// Категории у каждого пользователя свои (GET /categories): название, цвет из палитры, порядок.
+let allCategories = [];
+let categoryPalette = ['#85AACB', '#E2D47E', '#A9C89D', '#DCE5FB', '#F2B8A2', '#D9C2EC', '#F4C8D8', '#B9E0DA'];
+const COLOR_NAMES = {
+  '#85AACB': 'голубой', '#E2D47E': 'жёлтый', '#A9C89D': 'зелёный', '#DCE5FB': 'светло-голубой',
+  '#F2B8A2': 'персиковый', '#D9C2EC': 'лавандовый', '#F4C8D8': 'розовый', '#B9E0DA': 'мятный',
+};
+
+function categoryNames() {
+  return allCategories.map(c => c.name);
+}
+
+function categoryColor(name) {
+  const found = allCategories.find(c => c.name === name);
+  return found ? found.color : null;
+}
+
+// Закрашивает строку цветом её категории (неизвестная категория — белым фоном).
+function paintRow(el, categoryName) {
+  const color = categoryColor(categoryName);
+  if (color) el.style.setProperty('--row-bg', color);
+}
 
 let activeCategory = null;
 let activePriority = null;
@@ -1973,7 +2057,8 @@ function taskRowEl(task, mode) {
   const expanded = hasMore && expandedTasks.has(task.id);
 
   const row = document.createElement('div');
-  row.className = `task-row cat-${task.category}` + (hasMore ? ' has-more' : '');
+  row.className = 'task-row' + (hasMore ? ' has-more' : '');
+  paintRow(row, task.category);
   row.dataset.id = task.id;
 
   const check = document.createElement('button');
@@ -2009,7 +2094,7 @@ function taskRowEl(task, mode) {
   } else {
     time.textContent = timeOf(task.deadline);
   }
-  const rest = [CATEGORY_LABEL[task.category] || task.category];
+  const rest = [task.category];
   if (steps.length) rest.push(stepsText(steps.filter(s => s.is_done).length, steps.length));
   if (!expanded) tags.forEach(tag => rest.push('#' + tag)); // в раскрытой карточке теги показаны плашками
   const restEl = document.createElement('span');
@@ -2320,7 +2405,8 @@ function renderArchive() {
   }
   done.forEach(task => {
     const row = document.createElement('div');
-    row.className = `archive-row cat-${task.category}`;
+    row.className = 'archive-row';
+    paintRow(row, task.category);
     const body = document.createElement('div');
     body.className = 'row-body';
     const title = document.createElement('div');
@@ -2333,7 +2419,7 @@ function renderArchive() {
     const dt = task.deadline && parseNaiveDeadline(task.deadline);
     when.textContent = dt ? `${dt.getDate()} ${MONTH_SHORT[dt.getMonth()]} · ${timeOf(task.deadline)}` : 'Без срока';
     const cat = document.createElement('span');
-    cat.textContent = CATEGORY_LABEL[task.category] || task.category;
+    cat.textContent = task.category;
     meta.append(when, cat);
     body.append(title, meta);
 
@@ -2453,8 +2539,9 @@ function renderCalendar() {
   }
   dayTasks.forEach(task => {
     const row = document.createElement('button');
-    row.className = `compact-row cat-${task.category}`;
-    row.setAttribute('aria-label', `${timeOf(task.deadline)}, ${task.task}, ${CATEGORY_LABEL[task.category] || task.category}. Изменить`);
+    row.className = 'compact-row';
+    paintRow(row, task.category);
+    row.setAttribute('aria-label', `${timeOf(task.deadline)}, ${task.task}, ${task.category}. Изменить`);
     const time = document.createElement('span');
     time.className = 'compact-time';
     time.textContent = timeOf(task.deadline);
@@ -2734,6 +2821,7 @@ async function fetchTasksOnce() {
                auth: tasksRes.status === 401 || tasksRes.status === 403 };
     }
     allTasks = (await tasksRes.json()).filter(t => !pendingDeletions[t.id]);
+    await loadCategories();
     // Шаги второстепенны: их сбой не должен мешать показать список задач.
     try {
       const subtasksRes = await api('/subtasks', { timeout: REQUEST_TIMEOUT });
@@ -3054,7 +3142,7 @@ function tasksToCSV(tasks) {
   const headers = ['Задача', 'Категория', 'Приоритет', 'Статус', 'Дедлайн', 'Теги'];
   const rows = tasks.map(t => [
     t.task,
-    CATEGORY_LABEL[t.category] || t.category,
+    t.category,
     t.priority,
     t.status,
     t.deadline || '',
@@ -3091,7 +3179,7 @@ function openPrintView() {
     const dl = fmtDeadline(t.deadline);
     return `<tr>
       <td>${escapeHtml(t.task)}</td>
-      <td>${escapeHtml(CATEGORY_LABEL[t.category] || t.category)}</td>
+      <td>${escapeHtml(t.category)}</td>
       <td>${escapeHtml(t.priority)}</td>
       <td>${escapeHtml(t.status)}</td>
       <td>${dl ? escapeHtml(dl.label) : ''}</td>
@@ -3158,6 +3246,240 @@ if (inTelegram) {
 }
 document.getElementById('exportPdfBtn').onclick = () => { closeMobileMenu(); openPrintView(); };
 
+// ---------- Категории пользователя ----------
+async function loadCategories() {
+  try {
+    const res = await api('/categories', { timeout: REQUEST_TIMEOUT });
+    if (!res.ok) return;
+    allCategories = await res.json();
+    // фильтр по удалённой или переименованной категории больше не действует
+    if (activeCategory && !categoryNames().includes(activeCategory)) activeCategory = null;
+    renderChips();
+  } catch (e) { /* остаются прежние категории */ }
+}
+
+async function loadPalette() {
+  try {
+    const res = await api('/categories/palette');
+    if (res.ok) categoryPalette = (await res.json()).colors;
+  } catch (e) { /* остаётся встроенная палитра */ }
+}
+
+const categoriesSheet = document.getElementById('categoriesSheet');
+let catOpenPalette = null;   // id категории с открытой палитрой
+let catMovePrompt = null;    // { id, count } — спрашиваем, куда перенести задачи
+let catNewColor = null;
+
+async function categoryRequest(path, options, okMessage) {
+  try {
+    const res = await api(path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, options));
+    if (res.ok) {
+      if (okMessage) toast(okMessage);
+      await loadCategories();
+      await loadTasks();  // переименование и удаление меняют категории задач
+      renderCategoriesScreen();
+      return { ok: true };
+    }
+    let detail = {};
+    try { detail = (await res.json()).detail || {}; } catch (e) { detail = {}; }
+    return { ok: false, status: res.status, code: detail.code, message: detail.message || requestCode(options.method || 'GET', path, res.status) };
+  } catch (e) {
+    return { ok: false, message: e instanceof ApiError ? e.code : 'Нет связи с сервером' };
+  }
+}
+
+function paletteEl(selected, label, onPick) {
+  const wrap = document.createElement('div');
+  wrap.className = 'palette';
+  wrap.setAttribute('role', 'radiogroup');
+  wrap.setAttribute('aria-label', label);
+  categoryPalette.forEach(color => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'cat-swatch-btn';
+    btn.setAttribute('role', 'radio');
+    btn.setAttribute('aria-checked', String(color === selected));
+    btn.setAttribute('aria-label', COLOR_NAMES[color] || color);
+    btn.style.setProperty('--chip-color', color);
+    btn.innerHTML = '<span class="swatch"></span>';
+    btn.onclick = () => onPick(color);
+    wrap.appendChild(btn);
+  });
+  return wrap;
+}
+
+function iconButton(svgPath, label, onClick, extraClass) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'icon-plain' + (extraClass ? ' ' + extraClass : '');
+  btn.setAttribute('aria-label', label);
+  btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="${svgPath}"/></svg>`;
+  btn.onclick = onClick;
+  return btn;
+}
+
+function renderCategoriesScreen() {
+  const list = document.getElementById('catList');
+  const focusKey = list.contains(document.activeElement) ? document.activeElement.dataset.focusKey : null;
+  list.innerHTML = '';
+  allCategories.forEach((cat, index) => {
+    const card = document.createElement('div');
+    card.className = 'cat-card';
+    const row = document.createElement('div');
+    row.className = 'cat-card-row';
+
+    const swatch = document.createElement('button');
+    swatch.type = 'button';
+    swatch.className = 'cat-swatch-btn';
+    swatch.dataset.focusKey = 'cat-color-' + cat.id;
+    swatch.setAttribute('aria-label', `Цвет категории ${cat.name}: ${COLOR_NAMES[cat.color] || cat.color}`);
+    swatch.setAttribute('aria-expanded', String(catOpenPalette === cat.id));
+    swatch.style.setProperty('--chip-color', cat.color);
+    swatch.innerHTML = '<span class="swatch"></span>';
+    swatch.onclick = () => { catOpenPalette = catOpenPalette === cat.id ? null : cat.id; renderCategoriesScreen(); };
+
+    const name = document.createElement('input');
+    name.className = 'cat-name';
+    name.type = 'text';
+    name.maxLength = 30;
+    name.value = cat.name;
+    name.dataset.focusKey = 'cat-name-' + cat.id;
+    name.setAttribute('aria-label', 'Название категории');
+    const saveName = async () => {
+      const value = name.value.trim();
+      if (!value || value === cat.name) { name.value = cat.name; return; }
+      const r = await categoryRequest(`/categories/${cat.id}`, { method: 'PATCH', body: JSON.stringify({ name: value }) }, 'Категория переименована');
+      if (!r.ok) { toast(r.message); name.value = cat.name; }
+    };
+    name.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); name.blur(); } if (e.key === 'Escape') { e.stopPropagation(); name.value = cat.name; name.blur(); } };
+    name.onblur = saveName;
+
+    const move = async (delta) => {
+      const ids = allCategories.map(c => c.id);
+      const j = index + delta;
+      [ids[index], ids[j]] = [ids[j], ids[index]];
+      const r = await categoryRequest('/categories/order', { method: 'PUT', body: JSON.stringify({ ids }) });
+      if (!r.ok) toast(r.message);
+    };
+    const up = iconButton('M12 19V5M5 12l7-7 7 7', `Поднять ${cat.name}`, () => move(-1));
+    up.disabled = index === 0;
+    up.dataset.focusKey = 'cat-up-' + cat.id;
+    const down = iconButton('M12 5v14M5 12l7 7 7-7', `Опустить ${cat.name}`, () => move(1));
+    down.disabled = index === allCategories.length - 1;
+    down.dataset.focusKey = 'cat-down-' + cat.id;
+    const del = iconButton('M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12', `Удалить ${cat.name}`, async () => {
+      if (allCategories.length <= 1) { toast('Последнюю категорию удалить нельзя'); return; }
+      const r = await categoryRequest(`/categories/${cat.id}`, { method: 'DELETE' }, 'Категория удалена');
+      if (r.ok) return;
+      if (r.code === 'has_tasks') {
+        catMovePrompt = { id: cat.id, message: r.message, target: allCategories.find(c => c.id !== cat.id).id };
+        renderCategoriesScreen();
+      } else {
+        toast(r.message);
+      }
+    }, 'danger');
+    row.append(swatch, name, up, down, del);
+    card.appendChild(row);
+
+    if (catOpenPalette === cat.id) {
+      card.appendChild(paletteEl(cat.color, `Цвет категории ${cat.name}`, async (color) => {
+        catOpenPalette = null;
+        const r = await categoryRequest(`/categories/${cat.id}`, { method: 'PATCH', body: JSON.stringify({ color }) });
+        if (!r.ok) toast(r.message);
+      }));
+    }
+
+    if (catMovePrompt && catMovePrompt.id === cat.id) {
+      const box = document.createElement('div');
+      box.className = 'cat-move';
+      const text = document.createElement('p');
+      text.textContent = `${catMovePrompt.message}:`;
+      const chips = document.createElement('div');
+      chips.className = 'chip-group';
+      allCategories.filter(c => c.id !== cat.id).forEach(other => {
+        const [btn, label] = choiceChipEl(other.name, catMovePrompt.target === other.id, 'cat',
+          () => { catMovePrompt.target = other.id; renderCategoriesScreen(); });
+        btn.style.setProperty('--chip-color', other.color);
+        const dot = document.createElement('span');
+        dot.className = 'cat-dot';
+        btn.append(dot, label);
+        chips.appendChild(btn);
+      });
+      const actions = document.createElement('div');
+      actions.className = 'note-row start';
+      const go = document.createElement('button');
+      go.className = 'btn-small';
+      go.textContent = 'Перенести и удалить';
+      go.onclick = async () => {
+        const target = catMovePrompt.target;
+        catMovePrompt = null;
+        const r = await categoryRequest(`/categories/${cat.id}?move_to=${encodeURIComponent(target)}`, { method: 'DELETE' }, 'Задачи перенесены, категория удалена');
+        if (!r.ok) toast(r.message);
+      };
+      const cancel = document.createElement('button');
+      cancel.className = 'btn-plain';
+      cancel.textContent = 'Отмена';
+      cancel.onclick = () => { catMovePrompt = null; renderCategoriesScreen(); };
+      actions.append(go, cancel);
+      box.append(text, chips, actions);
+      card.appendChild(box);
+    }
+    list.appendChild(card);
+  });
+
+  // палитра новой категории: по умолчанию первый цвет, которого ещё нет в списке
+  if (!catNewColor) {
+    const used = new Set(allCategories.map(c => c.color));
+    catNewColor = categoryPalette.find(c => !used.has(c)) || categoryPalette[0];
+  }
+  const newPalette = document.getElementById('catNewPalette');
+  newPalette.replaceWith(Object.assign(paletteEl(catNewColor, 'Цвет новой категории', (color) => {
+    catNewColor = color;
+    renderCategoriesScreen();
+  }), { id: 'catNewPalette' }));
+
+  if (focusKey) {
+    const again = list.querySelector(`[data-focus-key="${focusKey}"]`);
+    if (again) again.focus({ preventScroll: true });
+  }
+}
+
+async function addCategory() {
+  const input = document.getElementById('catNewName');
+  const name = input.value.trim();
+  if (!name) { input.focus(); return; }
+  const r = await categoryRequest('/categories', { method: 'POST', body: JSON.stringify({ name, color: catNewColor }) }, 'Категория добавлена');
+  if (r.ok) { input.value = ''; catNewColor = null; renderCategoriesScreen(); }
+  else toast(r.message);
+}
+
+function openCategories() {
+  closeMobileMenu();
+  catOpenPalette = null;
+  catMovePrompt = null;
+  catNewColor = null;
+  renderCategoriesScreen();
+  categoriesSheet.hidden = false;
+  categoriesSheet.scrollTop = 0;
+  document.body.classList.add('no-scroll');
+  setBackgroundInert(true);
+  document.getElementById('categoriesClose').focus();
+  loadPalette().then(renderCategoriesScreen);
+}
+
+function closeCategories() {
+  categoriesSheet.hidden = true;
+  document.body.classList.remove('no-scroll');
+  setBackgroundInert(false);
+  renderCurrentPage();
+  document.getElementById('menuBtn').focus();
+}
+
+document.getElementById('menuCategories').onclick = openCategories;
+document.getElementById('categoriesClose').onclick = closeCategories;
+document.getElementById('catAdd').onclick = addCategory;
+document.getElementById('catNewName').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); addCategory(); } };
+
 // ---------- Экран «Фильтры» (макет Filters, раздел 5) ----------
 // Выбор копится в черновике; «Показать» применяет, крестик и Esc закрывают без изменений.
 const filtersSheet = document.getElementById('filtersSheet');
@@ -3175,10 +3497,11 @@ function renderFilters() {
 
   const cats = document.getElementById('filterCategory');
   cats.innerHTML = '';
-  [null, ...CATEGORIES].forEach(c => {
-    const [btn, text] = choiceChipEl(c ? CATEGORY_LABEL[c] : 'Все', filterDraft.category === c, c ? 'cat-' + c : 'solid',
+  [null, ...categoryNames()].forEach(c => {
+    const [btn, text] = choiceChipEl(c || 'Все', filterDraft.category === c, c ? 'cat' : 'solid',
       () => { filterDraft.category = c; renderFilters(); });
     if (c) {
+      btn.style.setProperty('--chip-color', categoryColor(c));
       const dot = document.createElement('span');
       dot.className = 'cat-dot';
       btn.appendChild(dot);
@@ -3333,7 +3656,8 @@ function renderSearch() {
   count.textContent = found.length ? pluralFound(found.length) : `Ничего не найдено по «${raw.trim()}»`;
   found.forEach(task => {
     const row = document.createElement('button');
-    row.className = `search-row cat-${task.category}` + (task.status === 'Done' ? ' done' : '');
+    row.className = 'search-row' + (task.status === 'Done' ? ' done' : '');
+    paintRow(row, task.category);
     row.dataset.focusKey = 'search-' + task.id;
     const body = document.createElement('div');
     body.className = 'row-body';
@@ -3345,7 +3669,7 @@ function renderSearch() {
     when.className = 'row-time';
     const dt = task.deadline && parseNaiveDeadline(task.deadline);
     when.textContent = dt ? `${dt.getDate()} ${MONTH_GENITIVE[dt.getMonth()]}, ${timeOf(task.deadline)}` : 'Без срока';
-    meta.append(when, CATEGORY_LABEL[task.category] || task.category);
+    meta.append(when, task.category);
     if (task.status === 'Done') meta.append(' · В архиве');
     (task.tags || []).forEach(tag => {
       meta.append(' · ');
@@ -3433,9 +3757,13 @@ function choiceChipEl(label, pressed, extraClass, onPick) {
 function renderEditChips() {
   const cats = document.getElementById('editCategory');
   cats.innerHTML = '';
-  CATEGORIES.forEach(c => {
-    const [btn, text] = choiceChipEl(CATEGORY_LABEL[c], editChoice.category === c, 'cat-' + c,
+  const editNames = categoryNames();
+  if (editChoice.category && !editNames.includes(editChoice.category)) editNames.push(editChoice.category);
+  editNames.forEach(c => {
+    const [btn, text] = choiceChipEl(c, editChoice.category === c, 'cat',
       () => { editChoice.category = c; renderEditChips(); });
+    const color = categoryColor(c);
+    if (color) btn.style.setProperty('--chip-color', color);
     const dot = document.createElement('span');
     dot.className = 'cat-dot';
     btn.append(dot, text);
@@ -3554,6 +3882,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (!editSheet.hidden) closeEdit();
   else if (!filtersSheet.hidden) closeFilters();
+  else if (!categoriesSheet.hidden) closeCategories();
   else if (!newTaskSheet.hidden) closeNewTask();
   else if (!searchSheet.hidden) closeSearch();
   else if (sidebarEl.classList.contains('mobile-open')) closeMobileMenu();

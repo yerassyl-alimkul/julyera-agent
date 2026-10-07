@@ -117,3 +117,57 @@ alter table google_credentials add primary key (user_id);
 
 -- Проверка после запуска: у Yera должен быть заполнен telegram_user_id.
 --   select name, telegram_user_id, is_admin from users;
+
+-- Свои категории у каждого пользователя (задача №2, шаг 2). Перед запуском:
+--   select category, count(*) from tasks group by 1;   -- значения вне четырёх добавить в набор Yera
+--   select conname from pg_constraint where conrelid = 'tasks'::regclass and contype = 'c';
+begin;
+
+create table categories (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  name text not null,
+  color text not null,
+  sort_order int not null default 0,
+  created_at timestamptz default now()
+);
+create unique index categories_user_name_idx on categories (user_id, lower(name));
+-- Backend ходит с ключом service_role (RLS его не касается); публичный ключ доступа к таблице не получает.
+alter table categories enable row level security;
+
+alter table tasks drop constraint tasks_category_check;
+
+insert into categories (user_id, name, color, sort_order)
+select u.id, c.name, c.color, c.ord
+from users u,
+     (values ('Study','#85AACB',0), ('Work','#E2D47E',1),
+             ('Personal','#A9C89D',2), ('UniMe','#DCE5FB',3)) as c(name,color,ord)
+where u.name = 'Yera';
+
+-- каждому, у кого ещё нет категорий (жена), одна «Общее»
+insert into categories (user_id, name, color, sort_order)
+select u.id, 'Общее', '#A9C89D', 0
+from users u
+where not exists (select 1 from categories c where c.user_id = u.id);
+
+-- задачи с категорией, которой нет в списке пользователя, получают его первую
+update tasks t set category =
+  (select c.name from categories c where c.user_id = t.user_id
+   order by c.sort_order limit 1)
+where not exists (
+  select 1 from categories c where c.user_id = t.user_id and c.name = t.category);
+
+create function rename_category(p_user uuid, p_id uuid, p_name text) returns void
+language plpgsql as $$
+declare old_name text;
+begin
+  select name into old_name from categories where id = p_id and user_id = p_user;
+  if old_name is null then raise exception 'not_found'; end if;
+  update tasks set category = p_name where user_id = p_user and category = old_name;
+  update categories set name = p_name where id = p_id and user_id = p_user;
+end $$;
+-- Вызывать функцию может только сервер (service_role), а не любой с публичным ключом проекта.
+revoke execute on function rename_category(uuid, uuid, text) from public, anon, authenticated;
+grant execute on function rename_category(uuid, uuid, text) to service_role;
+
+commit;
