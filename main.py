@@ -114,7 +114,14 @@ app.add_middleware(
 )
 
 
+def _deny(request: Request, status: int, reason: str, detail) -> HTTPException:
+    # В лог Render — только причина одним словом, метод и путь; значения initData и ключей не пишем.
+    logger.warning("Вход отклонён (%s): %s %s → %s", reason, request.method, request.url.path, status)
+    return HTTPException(status_code=status, detail=detail)
+
+
 def current_user(
+    request: Request,
     x_telegram_init_data: Optional[str] = Header(None),
     x_access_key: Optional[str] = Header(None),
 ) -> dict:
@@ -122,21 +129,20 @@ def current_user(
     if x_telegram_init_data:
         try:
             tg_user = verify_init_data(x_telegram_init_data, TELEGRAM_BOT_TOKEN or "")
-        except InitDataError:
-            raise HTTPException(status_code=401, detail="Неверные данные входа Telegram")
+        except InitDataError as exc:
+            raise _deny(request, 401, exc.reason, {"code": "init_data_" + ("expired" if exc.reason == "устарел" else "invalid"),
+                                                   "message": "Неверные или устаревшие данные входа Telegram"})
         user = users_service.get_by_telegram_id(tg_user["id"])
         if not user:
-            raise HTTPException(
-                status_code=403,
-                detail={"code": "not_approved", "message": "Доступ ещё не одобрен владельцем"},
-            )
+            raise _deny(request, 403, "не одобрен",
+                        {"code": "not_approved", "message": "Доступ ещё не одобрен владельцем"})
         return user
     if x_access_key:
         user = users_service.get_by_access_key(x_access_key)
         if not user:
-            raise HTTPException(status_code=401, detail="Неверный ключ доступа")
+            raise _deny(request, 401, "ключ неверный", {"code": "bad_key", "message": "Неверный ключ доступа"})
         return user
-    raise HTTPException(status_code=401, detail="Нужен вход через Telegram")
+    raise _deny(request, 401, "нет заголовка", {"code": "no_auth", "message": "Нужен вход через Telegram"})
 
 
 @app.post("/tasks", response_model=Task, status_code=201)

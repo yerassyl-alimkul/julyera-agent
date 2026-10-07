@@ -16,7 +16,12 @@ from urllib.parse import parse_qsl
 
 
 class InitDataError(Exception):
-    """initData не прошла проверку: нет подписи, подпись неверна, данные устарели или повреждены."""
+    """initData не прошла проверку: нет подписи, подпись неверна, данные устарели или повреждены.
+    reason — короткая причина для логов: «нет данных», «подпись неверна», «устарел»."""
+
+    def __init__(self, message: str, reason: str = "подпись неверна"):
+        super().__init__(message)
+        self.reason = reason
 
 
 def _secret_key(bot_token: str) -> bytes:
@@ -33,7 +38,7 @@ def verify_init_data(init_data: str, bot_token: str, max_age: int = 86400, now: 
     (словарь с ключами id, first_name, username и т.д.). При любом отклонении бросает InitDataError.
     """
     if not init_data or not bot_token:
-        raise InitDataError("нет данных для проверки")
+        raise InitDataError("нет данных для проверки", reason="нет данных")
     try:
         pairs = parse_qsl(init_data, keep_blank_values=True, strict_parsing=True)
     except ValueError as exc:
@@ -58,9 +63,9 @@ def verify_init_data(init_data: str, bot_token: str, max_age: int = 86400, now: 
         raise InitDataError("нет auth_date") from exc
     current = time.time() if now is None else now
     if current - auth_date > max_age:
-        raise InitDataError("данные устарели")
+        raise InitDataError("данные устарели", reason="устарел")
     if auth_date - current > 300:  # дата из будущего: часы не могут расходиться так сильно
-        raise InitDataError("auth_date в будущем")
+        raise InitDataError("auth_date в будущем", reason="устарел")
 
     try:
         user = json.loads(fields["user"])

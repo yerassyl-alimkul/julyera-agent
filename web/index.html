@@ -1105,6 +1105,40 @@
   .auth-gate-inner { max-width: 360px; display: flex; flex-direction: column; gap: var(--gap-l); }
   .auth-gate .t-h1-month { margin: 0; }
   .auth-gate p { margin: 0; font-size: 16px; line-height: 1.45; color: var(--ink-muted); }
+  .error-code {
+    align-self: center;
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    background: var(--hairline);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 13px;
+    color: var(--ink-meta);
+  }
+  .gate-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: var(--gap-s); padding-top: var(--gap-s); }
+  .gate-actions .btn-small { padding: 0 24px; }
+  .btn-outline {
+    height: var(--touch);
+    padding: 0 20px;
+    border: 1.5px solid var(--line);
+    border-radius: var(--radius-btn);
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .load-error {
+    margin-top: var(--gap-l);
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-m);
+    border: 1.5px dashed var(--dashed);
+    border-radius: var(--radius-card);
+    text-align: center;
+  }
+  .load-error b { font-size: 16px; font-weight: 600; }
+  .load-error p { margin: 0; font-size: 15px; line-height: 1.4; color: var(--ink-muted); }
   .menu-note { margin: 0; padding: 0 4px; font-size: 13px; line-height: 1.4; color: var(--ink-muted); }
 
   /* ---------- Загрузка (раздел 8): заглушки со слабой пульсацией ---------- */
@@ -1132,6 +1166,11 @@
   <div class="auth-gate-inner">
     <h1 class="t-h1-month" id="authGateTitle"></h1>
     <p id="authGateText"></p>
+    <code class="error-code" id="authGateCode" hidden></code>
+    <div class="gate-actions">
+      <button class="btn-small" id="authGateRetry">Повторить</button>
+      <button class="btn-outline" id="authGateClose" hidden>Закрыть</button>
+    </div>
   </div>
 </div>
 <div class="mobile-overlay" id="mobileOverlay"></div>
@@ -1449,31 +1488,75 @@ function authHeaders(extra) {
 
 let authGateShown = false;
 
-function showAuthGate(kind) {
-  const gate = document.getElementById('authGate');
-  document.getElementById('authGateTitle').textContent =
-    kind === 'pending' ? 'Ждём одобрения владельца' : 'Откройте приложение из Telegram';
-  document.getElementById('authGateText').textContent = kind === 'pending'
-    ? 'Если ещё не писали боту, отправьте ему /start — владельцу придёт запрос. Как только он разрешит доступ, приложение откроется само.'
-    : 'Нажмите кнопку «Открыть» в чате с ботом. Для браузера пришлите боту /web — он даст личную ссылку.';
-  gate.hidden = false;
+function showAuthGate(kind, code) {
+  const texts = {
+    pending: ['Ждём одобрения владельца',
+      'Если ещё не писали боту, отправьте ему /start — владельцу придёт запрос. Как только он разрешит доступ, приложение откроется само.'],
+    // initData задаётся при запуске Mini App и не обновляется: через сутки сервер его не примет
+    stale: ['Сессия устарела', 'Закройте приложение и откройте его снова кнопкой в чате с ботом.'],
+    login: ['Откройте приложение из Telegram',
+      'Нажмите кнопку «Открыть» в чате с ботом. Для браузера пришлите боту /web — он даст личную ссылку.'],
+  };
+  const [title, text] = texts[kind] || texts.login;
+  document.getElementById('authGateTitle').textContent = title;
+  document.getElementById('authGateText').textContent = text;
+  // Код первого отказавшего запроса (обычно GET /tasks): следующие отказы его не перезаписывают.
+  const codeEl = document.getElementById('authGateCode');
+  if (!authGateShown || !codeEl.textContent) {
+    codeEl.textContent = code || '';
+    codeEl.hidden = !code;
+  }
+  document.getElementById('authGateClose').hidden = !(inTelegram && kind === 'stale');
+  document.getElementById('authGate').hidden = false;
   authGateShown = true;
+}
+
+document.getElementById('authGateRetry').onclick = () => location.reload();
+document.getElementById('authGateClose').onclick = () => { try { tg.close(); } catch (e) { /* старый клиент */ } };
+
+// Ошибка запроса с коротким техническим кодом вида «GET /tasks → 502» (или «→ нет ответа»).
+class ApiError extends Error {
+  constructor(code, status) {
+    super(code);
+    this.code = code;
+    this.status = status;
+  }
+}
+
+function requestCode(method, path, status) {
+  return `${method} ${path.split('?')[0]} → ${status}`;
 }
 
 // Все запросы к серверу идут через api(): он добавляет заголовок входа и показывает
 // экран входа на 401 / 403 not_approved. Когда доступ появится, экран уберёт следующий удачный запрос.
 async function api(path, options = {}) {
-  const res = await fetch(`${BASE_URL}${path}`, Object.assign({}, options, { headers: authHeaders(options.headers) }));
+  const method = (options.method || 'GET').toUpperCase();
+  const { timeout, ...fetchOptions } = options;
+  const controller = timeout ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeout) : null;
+  let res;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, Object.assign({}, fetchOptions, {
+      headers: authHeaders(options.headers),
+      signal: controller ? controller.signal : options.signal,
+    }));
+  } catch (e) {
+    // Нет ответа: сеть, тайм-аут или сервер ещё просыпается
+    throw new ApiError(requestCode(method, path, controller && controller.signal.aborted ? 'тайм-аут' : 'нет ответа'), 0);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+  const code = requestCode(method, path, res.status);
   if (res.status === 401) {
     if (!inTelegram && accessKey) {  // ключ устарел или неверный — больше его не шлём
       accessKey = null;
       try { localStorage.removeItem(ACCESS_KEY_STORAGE); } catch (e) { /* ничего */ }
     }
-    showAuthGate('login');
+    showAuthGate(inTelegram ? 'stale' : 'login', code);
   } else if (res.status === 403) {
-    let code = null;
-    try { code = ((await res.clone().json()).detail || {}).code; } catch (e) { code = null; }
-    if (code === 'not_approved') showAuthGate('pending');
+    let reason = null;
+    try { reason = ((await res.clone().json()).detail || {}).code; } catch (e) { reason = null; }
+    if (reason === 'not_approved') showAuthGate('pending', code);
   } else if (res.ok && authGateShown) {
     authGateShown = false;
     document.getElementById('authGate').hidden = true;
@@ -1483,19 +1566,25 @@ async function api(path, options = {}) {
 
 // ---------- Telegram Mini App: цвета, отступы, жесты ----------
 if (inTelegram) {
-  const callTg = (name, ...args) => {
-    try { if (typeof tg[name] === 'function') tg[name](...args); } catch (e) { /* метод есть не во всех версиях */ }
+  // Старые клиенты Telegram не знают новых методов: проверяем версию и наличие метода,
+  // и всё равно оборачиваем в try — сбой SDK не должен ронять загрузку задач.
+  const callTg = (minVersion, name, ...args) => {
+    try {
+      if (minVersion && typeof tg.isVersionAtLeast === 'function' && !tg.isVersionAtLeast(minVersion)) return;
+      if (typeof tg[name] === 'function') tg[name](...args);
+    } catch (e) { /* метод есть не во всех версиях */ }
   };
-  callTg('ready');
-  callTg('expand');
+  callTg(null, 'ready');
+  callTg(null, 'expand');
   const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#FBFBFA';
-  callTg('setHeaderColor', bg);
-  callTg('setBackgroundColor', bg);
-  callTg('setBottomBarColor', bg);
-  callTg('disableVerticalSwipes'); // иначе прокрутка списка вниз может свернуть приложение
+  callTg('6.1', 'setHeaderColor', bg);
+  callTg('6.1', 'setBackgroundColor', bg);
+  callTg('7.10', 'setBottomBarColor', bg);
+  callTg('7.7', 'disableVerticalSwipes'); // иначе прокрутка списка вниз может свернуть приложение
   const applyInsets = () => {
-    // safeAreaInset — вырез и системные панели, contentSafeAreaInset — элементы самого Telegram.
-    const safe = tg.safeAreaInset, content = tg.contentSafeAreaInset;
+    // safeAreaInset — вырез и системные панели, contentSafeAreaInset — элементы самого Telegram (Bot API 8.0+).
+    let safe = null, content = null;
+    try { safe = tg.safeAreaInset; content = tg.contentSafeAreaInset; } catch (e) { return; }
     if (!safe && !content) return; // старые версии Telegram: остаются env()
     const top = ((safe && safe.top) || 0) + ((content && content.top) || 0);
     const bottom = ((safe && safe.bottom) || 0) + ((content && content.bottom) || 0);
@@ -2589,10 +2678,15 @@ document.getElementById('calPrev').onclick = () => shiftCalendarMonth(-1);
 document.getElementById('calNext').onclick = () => shiftCalendarMonth(1);
 
 // ---------- Загрузка и ошибки сети (раздел 8) ----------
-// Бесплатный сервер на Render просыпается до минуты: до первого ответа показываем заглушки,
-// через 5 секунд добавляем подпись. Уведомление об ошибке только при переходе «есть связь → нет».
+// Бесплатный сервер на Render после простоя просыпается до минуты. Первая загрузка сразу показывает
+// заглушки и повторяет запрос с нарастающей паузой около минуты, без сообщений об ошибке.
+// Только если сервер так и не ответил — экран с кодом запроса и кнопкой «Повторить».
+// Потом опрос раз в 15 секунд; уведомление — только при переходе «есть связь → нет».
+const REQUEST_TIMEOUT = 30000;
+const FIRST_LOAD_PATIENCE = 60000;
 let tasksLoaded = false;
 let lastLoadOk = true;
+let loadInFlight = false;
 let wakeNoteTimer = null;
 
 function showTasksLoading() {
@@ -2603,10 +2697,52 @@ function showTasksLoading() {
   const today = new Date();
   document.getElementById('dayTitle').textContent = WEEKDAY_FULL[today.getDay()];
   document.getElementById('daySubtitle').textContent = 'Загружаю задачи…';
+  clearTimeout(wakeNoteTimer);
   wakeNoteTimer = setTimeout(() => {
     const note = document.getElementById('loadingNote');
     if (note) note.textContent = 'Сервер просыпается, это может занять до минуты';
   }, 5000);
+}
+
+function showLoadError(code) {
+  clearTimeout(wakeNoteTimer);
+  const list = document.getElementById('dayTasks');
+  list.removeAttribute('aria-busy');
+  list.innerHTML = '';
+  const box = document.createElement('div');
+  box.className = 'load-error';
+  box.setAttribute('role', 'alert');
+  box.innerHTML = '<b>Не удалось загрузить задачи</b>' +
+    '<p>Сервер не ответил. Проверьте интернет и попробуйте ещё раз.</p>' +
+    '<code class="error-code"></code>' +
+    '<div class="gate-actions"><button class="btn-small">Повторить</button></div>';
+  box.querySelector('code').textContent = code || 'нет ответа';
+  box.querySelector('button').onclick = () => firstLoad();
+  list.appendChild(box);
+  document.getElementById('daySubtitle').textContent = 'Нет связи с сервером';
+}
+
+// Один запрос списка. Возвращает {ok, code, auth}; исключений наружу не бросает.
+async function fetchTasksOnce() {
+  const params = new URLSearchParams();
+  if (activeCategory) params.set('category', activeCategory);
+  if (activePriority) params.set('priority', activePriority);
+  try {
+    const tasksRes = await api(`/tasks?${params.toString()}`, { timeout: REQUEST_TIMEOUT });
+    if (!tasksRes.ok) {
+      return { ok: false, code: requestCode('GET', '/tasks', tasksRes.status),
+               auth: tasksRes.status === 401 || tasksRes.status === 403 };
+    }
+    allTasks = (await tasksRes.json()).filter(t => !pendingDeletions[t.id]);
+    // Шаги второстепенны: их сбой не должен мешать показать список задач.
+    try {
+      const subtasksRes = await api('/subtasks', { timeout: REQUEST_TIMEOUT });
+      if (subtasksRes.ok) allSubtasks = await subtasksRes.json();
+    } catch (e) { /* оставляем прежние шаги */ }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, code: e instanceof ApiError ? e.code : 'GET /tasks → ошибка', auth: false };
+  }
 }
 
 function taskLoadFinished(ok) {
@@ -2614,35 +2750,68 @@ function taskLoadFinished(ok) {
     tasksLoaded = true;
     clearTimeout(wakeNoteTimer);
     document.getElementById('dayTasks').removeAttribute('aria-busy');
-  } else if (!tasksLoaded) {
-    const note = document.getElementById('loadingNote');
-    if (note) note.textContent = 'Сервер не отвечает. Попробую ещё раз через 15 секунд';
   }
-  if (!ok && lastLoadOk) toast('Не удалось загрузить задачи');
+  setBackendStatus(ok);
+  if (!ok && lastLoadOk && tasksLoaded) toast('Не удалось обновить задачи');
   lastLoadOk = ok;
 }
 
+// Обновление списка (опрос раз в 15 секунд, после правок и т.д.)
 async function loadTasks() {
-  const params = new URLSearchParams();
-  if (activeCategory) params.set('category', activeCategory);
-  if (activePriority) params.set('priority', activePriority);
+  if (loadInFlight) return;  // ждущий ответа запрос на холодном сервере не дублируем
+  loadInFlight = true;
   try {
-    const [tasksRes, subtasksRes] = await Promise.all([
-      api(`/tasks?${params.toString()}`),
-      api(`/subtasks`),
-    ]);
-    if (!tasksRes.ok) throw new Error('bad status');
-    allTasks = (await tasksRes.json()).filter(t => !pendingDeletions[t.id]);
-    allSubtasks = subtasksRes.ok ? await subtasksRes.json() : [];
-    setBackendStatus(true);
+    const result = await fetchTasksOnce();
+    if (!result.ok) { if (!result.auth) taskLoadFinished(false); return; }
     taskLoadFinished(true);
     if (isRowInteractionBusy()) renderDeferred = true;
     else renderCurrentPage();
-  } catch (e) {
-    setBackendStatus(false);
-    taskLoadFinished(false);
+  } finally {
+    loadInFlight = false;
   }
 }
+
+// Первая загрузка: заглушки сразу, затем повторы 2 → 4 → 8 → 15 секунд примерно минуту.
+async function firstLoad() {
+  showTasksLoading();
+  const started = Date.now();
+  let pause = 2000;
+  for (;;) {
+    loadInFlight = true;
+    const result = await fetchTasksOnce();
+    loadInFlight = false;
+    if (result.ok) {
+      taskLoadFinished(true);
+      renderCurrentPage();
+      return;
+    }
+    if (result.auth) return;  // экран входа уже показан api()
+    if (Date.now() - started >= FIRST_LOAD_PATIENCE) {
+      setBackendStatus(false);
+      showLoadError(result.code);
+      return;
+    }
+    const note = document.getElementById('loadingNote');
+    if (note) note.textContent = 'Сервер просыпается, это может занять до минуты';
+    await new Promise(r => setTimeout(r, pause));
+    pause = Math.min(pause * 2, 15000);
+  }
+}
+
+// Глобальные обработчики: ошибка в скрипте до первой загрузки показывает тот же экран с кодом,
+// а не белую страницу; после загрузки — короткое уведомление.
+function reportClientError(code) {
+  if (!tasksLoaded) showLoadError(code);
+  else toast(`Ошибка в приложении: ${code}`);
+}
+window.addEventListener('error', (e) => {
+  if (!e.message || e.message === 'Script error.') return; // ошибки чужих скриптов без подробностей
+  reportClientError(`JS: ${e.message}`);
+});
+window.addEventListener('unhandledrejection', (e) => {
+  const reason = e.reason;
+  reportClientError(reason instanceof ApiError ? reason.code : `JS: ${(reason && reason.message) || reason}`);
+});
 
 function setBackendStatus(ok) {
   const dot = document.getElementById('statusDot');
@@ -3392,10 +3561,9 @@ document.addEventListener('keydown', (e) => {
 });
 
 renderChips();
-showTasksLoading();
-loadTasks();
+firstLoad();
 checkGoogleStatus();
-setInterval(loadTasks, 15000);
+setInterval(() => { if (tasksLoaded) loadTasks(); }, 15000);
 </script>
 </body>
 </html>
