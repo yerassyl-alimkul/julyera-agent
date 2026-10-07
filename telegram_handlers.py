@@ -15,6 +15,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppI
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 from groq_client import transcribe_audio
+import categories_service
 import task_service
 import users_service
 
@@ -24,7 +25,6 @@ logger = logging.getLogger(__name__)
 APP_URL = (os.environ.get("WEBHOOK_BASE_URL") or "https://julyera-agent.onrender.com").rstrip("/") + "/"
 
 PRIORITY_EMOJI = {"High": "🔴", "Mid": "🟡", "Low": "🟢"}
-CATEGORY_EMOJI = {"Study": "📚", "Work": "💼", "Personal": "🧍", "UniMe": "🎓"}
 
 # Не больше одного запроса доступа в час от одного Telegram-id (в памяти процесса:
 # после перезапуска сервиса счётчик сбрасывается, для двух человек этого достаточно).
@@ -52,20 +52,16 @@ def _format_deadline(deadline_str: str | None) -> str:
 
 
 def _format_task_line(task: dict) -> str:
-    emoji_c = CATEGORY_EMOJI.get(task.get("category"), "")
+    """Строка задачи: приоритет, текст, название категории пользователя, дедлайн."""
     emoji_p = PRIORITY_EMOJI.get(task.get("priority"), "")
     deadline = _format_deadline(task.get("deadline"))
-    return f"{emoji_c} {emoji_p} {task['task']} — {deadline}"
+    return f"{emoji_p} {task['task']} · {task.get('category', '')} — {deadline}"
 
 
 def format_reminder_message(tasks: list[dict]) -> str:
     """Сообщение для проактивного напоминания — с человекочитаемыми датой и временем."""
     lines = ["⏰ Напоминание о дедлайнах:"]
-    for t in tasks:
-        label = _format_deadline(t.get("deadline"))
-        emoji_c = CATEGORY_EMOJI.get(t.get("category"), "")
-        emoji_p = PRIORITY_EMOJI.get(t.get("priority"), "")
-        lines.append(f"{emoji_c} {emoji_p} {t['task']} — {label}")
+    lines += [_format_task_line(t) for t in tasks]
     return "\n".join(lines)
 
 
@@ -91,6 +87,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             f"Привет, {user['name']}! Напиши мне задачу текстом или голосом — я разберу её и сохраню.\n\n"
             "Команды:\n"
             "/list — активные задачи\n"
+            "/categories — твои категории\n"
             "/web — личная ссылка, чтобы открыть приложение в браузере\n"
             "/start — это сообщение",
             reply_markup=open_app_markup(),
@@ -181,6 +178,7 @@ async def access_decision(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         logger.exception("Не удалось получить имя нового пользователя")
     user = users_service.create_user(name, telegram_user_id)
     users_service.link_chat(telegram_user_id, user["id"])  # в личном чате chat_id = Telegram-id
+    categories_service.ensure_default(user["id"])  # у каждого всегда есть хотя бы «Общее»
     _last_access_request.pop(telegram_user_id, None)
 
     await query.answer("Доступ открыт")
@@ -193,6 +191,18 @@ async def access_decision(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
     except Exception:
         logger.exception("Не удалось отправить кнопку новому пользователю")
+
+
+async def categories_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/categories — список категорий пользователя; редактирование — в приложении."""
+    user = _known_user(update)
+    if not user:
+        await update.message.reply_text(NO_ACCESS_TEXT)
+        return
+    cats = categories_service.list_categories(user["id"])
+    lines = ["Твои категории:"] + [f"• {c['name']}" for c in cats]
+    lines.append("\nДобавить, переименовать или перекрасить — в приложении: меню → «Категории».")
+    await update.message.reply_text("\n".join(lines), reply_markup=open_app_markup())
 
 
 async def web_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -295,6 +305,7 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("list", list_tasks_handler))
     app.add_handler(CommandHandler("web", web_link))
+    app.add_handler(CommandHandler("categories", categories_handler))
     app.add_handler(CallbackQueryHandler(access_decision, pattern=r"^(approve|deny):\d+$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))

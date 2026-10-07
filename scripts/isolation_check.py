@@ -69,10 +69,27 @@ def setup_local():
     return db
 
 
-def fake_parse(raw_text, source_hint=None):
-    """Вместо Groq: каждая строка текста — задача без даты."""
-    return [{"task": line.strip(), "category": "Personal", "priority": "Mid", "tags": []}
-            for line in raw_text.splitlines() if line.strip()]
+PARSE_CALLS = []
+
+
+def fake_parse(raw_text, categories, source_hint=None):
+    """Вместо Groq: каждая строка текста — задача без даты. Запоминает, какие категории ей дали.
+    Метки в тексте имитируют ошибку модели: «#чужая» — категория другого пользователя, «#выдумка» — несуществующая."""
+    PARSE_CALLS.append(list(categories))
+    out = []
+    for line in raw_text.splitlines():
+        if not line.strip():
+            continue
+        category = "Учёба A" if "#чужая" in line else "Выдуманная" if "#выдумка" in line else categories[0]
+        out.append({"task": line.strip(), "category": category, "priority": "Mid", "tags": []})
+    return out
+
+
+def give_categories(user, *names):
+    import categories_service
+    palette = categories_service.PALETTE
+    for i, name in enumerate(names):
+        categories_service.create_category(user["id"], name, palette[i % len(palette)])
 
 
 # ---------------------------------------------------------------- заголовки входа
@@ -178,6 +195,56 @@ def http_checks(client, token, A, B, owner, unknown_tg_id, count_users_with_tg):
     via_key = client.get("/tasks", headers=key_headers(A))
     ids = {t["id"] for t in via_key.json()} if via_key.status_code == 200 else set()
     check("X-Access-Key A открывает только задачи A", via_key.status_code == 200 and ta["id"] in ids and tb_id not in ids)
+
+    section("Категории")
+    from categories_service import PALETTE
+    ca = client.post("/categories", headers=hA, json={"name": "Учёба A", "color": PALETTE[5]})
+    ca_id = ca.json().get("id")
+    check("A создаёт категорию", ca.status_code == 201 and ca.json().get("name") == "Учёба A")
+    check("категория A не видна в GET /categories у B",
+          all(c["id"] != ca_id for c in client.get("/categories", headers=hB).json()))
+    check("PATCH /categories/{чужая} → 404",
+          client.patch(f"/categories/{ca_id}", headers=hB, json={"name": "взлом"}).status_code == 404)
+    check("DELETE /categories/{чужая} → 404", client.delete(f"/categories/{ca_id}", headers=hB).status_code == 404)
+    ids_b = [c["id"] for c in client.get("/categories", headers=hB).json()]
+    check("PUT /categories/order с чужим id отклоняется",
+          client.put("/categories/order", headers=hB, json={"ids": ids_b + [ca_id]}).status_code == 422)
+    check("цвет вне палитры → 422",
+          client.post("/categories", headers=hA, json={"name": "Цвет", "color": "#123456"}).status_code == 422)
+    check("дубль названия без учёта регистра → 409",
+          client.post("/categories", headers=hA, json={"name": "  учёба a ", "color": PALETTE[0]}).status_code == 409)
+    check("название длиннее 30 символов → 422",
+          client.post("/categories", headers=hA, json={"name": "x" * 31, "color": PALETTE[0]}).status_code == 422)
+    check("задача B с категорией A → 422",
+          client.post("/tasks", headers=hB, json={"task": "чужая категория", "category": "Учёба A"}).status_code == 422)
+    t_cat = client.post("/tasks", headers=hA, json={"task": "Задача в Учёба A", "category": "учёба a"}).json()
+    check("категория задачи сохраняется в написании пользователя", t_cat.get("category") == "Учёба A")
+    client.patch(f"/categories/{ca_id}", headers=hA, json={"name": "Универ A", "color": PALETTE[6]})
+    renamed = client.get(f"/tasks/{t_cat['id']}", headers=hA).json()
+    cats_a = {c["id"]: c for c in client.get("/categories", headers=hA).json()}
+    check("переименование меняет категорию у существующих задач",
+          renamed.get("category") == "Универ A" and cats_a[ca_id]["color"] == PALETTE[6])
+    check("GET /tasks?category= фильтрует по названию",
+          [t["id"] for t in client.get("/tasks", headers=hA, params={"category": "Универ A"}).json()] == [t_cat["id"]])
+    check("удаление категории с задачами без move_to → 409",
+          client.delete(f"/categories/{ca_id}", headers=hA).status_code == 409)
+    work_a = next(c for c in cats_a.values() if c["name"] == "Work")
+    r = client.delete(f"/categories/{ca_id}", headers=hA, params={"move_to": work_a["id"]})
+    moved = client.get(f"/tasks/{t_cat['id']}", headers=hA).json()
+    check("удаление с move_to переносит задачи", r.status_code == 204 and moved.get("category") == "Work")
+    order = [c["id"] for c in client.get("/categories", headers=hA).json()][::-1]
+    client.put("/categories/order", headers=hA, json={"ids": order})
+    check("порядок категорий меняется", [c["id"] for c in client.get("/categories", headers=hA).json()] == order)
+    only = client.post("/categories", headers=hB, json={"name": "Временная B", "color": PALETTE[7]}).json()
+    for c in client.get("/categories", headers=hB).json():
+        if c["id"] != only["id"]:
+            client.delete(f"/categories/{c['id']}", headers=hB, params={"move_to": only["id"]})
+    left = client.get("/categories", headers=hB).json()
+    check("последнюю категорию удалить нельзя (409)",
+          len(left) == 1 and client.delete(f"/categories/{left[0]['id']}", headers=hB).status_code == 409)
+    check("у A после этого ничего не изменилось",
+          {c["name"] for c in client.get("/categories", headers=hA).json()} == {"Work", "Personal"})
+    client.post("/categories", headers=hB, json={"name": "Work", "color": PALETTE[1]})  # вернуть B рабочий набор
 
     section("Повторяющиеся задачи")
     rec = client.post("/tasks", headers=hA, json={
@@ -289,12 +356,23 @@ def telegram_checks(db, client, owner, A):
     run(h.access_decision(tg_update(owner["telegram_user_id"], callback_data=f"approve:{stranger}"), ctx))
     check("повторное «Разрешить» ничего не дублирует",
           len([x for x in db.tables["users"] if x.get("telegram_user_id") == stranger]) == 1)
+    wife_cats = [c["name"] for c in db.tables["categories"] if c["user_id"] == wife["id"]]
+    check("при одобрении создаётся одна категория «Общее»", wife_cats == ["Общее"])
 
     u = tg_update(stranger, text="Записаться к врачу")
     run(h.handle_text(u, ctx))
     wife_tasks = [t for t in db.tables["tasks"] if t["task"] == "Записаться к врачу"]
     check("задача из её чата создаётся у неё",
           len(wife_tasks) == 1 and wife_tasks[0]["user_id"] == wife["id"])
+    check("парсер получает только её категории", PARSE_CALLS[-1] == ["Общее"])
+    run(h.handle_text(tg_update(stranger, text="Чужая категория #чужая\nВыдуманная #выдумка"), ctx))
+    odd = [t for t in db.tables["tasks"] if t["user_id"] == wife["id"] and "#" in t["task"]]
+    check("несуществующая или чужая категория от модели → запасная («Общее»)",
+          len(odd) == 2 and all(t["category"] == "Общее" for t in odd))
+    u = tg_update(stranger, text="/categories")
+    run(h.categories_handler(u, ctx))
+    check("/categories показывает только её категории",
+          "Общее" in u.replies[-1].text and "Study" not in u.replies[-1].text)
     hA = key_headers(A)
     check("…и не видна другим",
           all(t["task"] != "Записаться к врачу" for t in client.get("/tasks", headers=hA).json()))
@@ -309,7 +387,7 @@ def telegram_checks(db, client, owner, A):
     via_link = client.get("/tasks", headers={"X-Access-Key": m.group(1)}) if m else None
     check("/web присылает ссылку, которая открывает только её данные",
           via_link is not None and via_link.status_code == 200
-          and {t["task"] for t in via_link.json()} == {"Записаться к врачу"})
+          and {t["id"] for t in via_link.json()} == {t["id"] for t in db.tables["tasks"] if t["user_id"] == wife["id"]})
     return wife
 
 
@@ -431,6 +509,9 @@ def run_local():
                                               "category": "UniMe", "deadline": "2026-10-01T09:00:00+00:00"})
     A = users_service.create_user("Тест A", 2001)
     B = users_service.create_user("Тест B", 2002)
+    give_categories(owner, "Study", "Work", "Personal", "UniMe")
+    give_categories(A, "Work", "Personal")
+    give_categories(B, "Work", "Personal")
     # без with: lifespan (вебхук Telegram) не запускается; ошибки сервера — ответ 500, а не падение скрипта
     client = TestClient(main.app, raise_server_exceptions=False)
 
@@ -468,6 +549,8 @@ def run_remote(base_url):
         created.append(A)
         B = users_service.create_user("isolation-check B", base_tg + 2)
         created.append(B)
+        give_categories(A, "Work", "Personal")
+        give_categories(B, "Work", "Personal")
         owner = next((u for u in users_service.list_admins()), None)
 
         def count_users_with_tg(tg_id):
@@ -486,6 +569,7 @@ def run_remote(base_url):
             supabase.table("notes").delete().eq("user_id", user["id"]).execute()
             supabase.table("telegram_chats").delete().eq("user_id", user["id"]).execute()
             supabase.table("google_credentials").delete().eq("user_id", user["id"]).execute()
+            supabase.table("categories").delete().eq("user_id", user["id"]).execute()
             supabase.table("users").delete().eq("id", user["id"]).execute()
         print(f"\nВременные пользователи удалены: {len(created)}")
     static_checks()

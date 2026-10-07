@@ -28,6 +28,7 @@ DEFAULTS = {
     "notes": lambda: {"id": str(uuid.uuid4()), "created_at": _now(), "updated_at": _now()},
     "subtasks": lambda: {"id": str(uuid.uuid4()), "is_done": False, "created_at": _now()},
     "telegram_chats": lambda: {"created_at": _now()},
+    "categories": lambda: {"id": str(uuid.uuid4()), "sort_order": 0, "created_at": _now()},
     "google_credentials": lambda: {"access_token": None, "token_expiry": None,
                                    "created_at": _now(), "updated_at": _now()},
 }
@@ -35,7 +36,8 @@ PRIMARY_KEYS = {"telegram_chats": "chat_id", "google_credentials": "user_id"}
 UNIQUE = {"users": ["telegram_user_id", "access_key"]}
 NOT_NULL = {"tasks": ["user_id", "task", "category"], "notes": ["user_id", "content"],
             "telegram_chats": ["user_id"], "google_credentials": ["user_id", "refresh_token"],
-            "subtasks": ["task_id", "content"], "users": ["name"]}
+            "subtasks": ["task_id", "content"], "users": ["name"],
+            "categories": ["user_id", "name", "color"]}
 
 
 class FakeError(Exception):
@@ -96,6 +98,10 @@ class Query:
         for col in NOT_NULL.get(self.table, []):
             if row.get(col) is None:
                 raise FakeError(f'null value in column "{col}" of relation "{self.table}"')
+        if self.table == "categories":  # unique index categories (user_id, lower(name))
+            for other in self._rows():
+                if other is not row and other["user_id"] == row["user_id"] and other["name"].lower() == row["name"].lower():
+                    raise FakeError('duplicate key value violates unique constraint "categories_user_name_idx"')
         for col in UNIQUE.get(self.table, []):
             if row.get(col) is None:
                 continue
@@ -154,6 +160,9 @@ class Query:
             if self.table == "tasks":  # on delete cascade для подзадач
                 ids = {r["id"] for r in gone}
                 self.db.tables["subtasks"] = [s for s in self.db.tables.get("subtasks", []) if s["task_id"] not in ids]
+            if self.table == "users":  # categories.user_id ... on delete cascade
+                ids = {r["id"] for r in gone}
+                self.db.tables["categories"] = [c for c in self.db.tables.get("categories", []) if c["user_id"] not in ids]
             return SimpleNamespace(data=[copy.deepcopy(r) for r in gone])
 
         raise FakeError(f"неизвестная операция {self.op}")
@@ -165,3 +174,24 @@ class FakeSupabase:
 
     def table(self, name):
         return Query(self, name)
+
+    def rpc(self, name, params):
+        """SQL-функции из schema.sql. rename_category — как в миграции: задачи и категория разом."""
+        db = self
+
+        class Call:
+            def execute(self):
+                if name != "rename_category":
+                    raise FakeError(f"нет функции {name}")
+                cats = db.tables.get("categories", [])
+                cat = next((c for c in cats if c["id"] == params["p_id"] and c["user_id"] == params["p_user"]), None)
+                if cat is None:
+                    raise FakeError("not_found")
+                old_name = cat["name"]
+                for t in db.tables.get("tasks", []):
+                    if t["user_id"] == params["p_user"] and t["category"] == old_name:
+                        t["category"] = params["p_name"]
+                cat["name"] = params["p_name"]
+                return SimpleNamespace(data=None)
+
+        return Call()

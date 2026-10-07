@@ -9,7 +9,9 @@
 from datetime import datetime, timedelta
 from typing import Optional
 
+import categories_service
 import google_calendar_service as gcal
+from categories_service import CategoryError
 from database import supabase
 from groq_client import parse_text_to_tasks
 from models import Status, TaskCreate, TaskUpdate
@@ -51,9 +53,18 @@ def _sync_google_clear(task: dict, user_id: str) -> dict:
     return task
 
 
+def _known_category(user_id: str, name: str) -> str:
+    """Название категории в том виде, как оно у пользователя; чужое или несуществующее — 422."""
+    resolved = categories_service.resolve_name(user_id, name)
+    if not resolved:
+        raise CategoryError(422, f"Нет такой категории: {name}", "unknown_category")
+    return resolved
+
+
 def create_task(payload: TaskCreate, user_id: str) -> dict:
     data = payload.model_dump(mode="json", exclude_none=False)
     data["user_id"] = user_id  # владельца ставит сервер, не клиент
+    data["category"] = _known_category(user_id, data["category"])
     result = supabase.table(TABLE).insert(data).execute()
     if not result.data:
         raise RuntimeError("Не удалось создать задачу")
@@ -62,9 +73,16 @@ def create_task(payload: TaskCreate, user_id: str) -> dict:
 
 
 def create_tasks_from_text(raw_text: str, user_id: str, source_hint: Optional[str] = None) -> list[dict]:
-    raw_tasks = parse_text_to_tasks(raw_text, source_hint=source_hint)
+    names = categories_service.names(user_id) or [categories_service.fallback_name(user_id)]
+    raw_tasks = parse_text_to_tasks(raw_text, names, source_hint=source_hint)
+    fallback = names[0]
     created = []
     for raw in raw_tasks:
+        if not isinstance(raw, dict):
+            continue
+        # Модель могла вернуть чужое или выдуманное название — подставляем запасную категорию,
+        # парсер не должен падать из-за категории.
+        raw = {**raw, "category": categories_service.resolve_name(user_id, str(raw.get("category") or "")) or fallback}
         try:
             validated = TaskCreate(**raw)
         except Exception:
@@ -111,6 +129,8 @@ def update_task(task_id: str, payload: TaskUpdate, user_id: str) -> Optional[dic
         for key, value in payload.model_dump(mode="json", exclude_unset=True).items()
         if value is not None or key in NULLABLE_FIELDS
     }
+    if "category" in update_data:
+        update_data["category"] = _known_category(user_id, update_data["category"])
     update_data["updated_at"] = datetime.utcnow().isoformat()
 
     result = supabase.table(TABLE).update(update_data).eq("id", task_id).eq("user_id", user_id).execute()

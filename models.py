@@ -9,13 +9,6 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
-class Category(str, Enum):
-    study = "Study"
-    work = "Work"
-    personal = "Personal"
-    unime = "UniMe"
-
-
 class Priority(str, Enum):
     high = "High"
     mid = "Mid"
@@ -36,7 +29,9 @@ class RecurrencePattern(str, Enum):
 
 class TaskBase(BaseModel):
     task: str = Field(..., min_length=1, description="Описание задачи")
-    category: Category
+    # Название категории пользователя. Список у каждого свой (таблица categories),
+    # допустимость проверяет сервер в task_service, а не модель.
+    category: str = Field(..., min_length=1, max_length=30)
     source: Optional[str] = None
     deadline: Optional[datetime] = None
     priority: Priority = Priority.mid
@@ -64,7 +59,7 @@ class TaskUpdate(BaseModel):
     """Тело запроса на обновление задачи (PATCH /tasks/{id}).
     Все поля опциональны — обновляются только переданные."""
     task: Optional[str] = None
-    category: Optional[Category] = None
+    category: Optional[str] = Field(None, min_length=1, max_length=30)
     source: Optional[str] = None
     deadline: Optional[datetime] = None
     priority: Optional[Priority] = None
@@ -84,6 +79,23 @@ class Task(TaskBase):
 
     class Config:
         from_attributes = True
+
+
+class CategoryCreate(BaseModel):
+    """Тело POST /categories. Длину названия и цвет из палитры проверяет categories_service."""
+    name: str
+    color: str
+
+
+class CategoryUpdate(BaseModel):
+    """Тело PATCH /categories/{id}: новое название и/или цвет."""
+    name: Optional[str] = None
+    color: Optional[str] = None
+
+
+class CategoryOrder(BaseModel):
+    """Тело PUT /categories/order: полный список id категорий в нужном порядке."""
+    ids: List[UUID]
 
 
 class NoteCreate(BaseModel):

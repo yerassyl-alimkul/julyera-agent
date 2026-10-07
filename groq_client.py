@@ -31,9 +31,8 @@ SYSTEM_PROMPT = """Ты — ассистент, который превраща�
 
 Правила:
 - Извлекай только конкретные, выполнимые действия. Игнорируй общий информационный текст.
-- Поле category — строго одно из значений: "Study", "Work", "Personal", "UniMe".
-  "UniMe" — конкретные дедлайны/задания по магистратуре в Университете Мессины.
-  "Study" — самостоятельное изучение (например, аналитика данных) вне рамок универа.
+- Поле category — строго одно из категорий пользователя: {categories}.
+  Выбирай по смыслу задачи; если ни одна не подходит явно — первую из списка.
 - Поле deadline включает И дату, И время в формате "YYYY-MM-DDTHH:MM:SS".
   Если время суток явно упомянуто в тексте (например "в 18:00", "к обеду", "утром") —
   используй его (примерно: "утром" → 09:00, "днём" → 14:00, "вечером" → 19:00,
@@ -55,7 +54,7 @@ SYSTEM_PROMPT = """Ты — ассистент, который превраща�
 Формат каждого элемента массива "tasks":
 {{
   "task": "строка",
-  "category": "Study | Work | Personal | UniMe",
+  "category": "одно из названий категорий пользователя",
   "source": "строка или null",
   "deadline": "YYYY-MM-DDTHH:MM:SS или null",
   "priority": "High | Mid | Low",
@@ -66,12 +65,17 @@ SYSTEM_PROMPT = """Ты — ассистент, который превраща�
 }}"""
 
 
-def parse_text_to_tasks(raw_text: str, source_hint: Optional[str] = None) -> list[dict]:
+def parse_text_to_tasks(raw_text: str, categories: list[str], source_hint: Optional[str] = None) -> list[dict]:
     """
     Отправляет сырой текст в Groq и возвращает список словарей,
     готовых к вставке в таблицу tasks (без id/created_at/updated_at).
+    categories — названия категорий пользователя: модель выбирает только из них,
+    а task_service всё равно сверяет ответ и подставляет запасную категорию.
     """
-    system = SYSTEM_PROMPT.format(today=datetime.now(USER_TIMEZONE).date().isoformat())
+    system = SYSTEM_PROMPT.format(
+        today=datetime.now(USER_TIMEZONE).date().isoformat(),
+        categories=", ".join(json.dumps(name, ensure_ascii=False) for name in categories),
+    )
     user_content = raw_text
     if source_hint:
         user_content = f"[Источник: {source_hint}]\n{raw_text}"

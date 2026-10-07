@@ -39,19 +39,23 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 load_dotenv()
 
 import task_service
+import categories_service
 import notes_service
 import subtasks_service
 import users_service
 import google_calendar_service as gcal
+from categories_service import CategoryError
 from telegram_auth import InitDataError, verify_init_data
 from models import (
-    Category,
+    CategoryCreate,
+    CategoryOrder,
+    CategoryUpdate,
     ParseRequest,
     Priority,
     Status,
@@ -114,6 +118,12 @@ app.add_middleware(
 )
 
 
+@app.exception_handler(CategoryError)
+async def category_error_handler(request: Request, exc: CategoryError):
+    # 404 — чужая или несуществующая, 409 — дубль / последняя / есть задачи, 422 — неверное название или цвет
+    return JSONResponse(status_code=exc.status, content={"detail": {"code": exc.code, "message": exc.message}})
+
+
 def _deny(request: Request, status: int, reason: str, detail) -> HTTPException:
     # В лог Render — только причина одним словом, метод и путь; значения initData и ключей не пишем.
     logger.warning("Вход отклонён (%s): %s %s → %s", reason, request.method, request.url.path, status)
@@ -167,7 +177,7 @@ def parse_and_create_tasks(payload: ParseRequest, user: dict = Depends(current_u
 
 @app.get("/tasks", response_model=list[Task])
 def list_tasks(
-    category: Optional[Category] = Query(None),
+    category: Optional[str] = Query(None, description="название категории пользователя"),
     status: Optional[Status] = Query(None),
     priority: Optional[Priority] = Query(None),
     deadline_before: Optional[datetime] = Query(None),
@@ -175,7 +185,7 @@ def list_tasks(
 ):
     return task_service.list_tasks(
         user["id"],
-        category=category.value if category else None,
+        category=category or None,
         status=status.value if status else None,
         priority=priority.value if priority else None,
         deadline_before=deadline_before,
@@ -203,6 +213,38 @@ def delete_task(task_id: UUID, user: dict = Depends(current_user)):
     deleted = task_service.delete_task(str(task_id), user["id"])
     if not deleted:
         raise HTTPException(status_code=404, detail="Задача не найдена")
+    return None
+
+
+@app.get("/categories")
+def list_categories(user: dict = Depends(current_user)):
+    return categories_service.list_categories(user["id"])
+
+
+@app.get("/categories/palette")
+def category_palette():
+    """Палитра цветов категорий (публичная: в ней нет данных пользователей)."""
+    return {"colors": categories_service.PALETTE}
+
+
+@app.post("/categories", status_code=201)
+def create_category(payload: CategoryCreate, user: dict = Depends(current_user)):
+    return categories_service.create_category(user["id"], payload.name, payload.color)
+
+
+@app.put("/categories/order")
+def reorder_categories(payload: CategoryOrder, user: dict = Depends(current_user)):
+    return categories_service.reorder(user["id"], [str(i) for i in payload.ids])
+
+
+@app.patch("/categories/{category_id}")
+def update_category(category_id: UUID, payload: CategoryUpdate, user: dict = Depends(current_user)):
+    return categories_service.update_category(str(category_id), user["id"], payload.name, payload.color)
+
+
+@app.delete("/categories/{category_id}", status_code=204)
+def delete_category(category_id: UUID, move_to: Optional[UUID] = Query(None), user: dict = Depends(current_user)):
+    categories_service.delete_category(str(category_id), user["id"], str(move_to) if move_to else None)
     return None
 
 
