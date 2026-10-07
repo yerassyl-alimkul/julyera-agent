@@ -72,7 +72,7 @@ def setup_local():
 PARSE_CALLS = []
 
 
-def fake_parse(raw_text, categories, source_hint=None):
+def fake_parse(raw_text, categories, source_hint=None, timezone=None):
     """Вместо Groq: каждая строка текста — задача без даты. Запоминает, какие категории ей дали.
     Метки в тексте имитируют ошибку модели: «#чужая» — категория другого пользователя, «#выдумка» — несуществующая."""
     PARSE_CALLS.append(list(categories))
@@ -424,8 +424,13 @@ def reminder_checks(client, A, B, wife):
     check("напоминание без секрета → 403", client.post("/internal/reminders/run").status_code == 403)
 
 
-def google_checks(db, client, A, B):
+def google_checks(db, client, owner, A, B):
+    import httplib2
+    from google.auth.exceptions import RefreshError
+    from googleapiclient.errors import HttpError
+
     import google_calendar_service as gcal
+    import notifier
 
     section("Google Calendar")
     state = gcal.make_state(A["id"])
@@ -441,50 +446,96 @@ def google_checks(db, client, A, B):
           url.startswith("https://accounts.google.com/") and "state=" in url)
     check("/google/auth-url без входа → 401", client.get("/google/auth-url").status_code == 401)
 
-    # Токены двух пользователей; клиент Google подменён: запоминаем, чьим токеном пишется событие.
+    # Сеть Google и Telegram подменены: запоминаем, чьим токеном пишется событие, что в нём и кому ушли сообщения.
     future = "2030-01-01T00:00:00+00:00"
     db.tables["google_credentials"] = [
-        {"user_id": A["id"], "access_token": "token-A", "refresh_token": "r-A", "token_expiry": future},
-        {"user_id": B["id"], "access_token": "token-B", "refresh_token": "r-B", "token_expiry": future},
+        {"user_id": A["id"], "access_token": "token-A", "refresh_token": "r-A", "token_expiry": future, "needs_reconnect": False},
+        {"user_id": B["id"], "access_token": "token-B", "refresh_token": "r-B", "token_expiry": future, "needs_reconnect": False},
     ]
-    used = []
-    broken = set()
+    used, bodies, sent, broken_api, dead_refresh = [], [], [], set(), set()
 
     class Exec:
-        def __init__(self, token):
-            self.token = token
+        def __init__(self, token, body=None):
+            self.token, self.body = token, body
 
         def execute(self):
-            if self.token in broken:
-                raise RuntimeError("Google недоступен")
+            if self.token in broken_api:  # Google отвечает 401: доступ отозван
+                raise HttpError(httplib2.Response({"status": 401}), b'{"error": "unauthorized"}')
             used.append(self.token)
+            if self.body:
+                bodies.append(self.body)
             return {"id": f"evt-{self.token}-{len(used)}"}
 
     def fake_build(*_, credentials=None, **__):
         token = credentials.token
-        events = SimpleNamespace(insert=lambda **kw: Exec(token), update=lambda **kw: Exec(token),
+        events = SimpleNamespace(insert=lambda **kw: Exec(token, kw.get("body")),
+                                 update=lambda **kw: Exec(token, kw.get("body")),
                                  delete=lambda **kw: Exec(token))
         return SimpleNamespace(events=lambda: events)
 
-    real_build = gcal.build
-    gcal.build = fake_build
+    def fake_refresh(creds):
+        if creds.refresh_token in dead_refresh:
+            raise RefreshError("invalid_grant: Token has been expired or revoked.")
+
+    class FakeFlow:
+        @staticmethod
+        def from_client_config(*_, **__):
+            flow = SimpleNamespace(credentials=None)
+            flow.fetch_token = lambda code: setattr(flow, "credentials", SimpleNamespace(
+                token="token-A2", refresh_token="r-A2", expiry=None))
+            return flow
+
+    saved = (gcal.build, gcal._refresh, gcal.Flow, notifier.send_telegram)
+    gcal.build, gcal._refresh, gcal.Flow = fake_build, fake_refresh, FakeFlow
+    notifier.send_telegram = lambda chat_id, text, with_app_button=False: sent.append((chat_id, text)) or True
+    gcal._status_cache.clear()
+    task = lambda h, name, deadline: client.post("/tasks", headers=h, json={"task": name, "category": "Work", "deadline": deadline})
     try:
-        client.post("/tasks", headers=key_headers(A), json={"task": "Событие A", "category": "Work",
-                                                            "deadline": "2030-01-02T09:00:00"})
-        client.post("/tasks", headers=key_headers(B), json={"task": "Событие B", "category": "Work",
-                                                            "deadline": "2030-01-02T10:00:00"})
+        hA, hB = key_headers(A), key_headers(B)
+        task(hA, "Событие A", "2030-01-02T09:00:00")
+        task(hB, "Событие B", "2030-01-02T10:00:00")
         check("события пишутся токеном своего пользователя", used == ["token-A", "token-B"])
-        broken.add("token-A")
-        r = client.post("/tasks", headers=key_headers(A), json={"task": "При сбое Google", "category": "Work",
-                                                                "deadline": "2030-01-03T09:00:00"})
-        rb = client.post("/tasks", headers=key_headers(B), json={"task": "У B всё хорошо", "category": "Work",
-                                                                 "deadline": "2030-01-03T10:00:00"})
-        check("ошибка календаря у A не ломает задачи (ни у A, ни у B)",
-              r.status_code == 201 and rb.status_code == 201 and used[-1] == "token-B")
+
+        st = lambda h: client.get("/google/status", headers=h).json()
+        check("статус: не подключён (нет токена)", st(key_headers(owner)) == {"configured": True, "connected": False, "needs_reconnect": False})
+        check("статус: подключён (токен проверен вживую)", st(hA) == {"configured": True, "connected": True, "needs_reconnect": False})
+
+        # Мёртвый refresh-токен у B: живая проверка → «нужно переподключить», ровно одно сообщение в её чат
+        dead_refresh.add("r-B")
+        gcal._status_cache.clear()
+        first = st(hB)
+        second = st(hB)
+        to_b = [t for c, t in sent if c == B["telegram_user_id"]]
+        check("испорченный refresh-токен → «Нужно переподключить»", first["needs_reconnect"] is True and second["needs_reconnect"] is True)
+        check("…и ровно одно сообщение бота", len(to_b) == 1 and "переподключите" in to_b[0])
+
+        # 401 от API у A при синхронизации → пометка, сообщение, задачи всё равно создаются
+        broken_api.add("token-A")
+        r1 = task(hA, "При отозванном доступе", "2030-01-03T09:00:00")
+        calls_before = len(used)
+        r2 = task(hA, "Ещё одна при мёртвом токене", "2030-01-03T10:00:00")
+        to_a = [t for c, t in sent if c == A["telegram_user_id"]]
+        check("задачи создаются и при мёртвом токене", r1.status_code == 201 and r2.status_code == 201)
+        check("401 от Google ставит «Нужно переподключить» и шлёт одно сообщение",
+              st(hA)["needs_reconnect"] is True and len(to_a) == 1)
+        check("пока токен мёртв, синхронизация пропускается", len(used) == calls_before)
+        rb = task(hB, "У B своё", "2030-01-03T11:00:00")
+        check("ошибка календаря у одного не ломает задачи другого", rb.status_code == 201)
+
+        # Переподключение A через callback с подписанным state снимает пометку
+        broken_api.discard("token-A")
+        r = client.get("/google/callback", params={"code": "new", "state": gcal.make_state(A["id"])})
+        check("после переподключения снова «Подключён»",
+              r.status_code == 200 and "Готово" in r.text and st(hA) == {"configured": True, "connected": True, "needs_reconnect": False})
+
+        # Пояс пользователя: «18:00» остаётся 18:00 в его поясе
+        next(u for u in db.tables["users"] if u["id"] == A["id"])["timezone"] = "Asia/Almaty"
+        task(hA, "Встреча в 18:00", "2030-01-05T18:00:00")
+        body = bodies[-1]
+        check("событие на 18:00 в поясе пользователя",
+              body["start"] == {"dateTime": "2030-01-05T18:00:00", "timeZone": "Asia/Almaty"} and used[-1] == "token-A2")
     finally:
-        gcal.build = real_build
-    status_a = client.get("/google/status", headers=key_headers(A)).json()
-    check("/google/status показывает статус текущего пользователя", status_a.get("connected") is True)
+        gcal.build, gcal._refresh, gcal.Flow, notifier.send_telegram = saved
 
 
 # ---------------------------------------------------------------- запуск
@@ -525,7 +576,7 @@ def run_local():
     check("задачи Yera на месте и видны только ему", [t["task"] for t in owner_tasks] == ["Старая задача Yera"])
     wife = telegram_checks(db, client, owner, A)
     reminder_checks(client, A, B, wife)
-    google_checks(db, client, A, B)
+    google_checks(db, client, owner, A, B)
     static_checks()
 
 

@@ -17,11 +17,15 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
+import notifier
+import users_service
 from database import supabase
 
 logger = logging.getLogger(__name__)
@@ -32,6 +36,11 @@ GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI")
 # Секрет для подписи state при подключении календаря (случайная строка от 32 символов, задаётся на Render).
 OAUTH_STATE_SECRET = os.environ.get("OAUTH_STATE_SECRET")
 STATE_TTL_SECONDS = 600  # подписанная метка в state живёт 10 минут
+
+# Живая проверка токена в /google/status кэшируется на 10 минут: user_id → (время, токен рабочий?)
+STATUS_CACHE_SECONDS = 600
+_status_cache: dict[str, tuple[float, bool]] = {}
+RECONNECT_MESSAGE = "Google Calendar отключился. Откройте приложение и переподключите его в меню."
 
 SCOPES = ["https://www.googleapis.com/auth/calendar.events"]
 CREDENTIALS_TABLE = "google_credentials"
@@ -100,10 +109,11 @@ def build_auth_url(user_id: str) -> str:
 def exchange_code(code: str, user_id: str) -> None:
     flow = Flow.from_client_config(_client_config(), scopes=SCOPES, redirect_uri=GOOGLE_REDIRECT_URI)
     flow.fetch_token(code=code)
-    _save_credentials(flow.credentials, user_id)
+    _save_credentials(flow.credentials, user_id, reconnected=True)
+    _status_cache[user_id] = (time.time(), True)
 
 
-def _save_credentials(creds: Credentials, user_id: str) -> None:
+def _save_credentials(creds: Credentials, user_id: str, reconnected: bool = False) -> None:
     data = {
         "user_id": user_id,
         "access_token": creds.token,
@@ -115,19 +125,64 @@ def _save_credentials(creds: Credentials, user_id: str) -> None:
     # тогда не затираем уже сохранённое значение пустым.
     if creds.refresh_token:
         data["refresh_token"] = creds.refresh_token
+    if reconnected:
+        data["needs_reconnect"] = False
     supabase.table(CREDENTIALS_TABLE).upsert(data).execute()
 
 
-def is_connected(user_id: str) -> bool:
-    result = supabase.table(CREDENTIALS_TABLE).select("user_id").eq("user_id", user_id).execute()
-    return bool(result.data)
-
-
-def _load_credentials(user_id: str) -> Optional[Credentials]:
+def _get_row(user_id: str) -> Optional[dict]:
     result = supabase.table(CREDENTIALS_TABLE).select("*").eq("user_id", user_id).execute()
-    if not result.data:
-        return None
-    row = result.data[0]
+    return result.data[0] if result.data else None
+
+
+def _refresh(creds: Credentials) -> None:
+    """Обновление access-токена у Google (отдельная функция, чтобы проверки могли подменить сеть)."""
+    creds.refresh(GoogleRequest())
+
+
+def _mark_needs_reconnect(user_id: str, reason: str) -> None:
+    """Токен больше не работает: ставим needs_reconnect и один раз пишем пользователю в Telegram.
+    Пока флаг стоит, синхронизация пропускается; снимает его только успешное переподключение."""
+    _status_cache[user_id] = (time.time(), False)
+    row = _get_row(user_id)
+    if not row or row.get("needs_reconnect"):
+        return  # уже помечено — сообщение было, повторять не нужно
+    supabase.table(CREDENTIALS_TABLE).update({"needs_reconnect": True}).eq("user_id", user_id).execute()
+    logger.warning("Google Calendar пользователя требует переподключения: %s", reason)
+    notifier.notify_user(user_id, RECONNECT_MESSAGE, with_app_button=True)
+
+
+def status(user_id: str) -> dict:
+    """Честный статус календаря: есть ли запись и работает ли токен на самом деле."""
+    result = {"configured": is_configured(), "connected": False, "needs_reconnect": False}
+    row = _get_row(user_id)
+    if not row:
+        return result
+    result["connected"] = True
+    if row.get("needs_reconnect"):
+        result["needs_reconnect"] = True
+        return result
+    cached = _status_cache.get(user_id)
+    if cached and time.time() - cached[0] < STATUS_CACHE_SECONDS:
+        result["needs_reconnect"] = not cached[1]
+        return result
+    if not result["configured"]:
+        return result
+    try:
+        creds = _credentials_from_row(row)
+        _refresh(creds)  # живая проверка: Google обменивает refresh_token на свежий access-токен
+        _save_credentials(creds, user_id)
+        _status_cache[user_id] = (time.time(), True)
+    except RefreshError as exc:
+        _mark_needs_reconnect(user_id, f"проверка статуса: {type(exc).__name__}")
+        result["needs_reconnect"] = True
+    except Exception:
+        # сеть или Google недоступен — это не повод просить переподключение; не кэшируем
+        logger.exception("Не удалось проверить токен Google Calendar")
+    return result
+
+
+def _credentials_from_row(row: dict) -> Credentials:
     # Срок действия access_token обязательно передаём: без него google-auth считает
     # токен вечным, не обновляет его заранее и падает уже посреди запроса к API.
     expiry = None
@@ -135,7 +190,7 @@ def _load_credentials(user_id: str) -> Optional[Credentials]:
         expiry = datetime.fromisoformat(row["token_expiry"])
         if expiry.tzinfo is not None:  # google-auth ждёт «голое» время в UTC
             expiry = expiry.astimezone(timezone.utc).replace(tzinfo=None)
-    creds = Credentials(
+    return Credentials(
         token=row.get("access_token"),
         refresh_token=row["refresh_token"],
         token_uri="https://oauth2.googleapis.com/token",
@@ -144,8 +199,19 @@ def _load_credentials(user_id: str) -> Optional[Credentials]:
         scopes=SCOPES,
         expiry=expiry,
     )
+
+
+def _load_credentials(user_id: str) -> Optional[Credentials]:
+    row = _get_row(user_id)
+    if not row or row.get("needs_reconnect"):
+        return None  # не подключён или токен уже признан нерабочим — синхронизацию пропускаем
+    creds = _credentials_from_row(row)
     if not creds.valid:
-        creds.refresh(GoogleRequest())
+        try:
+            _refresh(creds)
+        except RefreshError as exc:
+            _mark_needs_reconnect(user_id, f"обновление токена: {type(exc).__name__}")
+            return None
         _save_credentials(creds, user_id)
     return creds
 
@@ -167,12 +233,12 @@ def _get_service(user_id: str):
         return None
 
 
-def _event_body(task: dict) -> dict:
+def _event_body(task: dict, tz: str = "Europe/Rome") -> dict:
     emoji_c = CATEGORY_EMOJI.get(task.get("category"), "")
     emoji_p = PRIORITY_EMOJI.get(task.get("priority"), "")
     start_dt = datetime.fromisoformat(task["deadline"])
     # В нашей системе дедлайн хранится и везде показывается как "голая" стена
-    # часов (12:00 значит 12:00 по времени владельца, Europe/Rome, без UTC-пересчёта), но
+    # часов (12:00 значит 12:00 в поясе пользователя, users.timezone, без UTC-пересчёта), но
     # Supabase иногда возвращает строку с суффиксом +00:00. Google Calendar,
     # в отличие от бота и веб-интерфейса, ЧЕСТНО пересчитывает время по этому
     # смещению — поэтому убираем его и передаём зону отдельным полем timeZone.
@@ -182,8 +248,8 @@ def _event_body(task: dict) -> dict:
     return {
         "summary": f"{emoji_c} {emoji_p} {task['task']}".strip(),
         "description": task.get("note") or "",
-        "start": {"dateTime": start_dt.isoformat(), "timeZone": "Europe/Rome"},
-        "end": {"dateTime": end_dt.isoformat(), "timeZone": "Europe/Rome"},
+        "start": {"dateTime": start_dt.isoformat(), "timeZone": tz},
+        "end": {"dateTime": end_dt.isoformat(), "timeZone": tz},
     }
 
 
@@ -204,16 +270,16 @@ def sync_task_upsert(task: dict, user_id: str) -> Optional[str]:
     event_id = task.get("google_event_id")
 
     try:
-        body = _event_body(task)
+        body = _event_body(task, users_service.timezone_of(user_id))
         if event_id:
             service.events().update(calendarId="primary", eventId=event_id, body=body).execute()
             return event_id
         created = service.events().insert(calendarId="primary", body=body).execute()
         return created["id"]
-    except Exception:
+    except Exception as exc:
         # Не только HttpError: сеть, тайм-аут, отозванный refresh_token (RefreshError).
         # Задача уже сохранена в базе, поэтому ошибка календаря не должна ронять запрос.
-        logger.exception("Ошибка синхронизации с Google Calendar (upsert)")
+        _note_sync_failure(user_id, exc, "upsert")
         return event_id
 
 
@@ -225,5 +291,15 @@ def sync_task_delete(event_id: Optional[str], user_id: str) -> None:
         return
     try:
         service.events().delete(calendarId="primary", eventId=event_id).execute()
-    except Exception:
-        logger.exception("Ошибка синхронизации с Google Calendar (delete)")
+    except Exception as exc:
+        _note_sync_failure(user_id, exc, "delete")
+
+
+def _note_sync_failure(user_id: str, exc: Exception, action: str) -> None:
+    """Отказ в доступе (отозванный токен, 401/403 от API) ставит needs_reconnect;
+    сеть, 5xx и удалённое вручную событие (404) — временные сбои, их только логируем."""
+    status_code = getattr(getattr(exc, "resp", None), "status", None) if isinstance(exc, HttpError) else None
+    if isinstance(exc, RefreshError) or status_code in (401, 403):
+        _mark_needs_reconnect(user_id, f"синхронизация ({action}): {type(exc).__name__} {status_code or ''}".strip())
+    else:
+        logger.exception("Ошибка синхронизации с Google Calendar (%s)", action)

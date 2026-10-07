@@ -21,9 +21,9 @@ _client = Groq(api_key=GROQ_API_KEY)
 
 MODEL = "openai/gpt-oss-120b"
 
-# «Сегодня» для разбора «завтра», «в пятницу» и приоритета считается по времени владельца,
-# а не по часам сервера (UTC): иначе после полуночи по Италии «завтра» сдвигается на день.
-# Та же зона, что у событий в google_calendar_service.py.
+# «Сегодня» для разбора «завтра», «в пятницу» и приоритета считается по поясу пользователя
+# (users.timezone, передаёт task_service), а не по часам сервера (UTC): иначе после полуночи
+# «завтра» сдвигается на день. Это значение — запасное, если пояс не передан.
 USER_TIMEZONE = ZoneInfo("Europe/Rome")
 
 SYSTEM_PROMPT = """Ты — ассистент, который превращает произвольный текст (учебный материал,
@@ -65,15 +65,17 @@ SYSTEM_PROMPT = """Ты — ассистент, который превраща�
 }}"""
 
 
-def parse_text_to_tasks(raw_text: str, categories: list[str], source_hint: Optional[str] = None) -> list[dict]:
+def parse_text_to_tasks(raw_text: str, categories: list[str], source_hint: Optional[str] = None,
+                        timezone: Optional[str] = None) -> list[dict]:
     """
     Отправляет сырой текст в Groq и возвращает список словарей,
     готовых к вставке в таблицу tasks (без id/created_at/updated_at).
     categories — названия категорий пользователя: модель выбирает только из них,
     а task_service всё равно сверяет ответ и подставляет запасную категорию.
+    timezone — пояс пользователя (users.timezone), по нему считается «сегодня».
     """
     system = SYSTEM_PROMPT.format(
-        today=datetime.now(USER_TIMEZONE).date().isoformat(),
+        today=datetime.now(ZoneInfo(timezone) if timezone else USER_TIMEZONE).date().isoformat(),
         categories=", ".join(json.dumps(name, ensure_ascii=False) for name in categories),
     )
     user_content = raw_text

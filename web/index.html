@@ -2947,24 +2947,36 @@ async function connectGoogle() {
   googleAuthUrl = null;
 }
 
+// Три состояния календаря (GET /google/status → {configured, connected, needs_reconnect}):
+// «не подключён» — ссылка «Подключить», «подключён» — зелёная точка,
+// «нужно переподключить» (токен отозван или истёк) — красная точка и ссылка «Переподключить».
 async function checkGoogleStatus() {
   const dot = document.getElementById('googleDot');
   const text = document.getElementById('googleStatusText');
+  const row = document.getElementById('googleStatusRow');
+  const link = (label) => {
+    const a = document.createElement('a');
+    a.href = '#';
+    a.textContent = label;
+    a.onclick = (e) => { e.preventDefault(); connectGoogle(); };
+    return a;
+  };
   try {
-    const res = await api(`/google/status`);
+    const res = await api('/google/status');
     if (!res.ok) throw new Error('bad status');
     const data = await res.json();
-    if (data.connected) {
-      dot.classList.add('ok'); dot.classList.remove('err');
+    dot.classList.remove('ok', 'err');
+    row.classList.remove('err');
+    text.innerHTML = '';
+    if (data.connected && data.needs_reconnect) {
+      dot.classList.add('err');
+      text.append('Google Calendar отключился. ', link('Переподключить'));
+      prefetchGoogleAuthUrl();
+    } else if (data.connected) {
+      dot.classList.add('ok');
       text.textContent = 'Google Calendar подключён';
     } else {
-      dot.classList.remove('ok', 'err');
-      text.innerHTML = '';
-      const link = document.createElement('a');
-      link.href = '#';
-      link.textContent = 'Подключить Google Calendar';
-      link.onclick = (e) => { e.preventDefault(); connectGoogle(); };
-      text.appendChild(link);
+      text.appendChild(link('Подключить Google Calendar'));
       prefetchGoogleAuthUrl();
     }
   } catch (e) {
@@ -3216,6 +3228,7 @@ const mobileOverlay = document.getElementById('mobileOverlay');
 const sidebarEl = document.getElementById('sidebar');
 
 function openMobileMenu() {
+  checkGoogleStatus();
   sidebarEl.classList.add('mobile-open');
   mobileOverlay.classList.add('show');
   setBackgroundInert(true);
@@ -3892,6 +3905,7 @@ document.addEventListener('keydown', (e) => {
 renderChips();
 firstLoad();
 checkGoogleStatus();
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkGoogleStatus(); });
 setInterval(() => { if (tasksLoaded) loadTasks(); }, 15000);
 </script>
 </body>

@@ -171,3 +171,7 @@ revoke execute on function rename_category(uuid, uuid, text) from public, anon, 
 grant execute on function rename_category(uuid, uuid, text) to service_role;
 
 commit;
+
+-- Часовой пояс пользователя и честный статус Google Calendar (задача №2, шаг 3).
+alter table users add column timezone text not null default 'Europe/Rome';
+alter table google_credentials add column needs_reconnect boolean not null default false;

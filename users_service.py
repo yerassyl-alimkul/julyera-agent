@@ -64,3 +64,20 @@ def link_chat(chat_id: int, user_id: str) -> None:
 def get_chat_ids(user_id: str) -> list[int]:
     result = supabase.table(CHATS_TABLE).select("chat_id").eq("user_id", user_id).execute()
     return [row["chat_id"] for row in result.data]
+
+
+DEFAULT_TIMEZONE = "Europe/Rome"
+
+
+def timezone_of(user_id: str) -> str:
+    """Часовой пояс пользователя (users.timezone) для событий календаря и разбора «сегодня/завтра».
+    Неизвестное или пустое значение — пояс по умолчанию."""
+    from zoneinfo import ZoneInfo
+
+    user = get_by_id(user_id)
+    name = (user or {}).get("timezone") or DEFAULT_TIMEZONE
+    try:
+        ZoneInfo(name)
+    except Exception:
+        return DEFAULT_TIMEZONE
+    return name

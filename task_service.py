@@ -11,6 +11,7 @@ from typing import Optional
 
 import categories_service
 import google_calendar_service as gcal
+import users_service
 from categories_service import CategoryError
 from database import supabase
 from groq_client import parse_text_to_tasks
@@ -74,7 +75,8 @@ def create_task(payload: TaskCreate, user_id: str) -> dict:
 
 def create_tasks_from_text(raw_text: str, user_id: str, source_hint: Optional[str] = None) -> list[dict]:
     names = categories_service.names(user_id) or [categories_service.fallback_name(user_id)]
-    raw_tasks = parse_text_to_tasks(raw_text, names, source_hint=source_hint)
+    raw_tasks = parse_text_to_tasks(raw_text, names, source_hint=source_hint,
+                                    timezone=users_service.timezone_of(user_id))
     fallback = names[0]
     created = []
     for raw in raw_tasks:

@@ -21,7 +21,7 @@ def _now() -> str:
 # Значения по умолчанию и первичные ключи — как в schema.sql (после миграции multi-user).
 DEFAULTS = {
     "users": lambda: {"id": str(uuid.uuid4()), "is_admin": False, "telegram_user_id": None,
-                      "access_key": secrets.token_hex(32), "created_at": _now()},
+                      "access_key": secrets.token_hex(32), "timezone": "Europe/Rome", "created_at": _now()},
     "tasks": lambda: {"id": str(uuid.uuid4()), "source": None, "deadline": None, "priority": "Mid",
                       "status": "To Do", "note": None, "is_recurring": False, "recurrence_pattern": None,
                       "tags": [], "google_event_id": None, "created_at": _now(), "updated_at": _now()},
@@ -29,7 +29,7 @@ DEFAULTS = {
     "subtasks": lambda: {"id": str(uuid.uuid4()), "is_done": False, "created_at": _now()},
     "telegram_chats": lambda: {"created_at": _now()},
     "categories": lambda: {"id": str(uuid.uuid4()), "sort_order": 0, "created_at": _now()},
-    "google_credentials": lambda: {"access_token": None, "token_expiry": None,
+    "google_credentials": lambda: {"access_token": None, "token_expiry": None, "needs_reconnect": False,
                                    "created_at": _now(), "updated_at": _now()},
 }
 PRIMARY_KEYS = {"telegram_chats": "chat_id", "google_credentials": "user_id"}

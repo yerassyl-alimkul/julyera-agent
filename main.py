@@ -352,7 +352,8 @@ def google_auth_callback(code: Optional[str] = None, error: Optional[str] = None
 
 @app.get("/google/status")
 def google_status(user: dict = Depends(current_user)):
-    return {"connected": gcal.is_connected(user["id"]), "configured": gcal.is_configured()}
+    # {configured, connected, needs_reconnect}: токен проверяется вживую, результат кэшируется на 10 минут
+    return gcal.status(user["id"])
 
 
 @app.post("/notes", response_model=Note, status_code=201)
