@@ -8,11 +8,36 @@
      то есть личную ссылку с ?key=… (у иконки на iPhone своя память, ключ из Safari она не видит). -->
 <link rel="manifest" href="manifest.json" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="apple-mobile-web-app-title" content="JulYera" />
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>
+// Тема ставится до отрисовки, иначе тёмная тема мигнёт светлой. «Авто» повторяет Telegram (в Mini App)
+// или систему (браузер, иконка на экране Домой); выбор в меню хранится в localStorage.
+var THEME_STORAGE = 'task_agent_theme';
+function themePreference() {
+  try { var v = localStorage.getItem(THEME_STORAGE); return v === 'light' || v === 'dark' ? v : 'auto'; }
+  catch (e) { return 'auto'; }
+}
+function resolveTheme() {
+  var pref = themePreference();
+  if (pref !== 'auto') return pref;
+  var app = window.Telegram && window.Telegram.WebApp;
+  if (app && app.initData && (app.colorScheme === 'dark' || app.colorScheme === 'light')) return app.colorScheme;
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+function applyTheme() {
+  var theme = resolveTheme();
+  document.documentElement.setAttribute('data-theme', theme);
+  var meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', theme === 'dark' ? '#111214' : '#FBFBFA');
+  if (typeof window.onThemeApplied === 'function') window.onThemeApplied(theme);
+}
+applyTheme();
+</script>
 <title>JulYera Agent</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -47,6 +72,19 @@
     --scrim: rgba(23, 24, 28, 0.45);
     --tag-bg: rgba(255, 255, 255, 0.6);
     --highlight: rgba(255, 255, 255, 0.75);
+    /* Для тёмной темы: текст акцентного цвета, заливка «опасных» кнопок, тёмные плашки и текст на --ink */
+    --accent-text: #557546;
+    --danger-fill: #B3261E;
+    --on-ink: #FFFFFF;
+    --on-ink-muted: #C9CAD2;
+    --dock-bg: #17181C;
+    --dock-active-bg: #FFFFFF;
+    --dock-active-ink: #17181C;
+    --toast-bg: #17181C;
+    --shadow: rgba(23, 24, 28, 0.18);
+    /* Знак JulYera (design/brand): «J» и галочка-«Y» */
+    --logo-j: #17181C;
+    --logo-y: #557546;
 
     /* Шрифты */
     --font-display: 'Unbounded', system-ui, sans-serif;
@@ -79,6 +117,54 @@
     --dur-swipe: 180ms;
     --dur-base: 200ms;
     --dur-menu: 250ms;
+  }
+
+  /* ---------- Тёмная тема (data-theme ставит скрипт в <head>) ---------- */
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #111214;
+    --surface: #1B1C20;
+    --ink: #ECEDF0;
+    --ink-muted: #9A9CA6;
+    --ink-meta: #C3C5CC;
+    --line: #2C2E34;
+    --hairline: #24262B;
+    --dashed: #3A3D44;
+    --danger: #F28B82;
+    --bar-off: rgba(236, 237, 240, 0.22);
+    --dock-text: #A6A8B1;
+    --scrim: rgba(0, 0, 0, 0.6);
+    --tag-bg: rgba(255, 255, 255, 0.12);
+    --highlight: rgba(169, 200, 157, 0.35);
+    --accent-text: #A9C89D;
+    --on-ink: #17181C;
+    --on-ink-muted: #5D5F69;
+    --dock-bg: #26272C;
+    --dock-active-bg: #ECEDF0;
+    --dock-active-ink: #17181C;
+    --toast-bg: #2A2B31;
+    --shadow: rgba(0, 0, 0, 0.5);
+    --logo-j: #FFFFFF;
+    --logo-y: #A9C89D;
+  }
+  /* Выбранный чип категории залит пастельным цветом категории — текст на нём тёмный. */
+  :root[data-theme="dark"] .choice-chip.cat[aria-pressed="true"] { color: #17181C; --ink: #17181C; }
+  /* Цветные карточки задач остаются пастельными, поэтому внутри них — светлые токены и тёмный текст. */
+  :root[data-theme="dark"] :is(.task-row, .archive-row, .compact-row, .search-row) {
+    color: #17181C;
+    --ink: #17181C;
+    --ink-muted: #5D5F69;
+    --ink-meta: #33353D;
+    --surface: #FFFFFF;
+    --line: #E6E6E1;
+    --hairline: #EFEFEA;
+    --dashed: #D9D9D3;
+    --danger: #B3261E;
+    --bar-off: rgba(23, 24, 28, 0.18);
+    --tag-bg: rgba(255, 255, 255, 0.6);
+    --highlight: rgba(255, 255, 255, 0.75);
+    --accent-text: #557546;
+    --on-ink: #FFFFFF;
   }
 
   * { box-sizing: border-box; }
@@ -122,7 +208,7 @@
   /* Атрибут hidden всегда скрывает, даже если у элемента задан display. */
   [hidden] { display: none !important; }
 
-  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  :focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
@@ -165,10 +251,17 @@
     transform: translateX(0);
     visibility: visible;
     transition: transform var(--dur-menu) ease, visibility 0s;
-    box-shadow: 8px 0 32px rgba(23, 24, 28, 0.18);
+    box-shadow: 8px 0 32px var(--shadow);
   }
   .menu-head { display: flex; align-items: center; justify-content: space-between; gap: var(--gap-s); }
-  .menu-brand { font-family: var(--font-display); font-weight: 600; font-size: 18px; letter-spacing: -0.01em; }
+  .menu-brand { display: flex; align-items: center; gap: var(--gap-m); font-family: var(--font-display); font-weight: 600; font-size: 18px; letter-spacing: -0.01em; }
+  .brand-mark { width: 28px; height: 24px; flex: 0 0 auto; fill: none; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; }
+  .brand-mark .mark-j { stroke: var(--logo-j); }
+  .brand-mark .mark-y { stroke: var(--logo-y); }
+  .auth-gate .brand-mark { width: 56px; height: 48px; margin: 0 auto var(--gap-s); }
+  .menu-theme { display: flex; flex-direction: column; gap: var(--gap-s); }
+  .menu-theme .segmented { margin-top: 0; }
+  .menu-theme-label { padding: 0 4px; font-size: 13px; font-weight: 600; color: var(--ink-muted); }
   .menu-stats {
     display: flex;
     gap: var(--gap-l);
@@ -210,7 +303,7 @@
   }
   .menu-status { margin-top: auto; display: flex; flex-direction: column; gap: var(--gap-m); font-size: 14px; color: var(--ink-muted); }
   .menu-status-row { display: flex; align-items: center; gap: var(--gap-m); min-height: 22px; }
-  .menu-status-row a { color: var(--accent); font-weight: 600; }
+  .menu-status-row a { color: var(--accent-text); font-weight: 600; }
   /* Точка статуса: зелёная — подключено, красная — нет связи, пустой кружок — не подключено */
   .status-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; border: 1.5px solid var(--ink-muted); }
   .status-dot.ok { border-color: var(--accent); background: var(--accent); }
@@ -234,13 +327,13 @@
   .filters-form { display: flex; flex-direction: column; gap: var(--gap-header); padding-top: 32px; }
   .filters-form .form-section { gap: var(--gap-l); }
   .choice-chip.solid { padding: 0 18px; }
-  .choice-chip.solid[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: #FFFFFF; }
+  .choice-chip.solid[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
   .text-btn {
     height: var(--touch);
     padding: 0 4px;
     border: none;
     background: transparent;
-    color: var(--accent);
+    color: var(--accent-text);
     font-size: 15px;
     font-weight: 600;
     cursor: pointer;
@@ -389,9 +482,9 @@
   }
   .cal-cell-num { font-size: 15px; font-weight: 600; line-height: 1.2; }
   .cal-cell-count { min-height: 12px; font-size: 11px; font-weight: 600; line-height: 1; color: var(--ink-muted); }
-  .cal-cell.today { border-color: var(--accent); }
-  .cal-cell.selected { background: var(--ink); border-color: var(--ink); color: #FFFFFF; }
-  .cal-cell.selected .cal-cell-count { color: #FFFFFF; }
+  .cal-cell.today { border-color: var(--accent-text); }
+  .cal-cell.selected { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
+  .cal-cell.selected .cal-cell-count { color: var(--on-ink); }
   .cal-cell.other { border-color: transparent; background: transparent; color: #6B6D76; cursor: default; }
 
   .cal-day-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--gap-s); padding-top: 18px; }
@@ -507,7 +600,7 @@
     z-index: 80;
     overflow: hidden;
     border-radius: var(--radius-compact);
-    background: var(--ink);
+    background: var(--toast-bg);
     color: #FFFFFF;
     opacity: 0;
     transform: translate(-50%, 12px);
@@ -633,15 +726,15 @@
     transition: background-color var(--dur-chip) ease, color var(--dur-chip) ease, border-color var(--dur-chip) ease;
   }
   .day-chip.wide { flex: 0 0 auto; min-width: 64px; padding-left: 10px; padding-right: 10px; }
-  .day-chip.today { border: 1.5px solid var(--accent); }
+  .day-chip.today { border: 1.5px solid var(--accent-text); }
   .day-chip-wd { font-size: 12px; font-weight: 500; color: var(--ink-muted); white-space: nowrap; }
   .day-chip-num { font-family: var(--font-display); font-weight: 600; font-size: 18px; line-height: 1; }
   .day-chip-count { min-height: 14px; font-size: 11px; font-weight: 600; color: var(--ink-muted); }
   .day-chip.overdue .day-chip-num { color: var(--danger); }
-  .day-chip.selected { background: var(--ink); border-color: var(--ink); color: #FFFFFF; }
-  .day-chip.selected .day-chip-wd { color: #C9CAD2; }
+  .day-chip.selected { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
+  .day-chip.selected .day-chip-wd { color: var(--on-ink-muted); }
   .day-chip.selected .day-chip-count,
-  .day-chip.selected.overdue .day-chip-num { color: #FFFFFF; }
+  .day-chip.selected.overdue .day-chip-num { color: var(--on-ink); }
 
   /* ---------- TaskRow ---------- */
   .day-tasks { display: flex; flex-direction: column; gap: var(--gap-m); padding-top: 20px; }
@@ -681,7 +774,7 @@
     fill: none; stroke: transparent; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round;
   }
   .task-row.done .check-circle { background: var(--ink); }
-  .task-row.done .check-circle svg { stroke: #FFFFFF; }
+  .task-row.done .check-circle svg { stroke: var(--on-ink); }
   .task-row.done .row-title { text-decoration: line-through; color: var(--ink-meta); }
   .row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
   .row-title { font-size: 16px; font-weight: 500; line-height: 1.25; overflow-wrap: anywhere; }
@@ -730,7 +823,7 @@
     gap: 4px;
     padding: 6px;
     border-radius: var(--radius-dock);
-    background: var(--ink);
+    background: var(--dock-bg);
   }
   .dock-btn {
     flex: 1;
@@ -745,7 +838,7 @@
     cursor: pointer;
     transition: background-color var(--dur-chip) ease, color var(--dur-chip) ease;
   }
-  .dock-btn.active { background: var(--surface); color: var(--ink); font-weight: 600; }
+  .dock-btn.active { background: var(--dock-active-bg); color: var(--dock-active-ink); font-weight: 600; }
   .fab {
     flex: 0 0 var(--touch-l);
     width: var(--touch-l);
@@ -872,7 +965,7 @@
     font-weight: 500;
     cursor: pointer;
   }
-  .segmented button[aria-pressed="true"] { background: var(--ink); color: #FFFFFF; font-weight: 600; }
+  .segmented button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); font-weight: 600; }
   #newTaskSheet .newtask-body { padding-top: var(--gap-header); }
   #newTaskSheet.manual .btn-mic { display: none; }
   .newtask-manual { padding-top: var(--gap-header); }
@@ -984,7 +1077,7 @@
     fill: none; stroke: transparent; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round;
   }
   .step-row.done .step-circle { background: var(--ink); }
-  .step-row.done .step-circle svg { stroke: #FFFFFF; }
+  .step-row.done .step-circle svg { stroke: var(--on-ink); }
   .step-text { flex: 1; min-width: 0; font-size: 16px; line-height: 1.3; overflow-wrap: anywhere; }
   .step-row.done .step-text { text-decoration: line-through; color: var(--ink-muted); }
   .step-remove {
@@ -1058,8 +1151,8 @@
     font-weight: 600;
     cursor: pointer;
   }
-  .swipe-edit { background: var(--ink); }
-  .swipe-delete { background: var(--danger); }
+  .swipe-actions .swipe-edit { background: var(--ink); color: var(--on-ink); }
+  .swipe-delete { background: var(--danger-fill); }
 
   /* ---------- Раскрытая карточка (макет TaskExpanded) ---------- */
   .task-row { flex-wrap: wrap; cursor: pointer; }
@@ -1245,6 +1338,7 @@
 <body>
 <div class="auth-gate" id="authGate" role="alert" hidden>
   <div class="auth-gate-inner">
+    <svg class="brand-mark" viewBox="0 0 56 48" aria-hidden="true"><path class="mark-j" d="M12 9 V30 Q12 39 5 39"/><path class="mark-y" d="M24 16 L34 26 L49 7 M34 26 V40"/></svg>
     <h1 class="t-h1-month" id="authGateTitle"></h1>
     <p id="authGateText"></p>
     <code class="error-code" id="authGateCode" hidden></code>
@@ -1257,7 +1351,7 @@
 <div class="mobile-overlay" id="mobileOverlay"></div>
 <aside class="sidebar" id="sidebar" aria-label="Меню">
   <div class="menu-head">
-    <span class="menu-brand">JulYera Agent</span>
+    <span class="menu-brand"><svg class="brand-mark" viewBox="0 0 56 48" aria-hidden="true"><path class="mark-j" d="M12 9 V30 Q12 39 5 39"/><path class="mark-y" d="M24 16 L34 26 L49 7 M34 26 V40"/></svg>JulYera Agent</span>
     <button class="tb-btn" id="menuClose" aria-label="Закрыть меню"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
 
@@ -1291,6 +1385,15 @@
     </button>
   </nav>
   <p class="menu-note" id="exportNote" hidden>Экспорт CSV и печать работают в браузере: пришлите боту /web, он даст личную ссылку.</p>
+
+  <div class="menu-theme">
+    <span class="menu-theme-label" id="themeLabel">Тема</span>
+    <div class="segmented" role="group" aria-labelledby="themeLabel">
+      <button type="button" data-theme-pref="auto" aria-pressed="true">Авто</button>
+      <button type="button" data-theme-pref="light" aria-pressed="false">Светлая</button>
+      <button type="button" data-theme-pref="dark" aria-pressed="false">Тёмная</button>
+    </div>
+  </div>
 
   <div class="menu-status">
     <div class="menu-status-row" id="backendStatus">
@@ -1733,10 +1836,16 @@ if (inTelegram) {
   };
   callTg(null, 'ready');
   callTg(null, 'expand');
-  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#FBFBFA';
-  callTg('6.1', 'setHeaderColor', bg);
-  callTg('6.1', 'setBackgroundColor', bg);
-  callTg('7.10', 'setBottomBarColor', bg);
+  // Шапка и фон Telegram под цвет --bg текущей темы; пересчитываются при каждой смене темы.
+  const applyTgColors = () => {
+    const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#FBFBFA';
+    callTg('6.1', 'setHeaderColor', bg);
+    callTg('6.1', 'setBackgroundColor', bg);
+    callTg('7.10', 'setBottomBarColor', bg);
+  };
+  window.onThemeApplied = applyTgColors;
+  applyTgColors();
+  try { tg.onEvent('themeChanged', applyTheme); } catch (e) { /* событие есть не везде */ }
   callTg('7.7', 'disableVerticalSwipes'); // иначе прокрутка списка вниз может свернуть приложение
   const applyInsets = () => {
     // safeAreaInset — вырез и системные панели, contentSafeAreaInset — элементы самого Telegram (Bot API 8.0+).
@@ -1752,6 +1861,31 @@ if (inTelegram) {
   ['safeAreaChanged', 'contentSafeAreaChanged', 'viewportChanged', 'fullscreenChanged']
     .forEach(ev => { try { tg.onEvent(ev, applyInsets); } catch (e) { /* событие есть не везде */ } });
 }
+
+// Системная тема поменялась (например, вечером) — в режиме «Авто» меняемся вместе с ней.
+try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme); } catch (e) { /* старый Safari */ }
+
+function renderThemeButtons() {
+  const pref = themePreference();
+  document.querySelectorAll('[data-theme-pref]').forEach(btn =>
+    btn.setAttribute('aria-pressed', String(btn.dataset.themePref === pref)));
+}
+document.querySelectorAll('[data-theme-pref]').forEach(btn => {
+  btn.onclick = () => {
+    try {
+      if (btn.dataset.themePref === 'auto') localStorage.removeItem(THEME_STORAGE);
+      else localStorage.setItem(THEME_STORAGE, btn.dataset.themePref);
+    } catch (e) { /* без памяти выбор действует до перезагрузки */ }
+    if (themePreference() !== btn.dataset.themePref) {  // localStorage недоступен — применяем напрямую
+      document.documentElement.setAttribute('data-theme',
+        btn.dataset.themePref === 'auto' ? resolveTheme() : btn.dataset.themePref);
+    } else {
+      applyTheme();
+    }
+    renderThemeButtons();
+  };
+});
+renderThemeButtons();
 
 const PRIORITIES = ['High', 'Mid', 'Low'];
 
