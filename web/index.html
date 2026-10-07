@@ -851,6 +851,40 @@
   }
   .newtask-hint { margin: var(--gap-l) 0 0; font-size: 14px; line-height: 1.45; color: var(--ink-muted); }
 
+  /* NewTask: переключатель «ИИ / Вручную» */
+  .segmented {
+    display: flex;
+    margin-top: var(--gap-header);
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-btn);
+    background: var(--surface);
+  }
+  .segmented button {
+    flex: 1;
+    min-height: calc(var(--touch) - 8px);
+    border: 0;
+    border-radius: calc(var(--radius-btn) - 3px);
+    background: transparent;
+    color: var(--ink-muted);
+    font: inherit;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .segmented button[aria-pressed="true"] { background: var(--ink); color: #FFFFFF; font-weight: 600; }
+  #newTaskSheet .newtask-body { padding-top: var(--gap-header); }
+  #newTaskSheet.manual .btn-mic { display: none; }
+  .newtask-manual { padding-top: var(--gap-header); }
+
+  /* Все задачи: разделы по датам */
+  .all-list { display: flex; flex-direction: column; gap: var(--gap-section); padding-top: 20px; }
+  .all-group { display: flex; flex-direction: column; gap: var(--gap-m); }
+  .all-group-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--gap-s); }
+  .all-group-title { margin: 0; font-family: var(--font-text); font-size: 16px; font-weight: 600; }
+  .all-group-title.overdue { color: var(--danger); }
+  .all-group-count { font-size: 13px; color: var(--ink-muted); }
+
   /* Edit: форма */
   .edit-form { display: flex; flex-direction: column; gap: var(--gap-section); padding-top: var(--gap-header); }
   .form-section { display: flex; flex-direction: column; gap: var(--gap-m); }
@@ -1279,6 +1313,7 @@
       <svg viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></svg>
     </button>
     <div class="topbar-group">
+      <button class="tb-btn" id="layoutBtn" aria-label="Все задачи"></button>
       <button class="tb-btn" id="searchBtn" aria-label="Поиск"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button>
       <button class="tb-btn" id="filtersBtn" aria-label="Фильтры по категории и приоритету">
         <svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
@@ -1299,6 +1334,17 @@
         </div>
         <div class="day-strip" id="dayStrip" role="group" aria-label="Дни"></div>
         <div class="day-tasks" id="dayTasks"></div>
+      </section>
+
+      <!-- Все активные задачи, по датам -->
+      <section id="allView" aria-labelledby="allTitle" hidden>
+        <div class="day-head">
+          <div class="day-head-text">
+            <h1 class="t-h1" id="allTitle">Все задачи</h1>
+            <div class="day-sub" id="allSubtitle"></div>
+          </div>
+        </div>
+        <div class="all-list" id="allList"></div>
       </section>
 
       <!-- Архив (макет Archive) -->
@@ -1377,10 +1423,42 @@
       <h2 class="t-modal-title" id="newTaskTitle">Новая задача</h2>
       <span></span>
     </div>
-    <div class="newtask-body">
+    <div class="segmented" role="group" aria-label="Как создать задачу">
+      <button type="button" id="newModeAi" aria-pressed="true">ИИ</button>
+      <button type="button" id="newModeManual" aria-pressed="false">Вручную</button>
+    </div>
+    <div class="newtask-body" id="newTaskAi">
       <label class="newtask-label" for="composerInput">Опиши задачу своими словами</label>
       <textarea class="newtask-input" id="composerInput"></textarea>
       <p class="newtask-hint">Дату и время можно писать словами («завтра в 18:00»), теги через решётку («#экзамен»). Категорию и приоритет приложение определит само.<span id="micBtnHint" hidden> Голосом удобнее через бота: просто отправьте ему голосовое сообщение.</span></p>
+    </div>
+    <div class="edit-form newtask-manual" id="newTaskManual" hidden>
+      <section class="form-section">
+        <label class="form-label" for="newText">Задача</label>
+        <textarea class="field field-title" id="newText"></textarea>
+      </section>
+      <section class="form-section">
+        <h3 class="form-label" id="newCatLabel">Категория</h3>
+        <div class="chip-group" id="newCategory" role="group" aria-labelledby="newCatLabel"></div>
+      </section>
+      <section class="form-section">
+        <h3 class="form-label" id="newPrioLabel">Приоритет</h3>
+        <div class="chip-group" id="newPriority" role="group" aria-labelledby="newPrioLabel"></div>
+      </section>
+      <section class="form-section">
+        <div class="form-section-head">
+          <h3 class="form-label">Дедлайн</h3>
+          <button class="link-btn" id="newClearDeadline" type="button">Без даты</button>
+        </div>
+        <div class="field-row">
+          <input class="field field-date" id="newDate" type="date" aria-label="Дата дедлайна">
+          <input class="field field-time" id="newTime" type="time" aria-label="Время дедлайна">
+        </div>
+      </section>
+      <section class="form-section">
+        <label class="form-label" for="newTags">Теги (через запятую)</label>
+        <input class="field" id="newTags" type="text" autocomplete="off">
+      </section>
     </div>
   </div>
   <div class="sheet-footer">
@@ -1703,6 +1781,11 @@ function paintRow(el, categoryName) {
 let activeCategory = null;
 let activePriority = null;
 let viewMode = 'active'; // 'active' | 'archive'
+// Вид списка активных задач: 'day' — по одному дню с полосой дней, 'all' — все задачи по датам.
+// Запоминается в браузере (только удобство: без памяти просто откроется вид по дням).
+const LAYOUT_STORAGE = 'task_agent_list_layout';
+let listLayout = 'day';
+try { if (localStorage.getItem(LAYOUT_STORAGE) === 'all') listLayout = 'all'; } catch (e) { /* нет памяти */ }
 let currentPage = 'list'; // 'list' | 'calendar'
 let calYear = new Date().getFullYear();
 let calMonth = new Date().getMonth(); // 0-based
@@ -1752,6 +1835,13 @@ function renderChips() {
   document.getElementById('menuBtn').hidden = archive;
   document.getElementById('backBtn').hidden = !archive;
   document.getElementById('filtersBtn').hidden = !((currentPage === 'list' && !archive) || currentPage === 'calendar');
+  const layoutBtn = document.getElementById('layoutBtn');
+  layoutBtn.hidden = !(currentPage === 'list' && !archive);
+  const toAll = listLayout !== 'all';
+  layoutBtn.setAttribute('aria-label', toAll ? 'Все задачи' : 'Задачи по дням');
+  layoutBtn.innerHTML = toAll
+    ? '<svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>'
+    : '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16M9 3v4M15 3v4"/><circle cx="12" cy="15" r="1.2"/></svg>';
 }
 
 // Дедлайн хранит дату И время (ISO "YYYY-MM-DDTHH:MM:SS").
@@ -1887,10 +1977,13 @@ function renderCurrentPage() {
   if (!searchSheet.hidden) renderSearch();
   if (currentPage === 'list') {
     const archive = viewMode === 'archive';
-    document.getElementById('dayView').hidden = archive;
+    // До первой загрузки заглушки и экран ошибки живут в виде по дням — он и виден.
+    const all = !archive && listLayout === 'all' && tasksLoaded;
+    document.getElementById('dayView').hidden = archive || all;
+    document.getElementById('allView').hidden = !all;
     document.getElementById('archiveView').hidden = !archive;
     if (archive) renderArchive();
-    else renderMain();
+    else renderTaskList();
   } else if (currentPage === 'calendar') {
     renderCalendar();
   }
@@ -2133,7 +2226,7 @@ function taskRowEl(task, mode) {
     chevron.onclick = () => {
       if (expandedTasks.has(task.id)) expandedTasks.delete(task.id);
       else { expandedTasks.add(task.id); justExpandedId = task.id; }
-      renderMain();
+      renderTaskList();
       justExpandedId = null;
     };
     row.appendChild(chevron);
@@ -2275,7 +2368,7 @@ let renderDeferred = false;
 function isRowInteractionBusy() {
   if (openSwipe || (swipeDrag && swipeDrag.active)) return true;
   const a = document.activeElement;
-  return !!(a && a.matches('input, textarea') && a.closest('#dayTasks'));
+  return !!(a && a.matches('input, textarea') && a.closest('#dayTasks, #allList'));
 }
 
 function flushDeferredRender() {
@@ -2393,6 +2486,82 @@ function renderMain() {
     }
   }
 }
+
+// ---------- Все задачи: разделы по датам ----------
+function renderTaskList() {
+  if (listLayout === 'all') renderAll();
+  else renderMain();
+}
+
+function allGroupTitle(key, today) {
+  const dt = keyToDate(key);
+  const date = `${dt.getDate()} ${MONTH_GENITIVE[dt.getMonth()]}`;
+  const t = keyToDate(today);
+  const tomorrow = localDateKey(new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1));
+  if (key === today) return `Сегодня · ${date}`;
+  if (key === tomorrow) return `Завтра · ${date}`;
+  return `${WEEKDAY_FULL[dt.getDay()]}, ${date}`;
+}
+
+function allGroupEl(title, tasks, mode, extraClass) {
+  const group = document.createElement('section');
+  group.className = 'all-group';
+  const head = document.createElement('div');
+  head.className = 'all-group-head';
+  const h = document.createElement('h2');
+  h.className = 'all-group-title' + (extraClass ? ' ' + extraClass : '');
+  h.textContent = title;
+  const count = document.createElement('span');
+  count.className = 'all-group-count';
+  count.textContent = pluralTasks(tasks.length);
+  head.append(h, count);
+  group.appendChild(head);
+  tasks.forEach(t => group.appendChild(taskRowEl(t, mode)));
+  return group;
+}
+
+function renderAll() {
+  if (!tasksLoaded) return;
+  const active = document.activeElement;
+  const focusKey = active && active.dataset ? active.dataset.focusKey : null;
+  const focusValue = focusKey && 'value' in active ? active.value : null;
+  openSwipe = null;
+
+  const { today, groups } = groupActiveTasks();
+  const total = groups.overdue.length + groups.nodate.length
+    + Object.values(groups.byDay).reduce((n, list) => n + list.length, 0);
+  document.getElementById('allSubtitle').textContent = pluralTasks(total);
+
+  const list = document.getElementById('allList');
+  list.innerHTML = '';
+  if (!total) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-dashed';
+    empty.textContent = 'Активных задач нет';
+    list.appendChild(empty);
+  } else {
+    if (groups.overdue.length) list.appendChild(allGroupEl('Просрочено', groups.overdue, DAY_OVERDUE, 'overdue'));
+    Object.keys(groups.byDay).sort().forEach(key =>
+      list.appendChild(allGroupEl(allGroupTitle(key, today), groups.byDay[key], 'day')));
+    if (groups.nodate.length) list.appendChild(allGroupEl('Без даты', groups.nodate, DAY_NODATE));
+  }
+
+  if (focusKey) {
+    const again = document.querySelector(`[data-focus-key="${focusKey}"]`);
+    if (again) {
+      if (focusValue !== null) again.value = focusValue;
+      again.focus({ preventScroll: true });
+    }
+  }
+}
+
+document.getElementById('layoutBtn').onclick = () => {
+  listLayout = listLayout === 'all' ? 'day' : 'all';
+  try { localStorage.setItem(LAYOUT_STORAGE, listLayout); } catch (e) { /* нет памяти */ }
+  renderChips();
+  renderCurrentPage();
+  window.scrollTo(0, 0);
+};
 
 // ---------- Архив (макет Archive) ----------
 const MONTH_SHORT = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
@@ -3093,9 +3262,64 @@ async function submitComposer() {
   }
 }
 
-document.getElementById('composerBtn').onclick = submitComposer;
+// Ручное создание: POST /tasks с полями формы, ИИ не участвует.
+async function submitManual() {
+  const btn = document.getElementById('composerBtn');
+  const titleEl = document.getElementById('newText');
+  const text = titleEl.value.trim();
+  if (!text) { toast('Напиши, что нужно сделать'); titleEl.focus(); return; }
+  if (!newChoice.category) { toast('Сначала создай категорию в меню'); return; }
+  const date = document.getElementById('newDate').value;
+  const time = document.getElementById('newTime').value || '23:59'; // без времени — конец дня, как у разбора текста
+  const payload = {
+    task: text,
+    category: newChoice.category,
+    priority: newChoice.priority,
+    deadline: date ? `${date}T${time}:00` : null,
+    tags: document.getElementById('newTags').value.split(',').map(t => t.trim().replace(/^#+/, '')).filter(Boolean),
+    source: 'web',
+  };
+  btn.disabled = true;
+  btn.textContent = 'Сохраняю…';
+  try {
+    const res = await api('/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      let message = null;
+      try { const detail = (await res.clone().json()).detail; message = detail && detail.message; } catch (e) { message = null; }
+      if (res.status === 422) toast(message || 'Проверь поля задачи');
+      else { toast('Сервер ответил ошибкой. Проверь список: задача могла сохраниться'); loadTasks(); }
+      return;
+    }
+    const created = await res.json();
+    ['newText', 'newDate', 'newTime', 'newTags', 'composerInput'].forEach(id => { document.getElementById(id).value = ''; });
+    newChoice.priority = 'Mid';
+    closeNewTask();
+    toast('Задача добавлена');
+    selectedDay = created.deadline ? dateKey(created.deadline) : DAY_NODATE;
+    stripNeedsScroll = true;
+    viewMode = 'active';
+    renderChips();
+    switchPage('list');
+    await loadTasks();
+  } catch (e) {
+    toast('Нет связи с сервером. Проверь список: задача могла сохраниться');
+    loadTasks();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Добавить';
+  }
+}
+
+document.getElementById('composerBtn').onclick = () => (newTaskMode === 'manual' ? submitManual() : submitComposer());
 document.getElementById('composerInput').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitComposer();
+});
+document.getElementById('newText').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitManual();
 });
 
 // ---------- Голосовой ввод (Web Speech API, без backend) ----------
@@ -3604,14 +3828,51 @@ function setBackgroundInert(on) {
 const newTaskSheet = document.getElementById('newTaskSheet');
 let sheetReturnFocus = null;
 
+// Режим создания: 'ai' — текст разбирает ИИ, 'manual' — поля заполняет человек. Последний выбор запоминается.
+const NEW_MODE_STORAGE = 'task_agent_new_mode';
+let newTaskMode = 'ai';
+try { if (localStorage.getItem(NEW_MODE_STORAGE) === 'manual') newTaskMode = 'manual'; } catch (e) { /* нет памяти */ }
+let newChoice = { category: null, priority: 'Mid' };
+
+function renderNewChips() {
+  const names = categoryNames();
+  if (!names.includes(newChoice.category)) newChoice.category = names[0] || null;
+  renderCategoryPriorityChips('newCategory', 'newPriority', newChoice, renderNewChips);
+}
+
+function setNewTaskMode(mode, focus) {
+  // Текст не теряется: при переключении он переезжает в пустое поле другого режима.
+  const aiInput = document.getElementById('composerInput');
+  const title = document.getElementById('newText');
+  if (mode === 'manual' && !title.value.trim()) title.value = aiInput.value.trim();
+  if (mode === 'ai' && !aiInput.value.trim()) aiInput.value = title.value.trim();
+  newTaskMode = mode;
+  try { localStorage.setItem(NEW_MODE_STORAGE, mode); } catch (e) { /* нет памяти */ }
+  const manual = mode === 'manual';
+  document.getElementById('newModeAi').setAttribute('aria-pressed', String(!manual));
+  document.getElementById('newModeManual').setAttribute('aria-pressed', String(manual));
+  document.getElementById('newTaskAi').hidden = manual;
+  document.getElementById('newTaskManual').hidden = !manual;
+  newTaskSheet.classList.toggle('manual', manual);
+  if (manual) renderNewChips();
+  if (focus) document.getElementById(manual ? 'newText' : 'composerInput').focus();
+}
+
 function openNewTask() {
   sheetReturnFocus = document.activeElement;
+  setNewTaskMode(newTaskMode, false);
   newTaskSheet.hidden = false;
   newTaskSheet.scrollTop = 0;
   document.body.classList.add('no-scroll');
   setBackgroundInert(true);
-  document.getElementById('composerInput').focus();
+  document.getElementById(newTaskMode === 'manual' ? 'newText' : 'composerInput').focus();
 }
+document.getElementById('newModeAi').onclick = () => setNewTaskMode('ai', true);
+document.getElementById('newModeManual').onclick = () => setNewTaskMode('manual', true);
+document.getElementById('newClearDeadline').onclick = () => {
+  document.getElementById('newDate').value = '';
+  document.getElementById('newTime').value = '';
+};
 function closeNewTask() {
   newTaskSheet.hidden = true;
   document.body.classList.remove('no-scroll');
@@ -3784,13 +4045,18 @@ function choiceChipEl(label, pressed, extraClass, onPick) {
 }
 
 function renderEditChips() {
-  const cats = document.getElementById('editCategory');
+  renderCategoryPriorityChips('editCategory', 'editPriority', editChoice, renderEditChips);
+}
+
+// choice — объект { category, priority }; выбор меняет его и вызывает rerender.
+function renderCategoryPriorityChips(catId, prioId, choice, rerender) {
+  const cats = document.getElementById(catId);
   cats.innerHTML = '';
-  const editNames = categoryNames();
-  if (editChoice.category && !editNames.includes(editChoice.category)) editNames.push(editChoice.category);
-  editNames.forEach(c => {
-    const [btn, text] = choiceChipEl(c, editChoice.category === c, 'cat',
-      () => { editChoice.category = c; renderEditChips(); });
+  const names = categoryNames();
+  if (choice.category && !names.includes(choice.category)) names.push(choice.category);
+  names.forEach(c => {
+    const [btn, text] = choiceChipEl(c, choice.category === c, 'cat',
+      () => { choice.category = c; rerender(); });
     const color = categoryColor(c);
     if (color) btn.style.setProperty('--chip-color', color);
     const dot = document.createElement('span');
@@ -3798,11 +4064,11 @@ function renderEditChips() {
     btn.append(dot, text);
     cats.appendChild(btn);
   });
-  const prios = document.getElementById('editPriority');
+  const prios = document.getElementById(prioId);
   prios.innerHTML = '';
   PRIORITIES.forEach(p => {
-    const [btn, text] = choiceChipEl(p, editChoice.priority === p, 'prio',
-      () => { editChoice.priority = p; renderEditChips(); });
+    const [btn, text] = choiceChipEl(p, choice.priority === p, 'prio',
+      () => { choice.priority = p; rerender(); });
     const bars = document.createElement('span');
     bars.className = 'mini-bars';
     bars.setAttribute('aria-hidden', 'true');
