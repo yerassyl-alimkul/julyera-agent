@@ -3,7 +3,7 @@ Pydantic-модели для валидации входных/выходных 
 """
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Union
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -134,3 +134,72 @@ class Subtask(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ---------- Деньги (задача №3). Тип, сумму, валюту, категорию и дату проверяет money_service
+# (с понятным текстом ошибки); модели только переносят значения. user_id клиент не присылает.
+
+Amount = Union[str, int, float]  # «3,5» строкой тоже принимается
+
+
+class MoneyCategoryCreate(BaseModel):
+    kind: str
+    name: str
+    color: str
+
+
+class MoneyCategoryUpdate(BaseModel):
+    """Название и цвет; тип категории (kind) не меняется."""
+    name: Optional[str] = None
+    color: Optional[str] = None
+
+
+class MoneyCategoryOrder(BaseModel):
+    kind: str
+    ids: List[UUID]
+
+
+class TransactionCreate(BaseModel):
+    kind: str
+    amount: Amount
+    currency: str
+    category_id: str
+    spent_on: Optional[str] = None  # без даты — сегодня в поясе пользователя
+    note: Optional[str] = None
+
+
+class TransactionUpdate(BaseModel):
+    kind: Optional[str] = None
+    amount: Optional[Amount] = None
+    currency: Optional[str] = None
+    category_id: Optional[str] = None
+    spent_on: Optional[str] = None
+    note: Optional[str] = None
+
+
+class MoneyParseRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=2000)
+
+
+class RecurringCreate(BaseModel):
+    kind: str
+    amount: Amount
+    currency: str
+    category_id: str
+    day_of_month: Union[int, str]
+    note: Optional[str] = None
+    active: bool = True
+
+
+class RecurringUpdate(BaseModel):
+    kind: Optional[str] = None
+    amount: Optional[Amount] = None
+    currency: Optional[str] = None
+    category_id: Optional[str] = None
+    day_of_month: Optional[Union[int, str]] = None
+    note: Optional[str] = None
+    active: Optional[bool] = None
+
+
+class MeUpdate(BaseModel):
+    default_currency: str

@@ -46,17 +46,28 @@ load_dotenv()
 
 import task_service
 import categories_service
+import money_service
 import notes_service
 import subtasks_service
 import users_service
 import google_calendar_service as gcal
 from database import supabase
 from categories_service import CategoryError
+from money_service import MoneyError
 from telegram_auth import InitDataError, verify_init_data
 from models import (
     CategoryCreate,
     CategoryOrder,
     CategoryUpdate,
+    MeUpdate,
+    MoneyCategoryCreate,
+    MoneyCategoryOrder,
+    MoneyCategoryUpdate,
+    MoneyParseRequest,
+    RecurringCreate,
+    RecurringUpdate,
+    TransactionCreate,
+    TransactionUpdate,
     ParseRequest,
     Priority,
     Status,
@@ -104,6 +115,11 @@ async def lifespan(app: FastAPI):
                 )
             except Exception:
                 logger.exception("Не удалось установить кнопку меню Mini App")
+            try:
+                from telegram_handlers import BOT_COMMANDS
+                await telegram_app.bot.set_my_commands(BOT_COMMANDS)
+            except Exception:
+                logger.exception("Не удалось установить список команд бота")
     yield
     if telegram_app:
         await telegram_app.shutdown()
@@ -122,6 +138,12 @@ app.add_middleware(
 @app.exception_handler(CategoryError)
 async def category_error_handler(request: Request, exc: CategoryError):
     # 404 — чужая или несуществующая, 409 — дубль / последняя / есть задачи, 422 — неверное название или цвет
+    return JSONResponse(status_code=exc.status, content={"detail": {"code": exc.code, "message": exc.message}})
+
+
+@app.exception_handler(MoneyError)
+async def money_error_handler(request: Request, exc: MoneyError):
+    # Тот же формат, что у категорий: {"detail": {"code", "message"}}; message — понятный текст по-русски
     return JSONResponse(status_code=exc.status, content={"detail": {"code": exc.code, "message": exc.message}})
 
 
@@ -249,6 +271,144 @@ def delete_category(category_id: UUID, move_to: Optional[UUID] = Query(None), us
     return None
 
 
+# ---------- Пользователь ----------
+
+@app.get("/me")
+def get_me(user: dict = Depends(current_user)):
+    return {"name": user.get("name"), "is_admin": bool(user.get("is_admin")),
+            "timezone": user.get("timezone") or users_service.DEFAULT_TIMEZONE,
+            "default_currency": money_service.default_currency(user["id"]),
+            "currencies": list(money_service.CURRENCIES)}
+
+
+@app.patch("/me")
+def update_me(payload: MeUpdate, user: dict = Depends(current_user)):
+    money_service.set_default_currency(user["id"], payload.default_currency)
+    return get_me(users_service.get_by_id(user["id"]))
+
+
+# ---------- Деньги (задача №3): всё через money_service, user_id только из current_user ----------
+
+@app.get("/money/categories")
+def list_money_categories(kind: Optional[str] = Query(None), user: dict = Depends(current_user)):
+    return money_service.list_categories(user["id"], kind or None)
+
+
+@app.post("/money/categories", status_code=201)
+def create_money_category(payload: MoneyCategoryCreate, user: dict = Depends(current_user)):
+    return money_service.create_category(user["id"], payload.kind, payload.name, payload.color)
+
+
+@app.put("/money/categories/order")
+def reorder_money_categories(payload: MoneyCategoryOrder, user: dict = Depends(current_user)):
+    return money_service.reorder_categories(user["id"], payload.kind, [str(i) for i in payload.ids])
+
+
+@app.patch("/money/categories/{category_id}")
+def update_money_category(category_id: UUID, payload: MoneyCategoryUpdate, user: dict = Depends(current_user)):
+    return money_service.update_category(str(category_id), user["id"], payload.name, payload.color)
+
+
+@app.delete("/money/categories/{category_id}", status_code=204)
+def delete_money_category(category_id: UUID, move_to: Optional[str] = Query(None), user: dict = Depends(current_user)):
+    money_service.delete_category(str(category_id), user["id"], move_to or None)
+    return None
+
+
+@app.get("/money/transactions")
+def list_money_transactions(
+    date_from: Optional[str] = Query(None, alias="from"),
+    date_to: Optional[str] = Query(None, alias="to"),
+    kind: Optional[str] = Query(None),
+    category_id: Optional[UUID] = Query(None),
+    currency: Optional[str] = Query(None),
+    limit: int = Query(money_service.LIST_LIMIT_MAX, ge=1, le=money_service.LIST_LIMIT_MAX),
+    offset: int = Query(0, ge=0),
+    user: dict = Depends(current_user),
+):
+    return money_service.list_transactions(user["id"], date_from=date_from, date_to=date_to, kind=kind or None,
+                                           category_id=str(category_id) if category_id else None,
+                                           currency=currency or None, limit=limit, offset=offset)
+
+
+@app.post("/money/transactions", status_code=201)
+def create_money_transaction(payload: TransactionCreate, user: dict = Depends(current_user)):
+    return money_service.create_transaction(user["id"], payload.model_dump(), source="app")
+
+
+@app.get("/money/transactions/{tx_id}")
+def get_money_transaction(tx_id: UUID, user: dict = Depends(current_user)):
+    tx = money_service.get_transaction(str(tx_id), user["id"])
+    if not tx:
+        raise HTTPException(status_code=404, detail="Операция не найдена")
+    return tx
+
+
+@app.patch("/money/transactions/{tx_id}")
+def update_money_transaction(tx_id: UUID, payload: TransactionUpdate, user: dict = Depends(current_user)):
+    tx = money_service.update_transaction(str(tx_id), user["id"], payload.model_dump(exclude_unset=True))
+    if not tx:
+        raise HTTPException(status_code=404, detail="Операция не найдена")
+    return tx
+
+
+@app.delete("/money/transactions/{tx_id}", status_code=204)
+def delete_money_transaction(tx_id: UUID, user: dict = Depends(current_user)):
+    if not money_service.delete_transaction(str(tx_id), user["id"]):
+        raise HTTPException(status_code=404, detail="Операция не найдена")
+    return None
+
+
+@app.post("/money/parse")
+def parse_money(payload: MoneyParseRequest, user: dict = Depends(current_user)):
+    """Черновики операций из текста — без сохранения: пользователь подтверждает их в форме."""
+    try:
+        drafts = money_service.drafts_from_text(user["id"], payload.text)
+    except MoneyError:
+        raise
+    except Exception as exc:
+        logger.warning("Разбор денег не удался: %s", type(exc).__name__)
+        raise HTTPException(status_code=502, detail={"code": "parse_failed", "message": "Не получилось разобрать текст"})
+    if not drafts:
+        raise HTTPException(status_code=422, detail={"code": "no_amount", "message": "Не нашёл сумму, напишите её числом"})
+    return {"items": drafts}
+
+
+@app.get("/money/summary")
+def money_summary(month: Optional[str] = Query(None, description="YYYY-MM"), user: dict = Depends(current_user)):
+    return money_service.summary(user["id"], month)
+
+
+@app.get("/money/trend")
+def money_trend(months: int = Query(6), user: dict = Depends(current_user)):
+    return money_service.trend(user["id"], months)
+
+
+@app.get("/money/recurring")
+def list_money_recurring(user: dict = Depends(current_user)):
+    return money_service.list_recurring(user["id"])
+
+
+@app.post("/money/recurring", status_code=201)
+def create_money_recurring(payload: RecurringCreate, user: dict = Depends(current_user)):
+    return money_service.create_recurring(user["id"], payload.model_dump())
+
+
+@app.patch("/money/recurring/{rec_id}")
+def update_money_recurring(rec_id: UUID, payload: RecurringUpdate, user: dict = Depends(current_user)):
+    rec = money_service.update_recurring(str(rec_id), user["id"], payload.model_dump(exclude_unset=True))
+    if not rec:
+        raise HTTPException(status_code=404, detail="Платёж не найден")
+    return rec
+
+
+@app.delete("/money/recurring/{rec_id}", status_code=204)
+def delete_money_recurring(rec_id: UUID, user: dict = Depends(current_user)):
+    if not money_service.delete_recurring(str(rec_id), user["id"]):
+        raise HTTPException(status_code=404, detail="Платёж не найден")
+    return None
+
+
 @app.post("/telegram/webhook/{token}")
 async def telegram_webhook(token: str, request: Request):
     if not telegram_app or token != TELEGRAM_BOT_TOKEN:
@@ -283,7 +443,18 @@ async def run_reminders(request: Request):
 
     sent = 0
     tasks_found = 0
+    recurring_messages = []
+    try:
+        recurring_messages = money_service.run_recurring()
+    except Exception as exc:
+        logger.warning("Повторяющиеся платежи не обработаны: %s", type(exc).__name__)
     async with httpx.AsyncClient(timeout=15) as client:
+        for user_id, text in recurring_messages:
+            for chat_id in users_service.get_chat_ids(user_id):
+                try:
+                    await _send_telegram_message(client, chat_id, text)
+                except Exception as exc:
+                    logger.warning("Сообщение о платеже не отправлено: %s", type(exc).__name__)
         for user in users_service.list_users():
             tasks = task_service.get_reminder_tasks(user["id"])
             tasks_found += len(tasks)
@@ -294,7 +465,7 @@ async def run_reminders(request: Request):
                 if await _send_telegram_message(client, chat_id, message):
                     sent += 1
 
-    return {"sent": sent, "tasks_found": tasks_found}
+    return {"sent": sent, "tasks_found": tasks_found, "recurring_notices": len(recurring_messages)}
 
 
 @app.get("/health")

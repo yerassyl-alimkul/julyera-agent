@@ -105,6 +105,71 @@ def parse_text_to_tasks(raw_text: str, categories: list[str], source_hint: Optio
     return tasks
 
 
+MONEY_SYSTEM_PROMPT = """Ты разбираешь сообщение о деньгах: траты и доходы человека.
+Сегодня {today} ({weekday}). Валюта по умолчанию: {default_currency}.
+
+Правила:
+- Каждая трата или доход — отдельный объект. «продукты 45 евро, проезд 1500 тенге» — два объекта.
+- amount — сумма строкой с точкой: «3,5» и «3.5» → "3.50"; «5к», «5 тыс» → "5000".
+  Сумму НИКОГДА не выдумывай: если у траты в тексте нет числа, этот объект не возвращай.
+- currency: «евро», «€», «eur» → "EUR"; «тенге», «₸», «тг», «kzt» → "KZT";
+  если валюта не названа — "{default_currency}". Других валют не бывает.
+- kind: "income", если это поступление денег («получил», «зарплата», «пришло», «перевели мне»),
+  иначе "expense".
+- category — строго одно название из списка пользователя для своего kind:
+  расходы (expense): {expense_categories}
+  доходы (income): {income_categories}
+  Выбирай по смыслу; если ничего не подходит — "Прочее", а если его нет в списке — первое.
+- note — короткое описание из текста («Кофе», «Такси»), с большой буквы, без суммы и валюты.
+- date — "YYYY-MM-DD": «вчера», «в пятницу», «3 октября» считай от сегодняшней даты;
+  прошедший день недели — ближайший в прошлом. Если дата не названа — сегодня ({today}).
+  Дату не выдумывай.
+- Верни ТОЛЬКО JSON-объект вида {{"items": [...]}}, без пояснений и без markdown.
+  Элемент: {{"kind": "expense|income", "amount": "строка", "currency": "EUR|KZT",
+  "category": "название", "note": "строка", "date": "YYYY-MM-DD"}}.
+  Если денег в тексте нет — {{"items": []}}."""
+
+WEEKDAYS_RU = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
+
+
+def parse_money_text(text: str, categories: dict, today, default_currency: str) -> list[dict]:
+    """
+    Текст о деньгах → список черновиков {kind, amount, currency, category, note, date}.
+    categories — {"expense": [названия], "income": [названия]} пользователя; today — его сегодняшняя дата.
+    Ответ модели money_service всё равно сверяет: сумма, валюта, тип, категория и дата.
+    Текст ошибки не содержит ответа модели и самого сообщения (они не должны попадать в логи).
+    """
+    def names(kind):
+        return ", ".join(json.dumps(n, ensure_ascii=False) for n in categories.get(kind, [])) or '"Прочее"'
+
+    system = MONEY_SYSTEM_PROMPT.format(
+        today=today.isoformat(), weekday=WEEKDAYS_RU[today.weekday()], default_currency=default_currency,
+        expense_categories=names("expense"), income_categories=names("income"),
+    )
+    response = _client.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "system", "content": system}, {"role": "user", "content": text}],
+        temperature=0,
+        response_format={"type": "json_object"},
+    )
+    content = response.choices[0].message.content or ""
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError:
+        # модель иногда оборачивает JSON в лишний текст — берём первый объект целиком
+        start, end = content.find("{"), content.rfind("}")
+        try:
+            parsed = json.loads(content[start:end + 1]) if start >= 0 and end > start else None
+        except json.JSONDecodeError:
+            parsed = None
+        if parsed is None:
+            raise ValueError("модель вернула не JSON")
+    items = parsed.get("items", []) if isinstance(parsed, dict) else []
+    if not isinstance(items, list):
+        raise ValueError("в ответе модели нет списка items")
+    return items
+
+
 def transcribe_audio(audio_bytes: bytes, filename: str = "voice.ogg") -> str:
     """
     Распознаёт голосовое сообщение через Whisper (Groq).
