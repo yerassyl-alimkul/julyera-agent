@@ -25,7 +25,10 @@ DEFAULTS = {
     "users": lambda: {"id": str(uuid.uuid4()), "is_admin": False, "telegram_user_id": None,
                       "access_key": secrets.token_hex(32), "timezone": "Europe/Rome", "default_currency": "EUR", "digest_enabled": True,
                       "created_at": _now()},
-    "money_categories": lambda: {"id": str(uuid.uuid4()), "sort_order": 0, "created_at": _now()},
+    "money_categories": lambda: {"id": str(uuid.uuid4()), "sort_order": 0, "monthly_limit": None, "limit_currency": None,
+                                 "created_at": _now()},
+    "money_limit_alerts": lambda: {"sent_at": _now()},
+    "money_report_log": lambda: {"sent_at": _now()},
     "money_transactions": lambda: {"id": str(uuid.uuid4()), "note": None, "source": "app", "recurring_id": None,
                                    "created_at": _now()},
     "money_recurring": lambda: {"id": str(uuid.uuid4()), "note": None, "active": True, "frequency": "monthly",
@@ -52,7 +55,7 @@ NOT_NULL = {"tasks": ["user_id", "task", "category"], "notes": ["user_id", "cont
             "money_categories": ["user_id", "kind", "name", "color"],
             "money_transactions": ["user_id", "kind", "amount", "currency", "category_id", "spent_on"],
             "money_recurring": ["user_id", "kind", "amount", "currency", "category_id", "day_of_month", "next_run"]}
-NUMERIC = {"money_transactions": ["amount"], "money_recurring": ["amount"]}  # PostgREST отдаёт numeric числом
+NUMERIC = {"money_transactions": ["amount"], "money_recurring": ["amount"], "money_categories": ["monthly_limit"]}  # PostgREST отдаёт numeric числом
 
 
 class FakeError(Exception):
@@ -132,6 +135,13 @@ class Query:
         for col in NOT_NULL.get(self.table, []):
             if row.get(col) is None:
                 raise FakeError(f'null value in column "{col}" of relation "{self.table}"')
+        composite = {"money_limit_alerts": ("user_id", "category_id", "month", "threshold"),
+                     "money_report_log": ("user_id", "month")}
+        if self.table in composite:  # составной первичный ключ
+            cols = composite[self.table]
+            for other in self._rows():
+                if other is not row and all(other.get(c) == row.get(c) for c in cols):
+                    raise FakeError(f'duplicate key value violates unique constraint "{self.table}_pkey"', "23505")
         if self.table == "digest_log":  # primary key (user_id, kind, day)
             for other in self._rows():
                 if other is not row and (other["user_id"], other["kind"], other["day"]) == (row["user_id"], row["kind"], row["day"]):
@@ -230,6 +240,9 @@ class Query:
                 for ref in ("money_transactions", "money_recurring"):
                     if any(x["category_id"] in ids for x in self.db.tables.get(ref, [])):
                         raise FakeError(f'violates foreign key constraint on table "{ref}"', "23503")
+            if self.table == "money_categories":  # правила магазинов и предупреждения о лимите — on delete cascade
+                for ref in ("money_merchant_rules", "money_limit_alerts"):
+                    self.db.tables[ref] = [x for x in self.db.tables.get(ref, []) if x["category_id"] not in ids]
             if self.table == "money_recurring":  # recurring_id ... on delete set null
                 for x in self.db.tables.get("money_transactions", []):
                     if x.get("recurring_id") in ids:
@@ -240,7 +253,8 @@ class Query:
                 self.db.tables["subtasks"] = [s for s in self.db.tables.get("subtasks", []) if s["task_id"] not in ids]
             if self.table == "users":  # categories.user_id и money_*.user_id ... on delete cascade
                 ids = {r["id"] for r in gone}
-                for t in ("categories", "money_transactions", "money_recurring", "money_categories", "digest_log"):
+                for t in ("categories", "money_transactions", "money_recurring", "money_merchant_rules",
+                          "money_limit_alerts", "money_report_log", "money_categories", "digest_log"):
                     self.db.tables[t] = [c for c in self.db.tables.get(t, []) if c["user_id"] not in ids]
             return SimpleNamespace(data=[copy.deepcopy(r) for r in gone])
 

@@ -250,6 +250,15 @@ def main():
     asyncio.run(h.help_command(u, ctx))
     check("незнакомому /help — «Нет доступа»", "Нет доступа" in u.replies[-1].text)
 
+    section("Отчёт за месяц 1-го числа")
+    at(8, 5, plus_days=24)  # 1 ноября 2026, утро
+    msgs = to(A, run())
+    report = [m for m in msgs if m.text.startswith("📊 Итоги: октябрь 2026")]
+    check("1-го утром вместе со сводкой приходит отчёт за прошлый месяц",
+          len(report) == 1 and any("Доброе утро" in m.text for m in msgs) and report[0].buttons, str([m.text[:30] for m in msgs]))
+    at(8, 20, plus_days=24)
+    check("отчёт за месяц не повторяется", not [m for m in to(A, run()) if m.text.startswith("📊")])
+
     section("Устойчивость")
     at(13, 5, plus_days=1)
     real = digest_service.due_messages

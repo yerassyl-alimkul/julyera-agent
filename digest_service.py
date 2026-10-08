@@ -269,6 +269,9 @@ def due_messages(user: dict, now_utc: Optional[datetime] = None) -> list[tuple[s
         if user.get("digest_enabled", True) is not False and has_any_tasks(uid) and claim(uid, slot, local.date()):
             if slot == "morning":
                 out.append((morning_text(uid, now_utc), None))
+                report = monthly_report(uid, local.date())
+                if report:
+                    out.append(report)
             else:
                 text, can_move = evening(uid, now_utc)
                 buttons = [[{"text": "➡️ Перенести невыполненное на завтра",
@@ -285,6 +288,25 @@ def due_messages(user: dict, now_utc: Optional[datetime] = None) -> list[tuple[s
         if task["id"] not in in_slot:  # не дублируем то, что уже есть в плановом напоминании
             out.append(reminder_message(uid, [task], now_utc))
     return out
+
+
+def monthly_report(user_id: str, today: date) -> Optional[tuple[str, list]]:
+    """1-го числа вместе с утренней сводкой — итоги прошедшего месяца по деньгам (один раз, money_report_log).
+    Нет операций за месяц — отчёта нет."""
+    if today.day != 1:
+        return None
+    try:
+        import money_service
+
+        prev = (today - timedelta(days=1)).replace(day=1)
+        text = money_service.monthly_report_text(user_id, prev)
+        if not text or not money_service.claim_monthly_report(user_id, prev.strftime("%Y-%m")):
+            return None
+        from notifier import APP_URL
+        return text, [[{"text": "Открыть аналитику", "web_app": {"url": APP_URL}}]]
+    except Exception as exc:
+        logger.warning("Месячный отчёт не собран: %s", type(exc).__name__)
+        return None
 
 
 def matured_snoozes(user_id: str, now_utc: datetime) -> list[dict]:

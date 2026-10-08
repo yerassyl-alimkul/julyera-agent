@@ -315,7 +315,9 @@ def reorder_money_categories(payload: MoneyCategoryOrder, user: dict = Depends(c
 
 @app.patch("/money/categories/{category_id}")
 def update_money_category(category_id: UUID, payload: MoneyCategoryUpdate, user: dict = Depends(current_user)):
-    return money_service.update_category(str(category_id), user["id"], payload.name, payload.color)
+    data = payload.model_dump(exclude_unset=True)
+    extra = {"monthly_limit": data["monthly_limit"]} if "monthly_limit" in data else {}
+    return money_service.update_category(str(category_id), user["id"], payload.name, payload.color, **extra)
 
 
 @app.delete("/money/categories/{category_id}", status_code=204)
@@ -400,6 +402,13 @@ def money_applepay(payload: ApplePayIn, user: dict = Depends(current_user)):
         ]])
     logger.info("Apple Pay: операция %s, категория из %s", tx["id"], how)
     return {"ok": True, "duplicate": duplicate, "text": text, "transaction": tx}
+
+
+@app.get("/money/analytics")
+def money_analytics(date_from: Optional[str] = Query(None, alias="from"), date_to: Optional[str] = Query(None, alias="to"),
+                    user: dict = Depends(current_user)):
+    """Итоги за любой период в основной валюте (по умолчанию текущий месяц) и сравнение с предыдущим таким же."""
+    return money_service.analytics(user["id"], date_from, date_to)
 
 
 @app.get("/money/summary")

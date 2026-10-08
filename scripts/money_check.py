@@ -339,6 +339,66 @@ def applepay_checks(client, token, A, B, local: bool):
     return tx
 
 
+def limits_checks(client, token, B, alerts):
+    """Лимиты: задание, состояние в итогах, предупреждения 80% и 100% по одному разу (alerts — список отправленных
+    текстов, только локально; None — не проверять)."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    section("Лимиты по категориям")
+    hB = ic.init_data_headers(B["telegram_user_id"], token, "Тест B")
+    today = datetime.now(ZoneInfo("Europe/Rome")).date().isoformat()
+    month = today[:7]
+    cat = client.post("/money/categories", headers=hB, json={"kind": "expense", "name": "Лимит тест", "color": "#F2B8A2"}).json()
+    inc = client.get("/money/categories", headers=hB, params={"kind": "income"}).json()[0]
+    check("лимит у категории доходов → 422",
+          client.patch(f"/money/categories/{inc['id']}", headers=hB, json={"monthly_limit": "100"}).status_code == 422)
+    r = client.patch(f"/money/categories/{cat['id']}", headers=hB, json={"monthly_limit": "100,00"})
+    check("лимит задаётся (запятая допустима) в основной валюте", r.status_code == 200
+          and r.json().get("monthly_limit") == "100.00" and r.json().get("limit_currency") == "EUR", r.text[:150])
+
+    def state():
+        main = client.get("/money/summary", headers=hB, params={"month": month}).json()["main"]
+        return next((c for c in main["by_category"] if c["category_id"] == cat["id"]), {}), main.get("limits")
+
+    c, _ = state()
+    check("категория с лимитом видна и без трат", c.get("limit", {}).get("spent") == "0.00" and c["limit"]["state"] == "ok")
+    n0 = len(alerts) if alerts is not None else 0
+
+    def spend(amount):
+        client.post("/money/transactions", headers=hB, json={"kind": "expense", "amount": amount, "currency": "EUR",
+                                                             "category_id": cat["id"], "spent_on": today})
+    spend("79")
+    check("79% — без предупреждения", alerts is None or len(alerts) == n0)
+    spend("2")
+    c, _ = state()
+    check("81% — состояние «почти» (warn)", c["limit"]["pct"] == 81 and c["limit"]["state"] == "warn", str(c.get("limit")))
+    if alerts is not None:
+        check("на 80% одно предупреждение в бот", len(alerts) == n0 + 1 and alerts[-1].startswith("⚠️ «Лимит тест»: потрачено 81.00 EUR из 100.00 EUR (81%)"),
+              str(alerts[-1:]))
+    spend("30")
+    c, counts = state()
+    check("111% — превышен (over), остаток −11.00", c["limit"]["state"] == "over" and c["limit"]["left"] == "-11.00")
+    check("счётчик лимитов в итогах", counts.get("over", 0) >= 1)
+    if alerts is not None:
+        check("на 100% — «превышен на 11.00 EUR»", len(alerts) == n0 + 2 and "превышен на 11.00 EUR" in alerts[-1], str(alerts[-1:]))
+        spend("1")
+        check("дальше в этом месяце без повторов", len(alerts) == n0 + 2)
+    r = client.patch(f"/money/categories/{cat['id']}", headers=hB, json={"monthly_limit": None})
+    check("лимит снимается", r.status_code == 200 and r.json().get("monthly_limit") is None)
+
+    section("Аналитика за период")
+    a = client.get("/money/analytics", headers=hB, params={"from": "2026-06-01", "to": "2026-06-30"}).json()
+    check("итоги периода в основной валюте", (a.get("expense"), a.get("income"), a.get("days"), a.get("currency"))
+          == ("0.30", "100.00", 30, "EUR"), str({k: a.get(k) for k in ("expense", "income", "days", "currency")}))
+    check("предыдущий такой же период — май", (a["previous"]["from"], a["previous"]["to"]) == ("2026-05-02", "2026-05-31"))
+    check("средний расход в день и места трат", a["avg_per_day"] == "0.01" and a["top_places"] and a["largest"])
+    check("конец раньше начала → 422",
+          client.get("/money/analytics", headers=hB, params={"from": "2026-06-30", "to": "2026-06-01"}).status_code == 422)
+    check("аналитика B не видит трат A", client.get("/money/analytics", headers=hB,
+          params={"from": "2026-07-01", "to": "2026-07-31"}).json()["expense"] == "0.00")
+
+
 # ---------------------------------------------------------------- локально: платежи, бот, распознавание денег
 
 def recurring_checks(db, client, A, B):
@@ -679,6 +739,15 @@ def run_local(with_model):
           sent and sent[0][1].startswith("💳 Apple Pay: ESSELUNGA SpA 123 · 23.40 EUR")
           and [b["text"] for b in sent[0][2][0]] == ["Отменить", "Категория"], str(sent[:1]))
     check("о повторе покупки бот не пишет второй раз", len([x for x in sent if "ESSELUNGA SpA 123" in x[1]]) == 1)
+    limit_alerts = []
+    notifier.notify_user = lambda user_id, text, with_app_button=False, buttons=None: limit_alerts.append(text) or 1
+    limits_checks(client, token, B, limit_alerts)
+    import money_service as ms
+    from datetime import date as _date
+    report = ms.monthly_report_text(B["id"], _date(2026, 6, 1))
+    check("месячный отчёт: итоги июня", report and report.startswith("📊 Итоги: июнь 2026") and "Потрачено 0.30 EUR" in report, str(report)[:120])
+    check("за месяц без операций отчёта нет", ms.monthly_report_text(B["id"], _date(2025, 1, 1)) is None)
+    check("отчёт за месяц — один раз", ms.claim_monthly_report(B["id"], "2026-06") and not ms.claim_monthly_report(B["id"], "2026-06"))
     recurring_checks(db, client, A, B)
     release_checks(db)
     detection_checks()
@@ -720,10 +789,11 @@ def run_remote(base_url):
             http_checks(client, token, A, B, db_insert)
             wallet_checks(client, token, B)
             applepay_checks(client, token, A, B, False)
+            limits_checks(client, token, B, None)
     finally:
         for user in created:
-            for table in ("money_transactions", "money_recurring", "money_merchant_rules", "money_categories",
-                          "categories", "telegram_chats"):
+            for table in ("money_transactions", "money_recurring", "money_merchant_rules", "money_limit_alerts",
+                          "money_report_log", "money_categories", "categories", "telegram_chats"):
                 supabase.table(table).delete().eq("user_id", user["id"]).execute()
             supabase.table("users").delete().eq("id", user["id"]).execute()
         print(f"\nВременные пользователи удалены: {len(created)}")

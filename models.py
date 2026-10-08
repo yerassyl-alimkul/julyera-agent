@@ -152,9 +152,10 @@ class MoneyCategoryCreate(BaseModel):
 
 
 class MoneyCategoryUpdate(BaseModel):
-    """Название и цвет; тип категории (kind) не меняется."""
+    """Название, цвет и месячный лимит (только у расходов, null — снять); тип категории (kind) не меняется."""
     name: Optional[str] = None
     color: Optional[str] = None
+    monthly_limit: Optional[Amount] = None
 
 
 class MoneyCategoryOrder(BaseModel):

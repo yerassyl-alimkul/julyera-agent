@@ -207,6 +207,9 @@ def list_categories(user_id: str, kind: Optional[str] = None) -> list[dict]:
     if kind:
         query = query.eq("kind", clean_kind(kind))
     rows = query.execute().data
+    for row in rows:  # лимит наружу — строкой с двумя знаками, как все суммы
+        if row.get("monthly_limit") is not None:
+            row["monthly_limit"] = fmt(row["monthly_limit"])
     return sorted(rows, key=lambda c: (c["kind"], c.get("sort_order", 0), c.get("created_at") or ""))
 
 
@@ -251,8 +254,12 @@ def ensure_defaults(user_id: str) -> None:
         ]).execute()
 
 
-def update_category(category_id: str, user_id: str, name=None, color=None) -> dict:
-    """Название и цвет. Тип (kind) не меняется: операции привязаны к категории своего типа."""
+_UNSET = object()
+
+
+def update_category(category_id: str, user_id: str, name=None, color=None, monthly_limit=_UNSET) -> dict:
+    """Название, цвет и месячный лимит (только у расходов; None или "" — снять). Тип (kind) не меняется.
+    Лимит запоминается в основной валюте пользователя на момент задания (limit_currency)."""
     current = get_category(category_id, user_id)
     if not current:
         raise MoneyError(404, "Категория не найдена", "not_found")
@@ -264,9 +271,19 @@ def update_category(category_id: str, user_id: str, name=None, color=None) -> di
         changes["name"] = name
     if color is not None:
         changes["color"] = clean_color(color)
+    if monthly_limit is not _UNSET:
+        if monthly_limit in (None, ""):
+            changes.update(monthly_limit=None, limit_currency=None)
+        else:
+            if current["kind"] != "expense":
+                raise MoneyError(422, "Лимит бывает только у категорий расходов", "bad_limit")
+            changes.update(monthly_limit=str(parse_amount(monthly_limit)), limit_currency=default_currency(user_id))
     if changes:
         supabase.table(CAT_TABLE).update(changes).eq("id", category_id).eq("user_id", user_id).execute()
-    return get_category(category_id, user_id)
+    cat = get_category(category_id, user_id)
+    if cat and cat.get("monthly_limit") is not None:
+        cat["monthly_limit"] = fmt(cat["monthly_limit"])
+    return cat
 
 
 def reorder_categories(user_id: str, kind, ids: list[str]) -> list[dict]:
@@ -373,6 +390,8 @@ def create_transaction(user_id: str, data: dict, source: str = "app") -> dict:
             "note": row["note"], "frequency": repeat, "anchor_date": row["spent_on"]})
         supabase.table(TX_TABLE).update({"recurring_id": rec["id"]}).eq("id", tx["id"]).eq("user_id", user_id).execute()
         tx = {**tx, "recurring_id": rec["id"]}
+    if kind == "expense":
+        check_limit_alerts(user_id, row["category_id"], row["spent_on"])
     return _tx_out(tx)
 
 
@@ -402,7 +421,10 @@ def update_transaction(tx_id: str, user_id: str, data: dict) -> Optional[dict]:
     if (changes.get("category_id") and changes["category_id"] != current["category_id"]
             and current.get("source") == "applepay"):
         remember_merchant(user_id, current.get("note"), changes["category_id"])  # в следующий раз — сразу сюда
-    return get_transaction(tx_id, user_id)
+    updated = get_transaction(tx_id, user_id)
+    if updated and updated["kind"] == "expense" and {"amount", "currency", "category_id", "spent_on", "kind"} & set(changes):
+        check_limit_alerts(user_id, updated["category_id"], updated["spent_on"])
+    return updated
 
 
 def delete_transaction(tx_id: str, user_id: str) -> bool:
@@ -559,12 +581,15 @@ def _main_block(cats: dict, current: dict, previous: dict, main: str, rates: Opt
                 day["approx_expense"] = day["approx_expense"] or bool(v["expense"])
     income, expense = total(current, "income"), total(current, "expense")
     prev_income, prev_expense = total(previous, "income"), total(previous, "expense")
+    by_category = marked(_breakdown(cats, merged(current, "by_cat"), expense), "by_cat")
+    by_category, limits = _with_limits(cats, current, by_category, rates)
     parts = {kind: [{"currency": cur, "amount": fmt(current[cur][kind]), "converted": fmt(conv(current[cur][kind], cur))}
                     for cur in CURRENCIES if cur in current and current[cur][kind]]
              for kind in ("income", "expense")}
     return {
         "currency": main, "income": fmt(income), "expense": fmt(expense), "balance": fmt(income - expense),
-        "by_category": marked(_breakdown(cats, merged(current, "by_cat"), expense), "by_cat"),
+        "by_category": by_category,
+        "limits": limits,
         "income_by_category": marked(_breakdown(cats, merged(current, "by_cat_income"), income), "by_cat_income"),
         "days": [{"day": d, "income": fmt(v["income"]), "expense": fmt(v["expense"]),
                   "approx_income": v["approx_income"], "approx_expense": v["approx_expense"]}
@@ -573,6 +598,104 @@ def _main_block(cats: dict, current: dict, previous: dict, main: str, rates: Opt
         "previous": {"income": fmt(prev_income), "expense": fmt(prev_expense),
                      "expense_change": fmt(expense - prev_expense), "income_change": fmt(income - prev_income)},
     }
+
+
+LIMIT_WARN, LIMIT_OVER = 80, 100
+
+
+def _limit_state(spent: Decimal, limit: Decimal) -> tuple[int, str]:
+    pct = int((spent * 100 / limit).to_integral_value()) if limit else 0
+    return pct, ("over" if pct >= LIMIT_OVER else "warn" if pct >= LIMIT_WARN else "ok")
+
+
+def _with_limits(cats: dict, current: dict, by_category: list, rates: Optional[dict]) -> tuple[list, dict]:
+    """Добавить к категориям расходов их лимит: потрачено в валюте лимита, процент и состояние (ok/warn/over).
+    Категории с лимитом, но без трат в этом месяце, тоже попадают в список (с нулём)."""
+    counts = {"ok": 0, "warn": 0, "over": 0}
+    have = {c["category_id"] for c in by_category}
+    for cat_id, cat in cats.items():
+        if cat.get("kind") == "expense" and cat.get("monthly_limit") is not None and cat_id not in have:
+            by_category.append({"category_id": cat_id, "name": cat["name"], "color": cat.get("color"),
+                                "amount": "0.00", "share": 0, "approx": False})
+    out = []
+    for c in by_category:
+        cat = cats.get(c["category_id"], {})
+        if cat.get("monthly_limit") is None:
+            out.append(c)
+            continue
+        limit_cur = cat.get("limit_currency") or CURRENCIES[0]
+        if not rates_service.can_convert(rates, {cur for cur, t in current.items() if c["category_id"] in t["by_cat"]}, limit_cur):
+            out.append(c)
+            continue
+        spent = sum((rates_service.convert(t["by_cat"][c["category_id"]], cur, limit_cur, rates)
+                     for cur, t in current.items() if c["category_id"] in t["by_cat"]), Decimal(0))
+        limit = Decimal(str(cat["monthly_limit"]))
+        pct, state = _limit_state(spent, limit)
+        counts[state] += 1
+        out.append({**c, "limit": {"amount": fmt(limit), "currency": limit_cur, "spent": fmt(spent), "pct": pct,
+                                   "state": state, "left": fmt(limit - spent)}})
+    return out, counts
+
+
+def check_limit_alerts(user_id: str, category_id: str, spent_on: str) -> list[str]:
+    """После записи траты: если категория перешла 80% или 100% лимита в текущем месяце — один раз написать
+    в бот. Возвращает отправленные тексты (для проверок). Сбой здесь не мешает самой операции."""
+    try:
+        cat = get_category(category_id, user_id)
+        if not cat or cat["kind"] != "expense" or cat.get("monthly_limit") is None:
+            return []
+        today = today_for(user_id)
+        month = _month_start(today)
+        if str(spent_on)[:7] != month.strftime("%Y-%m"):
+            return []  # лимиты — про текущий месяц
+        rows = _fetch_all(lambda: supabase.table(TX_TABLE).select("amount,currency").eq("user_id", user_id)
+                          .eq("kind", "expense").eq("category_id", category_id)
+                          .gte("spent_on", month.isoformat()).lt("spent_on", _add_months(month, 1).isoformat()))
+        limit_cur = cat.get("limit_currency") or CURRENCIES[0]
+        currencies = {r["currency"] for r in rows}
+        rates = rates_service.get_rates() if currencies - {limit_cur} else None
+        if not rates_service.can_convert(rates, currencies, limit_cur):
+            return []
+        spent = sum((rates_service.convert(Decimal(str(r["amount"])), r["currency"], limit_cur, rates) for r in rows), Decimal(0))
+        limit = Decimal(str(cat["monthly_limit"]))
+        pct, state = _limit_state(spent, limit)
+        if state == "ok":
+            return []
+        key = month.strftime("%Y-%m")
+        sent = []
+
+        def claim(threshold: int) -> bool:
+            try:
+                supabase.table("money_limit_alerts").insert({"user_id": user_id, "category_id": category_id,
+                                                              "month": key, "threshold": threshold}).execute()
+                return True
+            except Exception as exc:
+                if not _is_duplicate(exc):
+                    raise
+                return False
+
+        if state == "over":
+            claim(LIMIT_WARN)  # после 100% предупреждение про 80% уже не нужно
+            if claim(LIMIT_OVER):
+                extra = spent - limit
+                text = (f"🔴 «{cat['name']}»: лимит {fmt(limit)} {limit_cur} " +
+                        (f"превышен на {fmt(extra)} {limit_cur}." if extra > 0 else "исчерпан."))
+                sent.append(text)
+        elif claim(LIMIT_WARN):
+            last_day = calendar.monthrange(today.year, today.month)[1]
+            days_left = last_day - today.day + 1
+            per_day = ((limit - spent) / days_left).quantize(CENT) if days_left else Decimal(0)
+            sent.append(f"⚠️ «{cat['name']}»: потрачено {fmt(spent)} {limit_cur} из {fmt(limit)} {limit_cur} ({pct}%). "
+                        f"До конца месяца {days_left} дн. — примерно {fmt(per_day)} {limit_cur} в день.")
+        if sent:
+            import notifier
+            for text in sent:
+                notifier.notify_user(user_id, text)
+            logger.info("Предупреждение о лимите: категория %s, %d%%", category_id, pct)
+        return sent
+    except Exception as exc:
+        logger.warning("Проверка лимита не удалась: %s", type(exc).__name__)
+        return []
 
 
 def trend(user_id: str, months: int = 6) -> dict:
@@ -821,6 +944,8 @@ def run_recurring(today_of=None, utc_today: Optional[date] = None) -> list[tuple
                 run_day = advance(run_day, frequency, rec["day_of_month"])
             supabase.table(REC_TABLE).update({"next_run": run_day.isoformat()}).eq("id", rec["id"]).eq(
                 "user_id", user_id).execute()
+            if created and rec["kind"] == "expense":
+                check_limit_alerts(user_id, rec["category_id"], today.isoformat())
             if created:
                 name = rec.get("note") or (get_category(rec["category_id"], user_id) or {}).get("name", "Платёж")
                 text = f"Добавлен платёж: {name} · {fmt(rec['amount'])} {rec['currency']}"
@@ -997,3 +1122,124 @@ def record_applepay(user_id: str, amount_text, merchant: Optional[str]) -> tuple
     tx = create_transaction(user_id, {"kind": "expense", "amount": str(amount), "currency": currency,
                                       "category_id": cat["id"], "note": note}, source="applepay")
     return tx, False, how
+
+
+# ---------------------------------------------------------------- аналитика за период и месячный отчёт
+
+def analytics(user_id: str, date_from=None, date_to=None) -> dict:
+    """Итоги за любой период в основной валюте: расходы, доходы, баланс, расход в среднем за день, категории
+    (с изменением к предыдущему такому же периоду), где тратится больше всего (по магазинам и заметкам)
+    и самые крупные траты. По умолчанию — текущий месяц."""
+    today = today_for(user_id)
+    start = parse_day(date_from, user_id) if date_from else _month_start(today)
+    end = parse_day(date_to, user_id) if date_to else _add_months(_month_start(today), 1) - timedelta(days=1)
+    if end < start:
+        raise MoneyError(422, "Конец периода раньше начала", "bad_period")
+    if (end - start).days > 3 * 366:
+        raise MoneyError(422, "Период — не длиннее трёх лет", "bad_period")
+    days = (end - start).days + 1
+    prev_end = start - timedelta(days=1)
+    prev_start = prev_end - timedelta(days=days - 1)
+    rows = _fetch_all(lambda: supabase.table(TX_TABLE).select("kind,amount,currency,category_id,spent_on,note")
+                      .eq("user_id", user_id).gte("spent_on", prev_start.isoformat()).lte("spent_on", end.isoformat()))
+    main = default_currency(user_id)
+    rates = rates_service.get_rates() if {r["currency"] for r in rows} - {main} else None
+    if not rates_service.can_convert(rates, {r["currency"] for r in rows}, main):
+        raise MoneyError(503, "Курс валют сейчас недоступен, попробуйте позже", "no_rate")
+    cats = {c["id"]: c for c in list_categories(user_id)}
+    cur_rows = [r for r in rows if str(r["spent_on"])[:10] >= start.isoformat()]
+    prev_rows = [r for r in rows if str(r["spent_on"])[:10] < start.isoformat()]
+
+    def conv(r):
+        return rates_service.convert(Decimal(str(r["amount"])), r["currency"], main, rates)
+
+    def sums(selected):
+        out = {"income": Decimal(0), "expense": Decimal(0), "by_cat": {}}
+        for r in selected:
+            amount = conv(r)
+            out[r["kind"]] += amount
+            if r["kind"] == "expense":
+                out["by_cat"][r["category_id"]] = out["by_cat"].get(r["category_id"], Decimal(0)) + amount
+        return out
+
+    now, before = sums(cur_rows), sums(prev_rows)
+
+    def change(a: Decimal, b: Decimal) -> Optional[int]:
+        return int(((a - b) * 100 / b).to_integral_value()) if b else None
+
+    by_category = []
+    for item in _breakdown(cats, now["by_cat"], now["expense"]):
+        prev = before["by_cat"].get(item["category_id"], Decimal(0))
+        by_category.append({**item, "change_pct": change(Decimal(item["amount"]), prev)})
+    places = {}
+    for r in cur_rows:
+        if r["kind"] != "expense":
+            continue
+        key = merchant_key(r.get("note")) or f"cat:{r['category_id']}"
+        label = (r.get("note") or cats.get(r["category_id"], {}).get("name", "?")).strip()
+        place = places.setdefault(key, {"name": label, "count": 0, "amount": Decimal(0)})
+        place["count"] += 1
+        place["amount"] += conv(r)
+    top_places = sorted(places.values(), key=lambda p: p["amount"], reverse=True)[:5]
+    largest = sorted((r for r in cur_rows if r["kind"] == "expense"), key=conv, reverse=True)[:5]
+    approx = any(r["currency"] != main for r in cur_rows)
+    return {
+        "from": start.isoformat(), "to": end.isoformat(), "days": days, "currency": main, "approx": approx,
+        "expense": fmt(now["expense"]), "income": fmt(now["income"]), "balance": fmt(now["income"] - now["expense"]),
+        "avg_per_day": fmt((now["expense"] / days).quantize(CENT)),
+        "previous": {"from": prev_start.isoformat(), "to": prev_end.isoformat(),
+                     "expense": fmt(before["expense"]), "income": fmt(before["income"])},
+        "expense_change_pct": change(now["expense"], before["expense"]),
+        "by_category": by_category,
+        "top_places": [{"name": p["name"], "count": p["count"], "amount": fmt(p["amount"])} for p in top_places],
+        "largest": [{"name": (r.get("note") or cats.get(r["category_id"], {}).get("name", "?")), "amount": fmt(conv(r)),
+                     "spent_on": str(r["spent_on"])[:10]} for r in largest],
+    }
+
+
+MONTHS_NOM = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь",
+              "ноябрь", "декабрь"]
+
+
+def monthly_report_text(user_id: str, month_start: date) -> Optional[str]:
+    """«📊 Итоги сентября» — за указанный (прошедший) месяц. None — если операций в нём не было."""
+    end = _add_months(month_start, 1) - timedelta(days=1)
+    try:
+        a = analytics(user_id, month_start.isoformat(), end.isoformat())
+    except MoneyError:
+        return None
+    if a["expense"] == "0.00" and a["income"] == "0.00":
+        return None
+    cur, ap = a["currency"], "≈ " if a["approx"] else ""
+    name = MONTHS_NOM[month_start.month - 1]
+    lines = [f"📊 Итоги: {name} {month_start.year}"]
+    change = a["expense_change_pct"]
+    lines.append(f"Потрачено {ap}{a['expense']} {cur}" +
+                 (f" ({'+' if change > 0 else ''}{change}% к прошлому месяцу)" if change is not None else ""))
+    lines.append(f"Доходы {ap}{a['income']} {cur} · баланс {ap}{'+' if not a['balance'].startswith('-') else ''}{a['balance']} {cur}")
+    if a["by_category"]:
+        lines.append("\nБольше всего:")
+        lines += [f"  {c['name']}: {c['amount']} {cur} ({c['share']}%)" for c in a["by_category"][:3]]
+    if a["largest"]:
+        lines.append("Крупнейшие траты: " + ", ".join(f"{x['name']} {x['amount']} {cur}" for x in a["largest"][:3]))
+    try:
+        s = summary(user_id, month_start.strftime("%Y-%m"))
+        limits = (s.get("main") or {}).get("limits") or {}
+        total = sum(limits.values())
+        if total:
+            over = [c["name"] for c in s["main"]["by_category"] if (c.get("limit") or {}).get("state") == "over"]
+            lines.append(f"Лимиты: превышено {len(over)} из {total}" + (f" ({', '.join(over)})" if over else " — все в норме 👍"))
+    except Exception as exc:
+        logger.warning("Лимиты для отчёта не посчитаны: %s", type(exc).__name__)
+    return "\n".join(lines)
+
+
+def claim_monthly_report(user_id: str, month_key: str) -> bool:
+    """Отчёт за месяц — один раз (строка в money_report_log вставляется до отправки)."""
+    try:
+        supabase.table("money_report_log").insert({"user_id": user_id, "month": month_key}).execute()
+        return True
+    except Exception as exc:
+        if not _is_duplicate(exc):
+            logger.warning("money_report_log: вставка не удалась (%s)", type(exc).__name__)
+        return False
