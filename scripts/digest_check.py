@@ -230,6 +230,12 @@ def main():
     upd.callback_query.message = SimpleNamespace(text="", reply_text=reply_text, chat=SimpleNamespace(send_action=None))
     asyncio.run(h.help_callback(upd, ctx))
     check("кнопка «Валюта» показывает текущую валюту", "Валюта по умолчанию" in replies[-1])
+    u = ic.tg_update(A["telegram_user_id"], text="/applepay")
+    asyncio.run(h.applepay_command(u, ctx))
+    texts = [r.text for r in u.replies]
+    check("/applepay: инструкция на русском и английском, адрес, ключ отдельным сообщением",
+          len(texts) == 4 and "«Wallet»" in texts[0] and "Wallet (older iOS: Transaction)" in texts[1]
+          and "money/applepay" in texts[0] and texts[3] == A["access_key"])
     u = ic.tg_update(9_999_998, text="/help")
     asyncio.run(h.help_command(u, ctx))
     check("незнакомому /help — «Нет доступа»", "Нет доступа" in u.replies[-1].text)

@@ -487,30 +487,56 @@ async def _money_command(update: Update, kind: str) -> None:
     await _record_money(update, user, text, force_kind=kind, source="text")
 
 
+APPLEPAY_RU = (
+    "💳 Траты из Apple Pay — автоматически (iPhone, iOS 17 и новее)\n\n"
+    "1. «Команды» → вкладка «Автоматизация» → «+» → «Wallet» (в старых версиях — «Транзакция»).\n"
+    "2. Выберите свои карты, категории и магазины оставьте «Любые». Внизу «Выполнять сразу», "
+    "«Уведомлять» выключите → «Далее».\n"
+    "3. «Новая пустая автоматизация» → «Добавить действие» → «Получить содержимое URL».\n"
+    "4. URL: {url}\n"
+    "5. Стрелка «›» у действия:\n"
+    "   • Метод: POST\n"
+    "   • Заголовки → «Добавить новый»: ключ X-Access-Key, значение — ваш ключ (последнее сообщение)\n"
+    "   • Текст запроса: JSON → три поля «Текст», ключи ровно такие:\n"
+    "     amount → переменная «Ввод команды» → «Сумма»\n"
+    "     merchant → «Ввод команды» → «Продавец»\n"
+    "     card → «Ввод команды» → «Карта или пропуск»\n"
+    "6. «Готово». Заплатите телефоном — я пришлю «💳 Apple Pay: …». "
+    "Если iPhone спросит про доступ к julyera-agent.onrender.com — «Разрешать всегда».\n"
+    "Категория не та — нажмите «Категория» под сообщением, для этого магазина я запомню."
+)
+
+APPLEPAY_EN = (
+    "💳 Apple Pay expenses — automatic (iPhone, iOS 17+)\n\n"
+    "1. Shortcuts → Automation → + → Wallet (older iOS: Transaction).\n"
+    "2. Select your cards, keep Categories and Merchants as Any. Choose Run Immediately, "
+    "turn off Notify When Run → Next.\n"
+    "3. New Blank Automation → Add Action → Get Contents of URL.\n"
+    "4. URL: {url}\n"
+    "5. Tap › (Show More) on the action:\n"
+    "   • Method: POST\n"
+    "   • Headers → Add new header: key X-Access-Key, value — your key (the last message)\n"
+    "   • Request Body: JSON → three Text fields, keys exactly:\n"
+    "     amount → Select Variable → Shortcut Input → Amount\n"
+    "     merchant → Shortcut Input → Merchant\n"
+    "     card → Shortcut Input → Card or Pass\n"
+    "6. Done. Pay with your phone — I'll send «💳 Apple Pay: …». "
+    "If iPhone asks to connect to julyera-agent.onrender.com — Always Allow.\n"
+    "Wrong category? Tap «Категория» under my message — I'll remember it for that shop."
+)
+
+
 async def applepay_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/applepay — инструкция для автоматизации «Транзакция» в «Командах» с адресом и личным ключом."""
+    """/applepay — инструкция для автоматизации Wallet («Транзакция») в «Командах» на русском и английском,
+    затем личный ключ отдельным сообщением (удобно скопировать)."""
     user = _known_user(update)
     if not user:
         await update.message.reply_text(NO_ACCESS_TEXT)
         return
-    await update.message.reply_text(
-        "💳 Траты из Apple Pay — автоматически (iPhone, iOS 17 и новее)\n\n"
-        "1. Откройте «Команды» → вкладка «Автоматизация» → «+» → «Транзакция».\n"
-        "2. Карты: выберите свои карты. Остальное не трогайте. Внизу «Выполнять сразу» и выключите «Уведомлять». → «Далее».\n"
-        "3. «Новая пустая автоматизация» → «Добавить действие» → найдите «Получить содержимое URL».\n"
-        f"4. URL: {APP_URL}money/applepay\n"
-        "5. Нажмите стрелку «>» у действия:\n"
-        "   • Метод: POST\n"
-        "   • Заголовки → «Добавить новый»: ключ X-Access-Key, значение — ключ ниже\n"
-        "   • Текст запроса: JSON. Добавьте три поля «Текст» (названия ровно такие):\n"
-        "     amount → значение: переменная «Ввод команды» (Shortcut Input), в ней «Сумма» (Amount)\n"
-        "     merchant → «Ввод команды» → «Продавец» (Merchant)\n"
-        "     card → «Ввод команды» → «Карта или пропуск» (Card or Pass)\n"
-        "   Названия на iPhone могут немного отличаться — ищите сумму, магазин и карту.\n"
-        "6. «Готово». Заплатите телефоном — я пришлю «💳 Apple Pay: …» с категорией.\n\n"
-        "Ваш ключ (никому не пересылайте, по нему открываются ваши данные):",
-        disable_web_page_preview=True,
-    )
+    url = f"{APP_URL}money/applepay"
+    await update.message.reply_text(APPLEPAY_RU.format(url=url), disable_web_page_preview=True)
+    await update.message.reply_text(APPLEPAY_EN.format(url=url), disable_web_page_preview=True)
+    await update.message.reply_text("🔑 Ваш ключ / your key — никому не пересылайте / don't share it:")
     await update.message.reply_text(user["access_key"])
 
 
