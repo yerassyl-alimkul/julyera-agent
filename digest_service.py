@@ -234,8 +234,15 @@ def reminder_message(user_id: str, tasks: list[dict], now_utc: Optional[datetime
         when = _time_or_date(t, today)
         overdue = _deadline(t).date() < today
         lines.append(f"{'🔴' if overdue else '•'} {t['task']} · {t.get('category', '')} — {'просрочено, ' if overdue else ''}{when}")
-    rows = [[{"text": "✅ " + _short(t["task"]), "callback_data": f"done:{t['id']}"},
-             {"text": "⏰ +1 ч", "callback_data": f"snooze:{t['id']}"}] for t in tasks[:REMINDER_BUTTONS_MAX]]
+    rows = []
+    for t in tasks[:REMINDER_BUTTONS_MAX]:
+        row = [{"text": "✅ " + _short(t["task"]), "callback_data": f"done:{t['id']}"}]
+        if _deadline(t).date() < today:  # просрочена — перенести на завтра или послезавтра
+            row += [{"text": "➡️ Завтра", "callback_data": f"mv1:{t['id']}"},
+                    {"text": "➡️ +2 дня", "callback_data": f"mv2:{t['id']}"}]
+        else:
+            row.append({"text": "⏰ +1 ч", "callback_data": f"snooze:{t['id']}"})
+        rows.append(row)
     return "\n".join(lines), rows
 
 
@@ -364,6 +371,21 @@ def move_unfinished(user_id: str, day: date, now_utc: Optional[datetime] = None)
             task_service.update_task(t["id"], TaskUpdate(deadline=datetime.combine(tomorrow, d.time())), user_id)
             moved += 1
     return ("moved" if moved else "nothing"), moved
+
+
+def reschedule(task_id: str, user_id: str, days: int) -> tuple[str, Optional[dict]]:
+    """«➡️ Завтра / Послезавтра» у просроченной задачи: дедлайн = сегодня + days, время прежнее.
+    Через task_service.update_task — событие в календаре переезжает. ('moved'|'already'|'not_found', задача)."""
+    task = task_service.get_task(task_id, user_id)
+    if not task:
+        return "not_found", None
+    if task.get("status") == Status.done.value:
+        return "already", task
+    d = _deadline(task)
+    day = local_now(user_id).date() + timedelta(days=days)
+    new = datetime.combine(day, d.time() if d else time(23, 59))
+    supabase.table(TASKS).update({"snoozed_until": None}).eq("id", task_id).eq("user_id", user_id).execute()
+    return "moved", task_service.update_task(task_id, TaskUpdate(deadline=new), user_id)
 
 
 def set_enabled(user_id: str, enabled: bool) -> None:

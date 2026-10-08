@@ -122,7 +122,8 @@ def main():
     msgs = run()
     rem = to(A, msgs)
     check("напоминание в 13:10 с кнопками на каждую задачу", len(rem) == 1 and rem[0].buttons
-          and [b["callback_data"] for b in rem[0].buttons[0]] == [f"done:{t_overdue['id']}", f"snooze:{t_overdue['id']}"])
+          and [b["callback_data"] for b in rem[0].buttons[0]] == [f"done:{t_overdue['id']}", f"mv1:{t_overdue['id']}", f"mv2:{t_overdue['id']}"]
+          and any(b["callback_data"].startswith("snooze:") for row in rem[0].buttons[1:] for b in row))
     check("напоминания приходят и при выключенных сводках", len(to(B, msgs)) == 1)
     check("callback_data не длиннее 64 байт", all(len(b["callback_data"].encode()) <= 64
                                                  for m in msgs for row in (m.buttons or []) for b in row))
@@ -179,6 +180,18 @@ def main():
     msgs = to(A, run())
     check("в 17:05 плановое напоминание, отложенная в нём один раз, без дубля отдельным сообщением",
           len(msgs) == 1 and msgs[0].text.count("Сдать отчёт") == 1)
+
+    t_old = add(A, "Старая просрочка", "2026-10-05T09:00:00+00:00")
+    answers, _ = press(B, f"mv2:{t_old['id']}")
+    check("перенос чужой задачи отклоняется", answers == ["Задача не найдена"]
+          and next(t for t in db.tables["tasks"] if t["id"] == t_old["id"])["deadline"].startswith("2026-10-05"))
+    answers, edits = press(A, f"mv2:{t_old['id']}")
+    moved_old = next(t for t in db.tables["tasks"] if t["id"] == t_old["id"])
+    check("«➡️ +2 дня» переносит просрочку на послезавтра в то же время",
+          moved_old["deadline"].startswith("2026-10-10T09:00") and "Перенесено на 10 октября" in edits[-1][0], moved_old["deadline"])
+    answers, _ = press(A, f"mv1:{t_old['id']}")
+    check("«➡️ Завтра» — на завтра", next(t for t in db.tables["tasks"] if t["id"] == t_old["id"])["deadline"].startswith("2026-10-09T09:00"))
+    db.table("tasks").update({"deadline": "2026-10-12T09:00:00"}).eq("id", t_old["id"]).execute()  # не мешать вечерним проверкам
 
     section("Вечер")
     at(20, 10)

@@ -792,6 +792,17 @@ async def reminder_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await query.answer("Уже выполнено" if status == "already" else "Готово ✅")
         await _append_and_trim(query, f"✅ Выполнено: {task['task']}", task_id)
         return
+    if action in ("mv1", "mv2"):
+        status, moved = digest_service.reschedule(task_id, user["id"], 1 if action == "mv1" else 2)
+        if status == "already":
+            await query.answer("Задача уже выполнена")
+            await _append_and_trim(query, f"✅ Выполнено: {task['task']}", task_id)
+            return
+        day = digest_service._deadline(moved)
+        label = f"{day.day} {digest_service.MONTHS_GEN[day.month - 1]}" if day else "завтра"
+        await query.answer(f"Перенёс на {label}")
+        await _append_and_trim(query, f"➡️ Перенесено на {label}: {task['task']}", task_id)
+        return
     status, until = digest_service.snooze(task_id, user["id"])
     if status == "already":
         await query.answer("Задача уже выполнена")
@@ -825,7 +836,7 @@ async def digest_move_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
 # Задача из сообщения бота, на которое ответил человек: кнопки done:/snooze:/cmt: с id задачи
 # и сообщения-приглашения «Ответьте на это сообщение…» (ForceReply, id помним в памяти процесса).
-_TASK_ID_RE = re.compile(r"^(?:done|snooze|cmt):([0-9a-fA-F-]{36})$")
+_TASK_ID_RE = re.compile(r"^(?:done|snooze|mv1|mv2|cmt):([0-9a-fA-F-]{36})$")
 _prompt_targets: dict[tuple[int, int], str] = {}
 _pending_comments: dict[str, dict] = {}   # «К какой задаче?»: токен → что прикрепить и среди чего выбирать
 PENDING_TTL = 15 * 60
@@ -1032,7 +1043,7 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(help_callback, pattern=r"^h:[a-z]+$"))
     app.add_handler(CallbackQueryHandler(comment_callback, pattern=r"^(cmt:[0-9a-fA-F-]{36}|cm:[0-9a-f]{8}:(\d+|x))$"))
     app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, handle_file))
-    app.add_handler(CallbackQueryHandler(reminder_callback, pattern=r"^(done|snooze):[0-9a-fA-F-]{36}$"))
+    app.add_handler(CallbackQueryHandler(reminder_callback, pattern=r"^(done|snooze|mv1|mv2):[0-9a-fA-F-]{36}$"))
     app.add_handler(CallbackQueryHandler(digest_move_callback, pattern=r"^dmove:\d{4}-\d{2}-\d{2}$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))

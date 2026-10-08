@@ -46,7 +46,8 @@ money_service.ensure_defaults(uid)
 
 today = date.today()
 for title, cat, days in (("Созвон с командой", "Work", 0), ("Купить продукты", "Personal", 0),
-                         ("Сдать отчёт", "Work", 2), ("Прочитать главу", "Study", None)):
+                         ("Сдать отчёт", "Work", 2), ("Прочитать главу", "Study", None),
+                         ("Оплатить интернет", "Personal", -2)):
     task_service.supabase.table("tasks").insert({
         "user_id": uid, "task": title, "category": cat, "priority": "Mid",
         "deadline": f"{today + timedelta(days=days)}T18:00:00" if days is not None else None}).execute()

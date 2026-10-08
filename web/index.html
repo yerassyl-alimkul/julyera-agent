@@ -781,6 +781,9 @@ applyTheme();
   .row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
   .row-title { font-size: 16px; font-weight: 500; line-height: 1.25; overflow-wrap: anywhere; }
   .row-meta { font-size: 13px; line-height: 1.35; color: var(--ink-meta); }
+  .row-move { order: 10; flex: 0 0 100%; display: flex; gap: var(--gap-s); padding: 2px 0 2px 52px; }
+  .row-move button { min-height: 36px; padding: 0 14px; border: 1px solid rgba(23, 24, 28, 0.25); border-radius: var(--radius-pill);
+    background: var(--tag-bg); color: var(--ink); font-size: 13px; font-weight: 600; cursor: pointer; }
   .row-time { font-weight: 600; color: var(--ink); margin-right: var(--gap-s); }
   .row-time.overdue { color: var(--danger); }
 
@@ -2559,6 +2562,38 @@ function stepsText(done, total) {
   return `${done} из ${total} ${word}`;
 }
 
+// «➡️ Завтра / Послезавтра» под просроченной задачей: дедлайн = сегодня + N дней, время прежнее.
+function moveButtonsEl(task) {
+  const box = document.createElement('div');
+  box.className = 'row-move';
+  [[1, 'завтра'], [2, 'послезавтра']].forEach(([days, label]) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = `На ${label}`;
+    btn.dataset.focusKey = `move-${days}-${task.id}`;
+    btn.setAttribute('aria-label', `Перенести «${task.task}» на ${label}`);
+    btn.onclick = async (e) => {
+      e.stopPropagation();
+      btn.disabled = true;
+      const now = new Date();
+      const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + days);
+      const time = (task.deadline && timeOf(task.deadline)) || '23:59';
+      try {
+        const res = await api(`/tasks/${task.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deadline: `${localDateKey(day)}T${time}:00` }) });
+        if (!res.ok) throw new Error('bad status');
+        toast(`Перенесено на ${day.getDate()} ${MONTH_GENITIVE[day.getMonth()]}`);
+        await loadTasks();
+      } catch (err) {
+        toast('Не удалось перенести задачу');
+        btn.disabled = false;
+      }
+    };
+    box.appendChild(btn);
+  });
+  return box;
+}
+
 function timeOf(deadline) {
   const dt = parseNaiveDeadline(deadline);
   return dt ? `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}` : '';
@@ -2729,6 +2764,7 @@ function taskRowEl(task, mode) {
   };
 
   row.append(check, body);
+  if (mode === DAY_OVERDUE && task.status !== 'Done') row.appendChild(moveButtonsEl(task));
 
   if (hasMore) {
     const chevron = document.createElement('button');
