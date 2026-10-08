@@ -170,6 +170,34 @@ def parse_money_text(text: str, categories: dict, today, default_currency: str) 
     return items
 
 
+MERCHANT_PROMPT = """По названию магазина или сервиса выбери категорию расходов человека.
+Категории (только из этого списка): {categories}.
+Супермаркеты, кафе, рестораны, доставка еды — еда (в том числе сети Esselunga, Conad, Coop, Carrefour, Lidl,
+Eurospin, Pam, Despar, Penny, Aldi, Magnum, Small, Galmart, Arbuz, Wolt, Glovo, Just Eat); такси, транспорт, топливо, парковка —
+транспорт (Uber, Bolt, Yandex Go, Trenitalia, Italo, ATM, Eni, Q8);
+аптеки и клиники — здоровье; кино, концерты, игры — развлечения; стриминг и подписки — подписки; одежда и обувь — одежда.
+Если не уверен — "Прочее" (или первая категория, если "Прочее" нет в списке).
+Верни ТОЛЬКО JSON {{"category": "название из списка"}}."""
+
+
+def classify_merchant(merchant: str, categories: list[str]) -> Optional[str]:
+    """Категория расходов по названию магазина (Apple Pay). Модель получает только название и список категорий,
+    без суммы. Ответ сверяет money_service; ошибка — None (тогда «Прочее»)."""
+    names = ", ".join(json.dumps(n, ensure_ascii=False) for n in categories)
+    response = _client.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "system", "content": MERCHANT_PROMPT.format(categories=names)},
+                  {"role": "user", "content": merchant[:120]}],
+        temperature=0,
+        response_format={"type": "json_object"},
+    )
+    try:
+        value = json.loads(response.choices[0].message.content or "{}").get("category")
+    except (json.JSONDecodeError, AttributeError):
+        return None
+    return value if isinstance(value, str) else None
+
+
 def transcribe_audio(audio_bytes: bytes, filename: str = "voice.ogg") -> str:
     """
     Распознаёт голосовое сообщение через Whisper (Groq).

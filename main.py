@@ -60,6 +60,7 @@ from models import (
     CategoryCreate,
     CategoryOrder,
     CategoryUpdate,
+    ApplePayIn,
     MeUpdate,
     MoneyCategoryCreate,
     MoneyCategoryOrder,
@@ -378,6 +379,25 @@ def parse_money(payload: MoneyParseRequest, user: dict = Depends(current_user)):
     if not drafts:
         raise HTTPException(status_code=422, detail={"code": "no_amount", "message": "Не нашёл сумму, напишите её числом"})
     return {"items": drafts}
+
+
+@app.post("/money/applepay", status_code=201)
+def money_applepay(payload: ApplePayIn, user: dict = Depends(current_user)):
+    """Покупка из Apple Pay (автоматизация «Транзакция» на iPhone, вход по личному ключу X-Access-Key).
+    Бот пишет «💳 магазин · сумма · категория» с кнопками «Отменить» и «Категория»; повтор за 2 минуты не пишется."""
+    import notifier
+
+    tx, duplicate, how = money_service.record_applepay(user["id"], payload.amount, payload.merchant)
+    cat = (money_service.get_category(tx["category_id"], user["id"]) or {}).get("name", "?")
+    text = f"{tx['note']} · {tx['amount']} {tx['currency']} · {cat}"
+    if not duplicate:
+        hint = "\n(категория подобрана впервые — если не та, поправьте кнопкой, я запомню)" if how != "memory" else ""
+        notifier.notify_user(user["id"], f"💳 Apple Pay: {text}{hint}", buttons=[[
+            {"text": "Отменить", "callback_data": f"m:u:{tx['id']}"},
+            {"text": "Категория", "callback_data": f"m:c:{tx['id']}"},
+        ]])
+    logger.info("Apple Pay: операция %s, категория из %s", tx["id"], how)
+    return {"ok": True, "duplicate": duplicate, "text": text, "transaction": tx}
 
 
 @app.get("/money/summary")

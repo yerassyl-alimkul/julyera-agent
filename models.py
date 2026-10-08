@@ -206,5 +206,12 @@ class RecurringUpdate(BaseModel):
     active: Optional[bool] = None
 
 
+class ApplePayIn(BaseModel):
+    """Тело POST /money/applepay от автоматизации «Транзакция» в «Командах» iPhone."""
+    amount: Amount                  # как его отдаёт iPhone: «€23,40», «4 000 ₸», «KZT 4,000.00»
+    merchant: Optional[str] = None  # название магазина
+    card: Optional[str] = None      # карта (не сохраняется)
+
+
 class MeUpdate(BaseModel):
     default_currency: str

@@ -14,6 +14,7 @@
 <h2>Data we handle</h2>
 <p>Tasks, notes and subtasks entered by the user are stored in a private database (Supabase). Voice messages are transcribed and text is parsed by third-party AI services (Groq) solely to create tasks.</p>
 <p>Expense and income records (amounts, categories, dates and short notes) are stored in the same private database and are available only to the user who created them. When an expense or income is entered by text or voice, that message is processed by Groq solely to extract the record; totals and balances are never sent to AI services.</p>
+<p>If the user sets up the optional Apple Pay automation on their iPhone, the iPhone sends the purchase amount, the merchant name and the card name to this app after each payment. The amount and merchant are stored as an expense record; the card name is not stored. Only the merchant name (without the amount) may be sent to Groq to suggest a category. No card numbers or bank credentials are ever received.</p>
 <h2>Google user data</h2>
 <p>If the user connects Google Calendar, the app requests access to calendar events (scope calendar.events) only to create, update and delete events that correspond to the user's own tasks. Google data is not shared with third parties, not sold, and not used for advertising or AI model training.</p>
 <h2>Retention and deletion</h2>

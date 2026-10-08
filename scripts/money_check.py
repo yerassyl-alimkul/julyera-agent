@@ -299,6 +299,46 @@ def wallet_checks(client, token, B):
           and eur["income_by_category"][0]["share"] == 100 and "income_change" in eur["previous"])
 
 
+def applepay_checks(client, token, A, B, local: bool):
+    """Покупки из Apple Pay: разбор суммы, категория (память магазинов, модель), повтор, возвраты, изоляция."""
+    import money_service
+
+    section("Apple Pay")
+    hA = ic.init_data_headers(A["telegram_user_id"], token, "Тест A")
+    hB = ic.init_data_headers(B["telegram_user_id"], token, "Тест B")
+    for text, expected in (("€23,40", ("23.40", "EUR")), ("23,40 €", ("23.40", "EUR")), ("EUR 1,234.56", ("1234.56", "EUR")),
+                           ("4 000 ₸", ("4000.00", "KZT")), ("₸4.000", ("4000.00", "KZT")), ("KZT 4,000.00", ("4000.00", "KZT")),
+                           ("12.5", ("12.50", "EUR"))):
+        amount, cur, refund = money_service.parse_applepay_amount(text, "EUR")
+        check(f"сумма «{text}» → {expected[0]} {expected[1]}", (str(amount), cur, refund) == (*expected, False))
+    check("«-5,00 €» — это возврат", money_service.parse_applepay_amount("-5,00 €", "EUR")[2] is True)
+
+    def pay(h, amount, merchant):
+        return client.post("/money/applepay", headers=h, json={"amount": amount, "merchant": merchant, "card": "Visa"})
+
+    r = pay(hA, "€23,40", "ESSELUNGA SpA 123")
+    tx = r.json().get("transaction", {})
+    names = {c["id"]: c for c in client.get("/money/categories", headers=hA, params={"kind": "expense"}).json()}
+    check("покупка записана как расход Apple Pay в своей категории расходов",
+          r.status_code == 201 and tx.get("amount") == "23.40" and tx.get("currency") == "EUR"
+          and tx.get("source") == "applepay" and tx.get("category_id") in names, f"{r.status_code} {r.text[:120]}")
+    r2 = pay(hA, "23,40 €", "ESSELUNGA SpA 123")
+    check("та же покупка через минуту не записывается второй раз",
+          r2.status_code == 201 and r2.json().get("duplicate") is True and r2.json()["transaction"]["id"] == tx.get("id"))
+    other = next(c for c in names.values() if c["id"] != tx.get("category_id"))
+    client.patch(f"/money/transactions/{tx['id']}", headers=hA, json={"category_id": other["id"]})
+    r3 = pay(hA, "€5,00", "Esselunga S.p.A. 77")
+    check("после исправления категории магазин запоминается (другой номер того же магазина)",
+          r3.json().get("transaction", {}).get("category_id") == other["id"], r3.text[:120])
+    rb = pay(hB, "€5,00", "Esselunga S.p.A. 77")
+    check("память магазинов у каждого своя", rb.status_code == 201 and rb.json()["transaction"]["category_id"] != other["id"])
+    check("операция Apple Pay другого пользователя → 404", client.get(f"/money/transactions/{tx['id']}", headers=hB).status_code == 404)
+    check("возврат не записывается (422)", pay(hA, "-5,00 €", "Esselunga").status_code == 422)
+    check("валюта не EUR/KZT → 422 с понятным текстом", "не поддерживается" in pay(hA, "$10.00", "Shop").text)
+    check("без входа → 401", client.post("/money/applepay", json={"amount": "€1", "merchant": "X"}).status_code == 401)
+    return tx
+
+
 # ---------------------------------------------------------------- локально: платежи, бот, распознавание денег
 
 def recurring_checks(db, client, A, B):
@@ -585,6 +625,12 @@ def model_checks():
         check(f"«{phrase}»: категории существуют", all(d["category"] in names for d in got))
     check("«купить молоко» — не деньги", not money_service.looks_like_money("купить молоко"))
     check("«кофе» без суммы — ничего не создано", money_service.drafts_from_text(user["id"], "кофе") == [])
+    from groq_client import classify_merchant
+    expense_names = [c["name"] for c in money_service.list_categories(user["id"], "expense")]
+    for merchant, expected in (("ESSELUNGA SPA", "Еда"), ("UBER *TRIP", "Транспорт"), ("Farmacia Centrale", "Здоровье"),
+                               ("Spotify", "Подписки")):
+        got = classify_merchant(merchant, expense_names)
+        check(f"магазин «{merchant}» → {expected}", got == expected, str(got))
 
 
 # ---------------------------------------------------------------- запуск
@@ -621,6 +667,18 @@ def run_local(with_model):
     print("Локальная проверка денег (база в памяти, без сети)")
     http_checks(client, token, A, B, db_insert)
     wallet_checks(client, token, B)
+    import groq_client
+    import notifier
+    sent = []
+    notifier.notify_user = lambda user_id, text, with_app_button=False, buttons=None: sent.append((user_id, text, buttons)) or 1
+    real_classify = groq_client.classify_merchant
+    groq_client.classify_merchant = lambda merchant, cats: "Еда" if "esselunga" in merchant.lower() else None
+    applepay_checks(client, token, A, B, True)
+    groq_client.classify_merchant = real_classify  # для --model нужен настоящий подбор
+    check("бот пишет о покупке с кнопками «Отменить» и «Категория»",
+          sent and sent[0][1].startswith("💳 Apple Pay: ESSELUNGA SpA 123 · 23.40 EUR")
+          and [b["text"] for b in sent[0][2][0]] == ["Отменить", "Категория"], str(sent[:1]))
+    check("о повторе покупки бот не пишет второй раз", len([x for x in sent if "ESSELUNGA SpA 123" in x[1]]) == 1)
     recurring_checks(db, client, A, B)
     release_checks(db)
     detection_checks()
@@ -661,9 +719,11 @@ def run_remote(base_url):
             client.get("/health")
             http_checks(client, token, A, B, db_insert)
             wallet_checks(client, token, B)
+            applepay_checks(client, token, A, B, False)
     finally:
         for user in created:
-            for table in ("money_transactions", "money_recurring", "money_categories", "categories", "telegram_chats"):
+            for table in ("money_transactions", "money_recurring", "money_merchant_rules", "money_categories",
+                          "categories", "telegram_chats"):
                 supabase.table(table).delete().eq("user_id", user["id"]).execute()
             supabase.table("users").delete().eq("id", user["id"]).execute()
         print(f"\nВременные пользователи удалены: {len(created)}")

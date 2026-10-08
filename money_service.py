@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 CURRENCIES = ("EUR", "KZT")  # чтобы добавить валюту: сюда, в CHECK миграции и в CURRENCY_MARKERS
 KINDS = ("expense", "income")
-SOURCES = ("app", "text", "voice", "recurring")
+SOURCES = ("app", "text", "voice", "recurring", "applepay")
 
 CAT_TABLE = "money_categories"
 TX_TABLE = "money_transactions"
@@ -399,6 +399,9 @@ def update_transaction(tx_id: str, user_id: str, data: dict) -> Optional[dict]:
         changes["spent_on"] = parse_day(data["spent_on"], user_id).isoformat()
     if changes:
         supabase.table(TX_TABLE).update(changes).eq("id", tx_id).eq("user_id", user_id).execute()
+    if (changes.get("category_id") and changes["category_id"] != current["category_id"]
+            and current.get("source") == "applepay"):
+        remember_merchant(user_id, current.get("note"), changes["category_id"])  # в следующий раз — сразу сюда
     return get_transaction(tx_id, user_id)
 
 
@@ -898,3 +901,99 @@ def drafts_from_text(user_id: str, text: str, force_kind: Optional[str] = None) 
                        "category": cat["name"], "note": note[:NOTE_MAX] if note else None,
                        "spent_on": day.isoformat()})
     return drafts
+
+
+# ---------------------------------------------------------------- Apple Pay (автоматизация «Транзакция» в «Командах»)
+# iPhone при каждой оплате картой из Wallet присылает сумму текстом («€23,40», «4 000 ₸», «KZT 4,000.00»),
+# магазин и карту. Категория: память магазинов (money_merchant_rules, учится на исправлениях пользователя),
+# иначе подбор моделью по названию магазина (без суммы), иначе «Прочее». Повтор той же покупки в течение
+# двух минут не записывается второй раз. Возвраты (сумма со знаком минус) пока не записываются.
+
+APPLEPAY_DEDUP = timedelta(minutes=2)
+MERCHANT_TABLE = "money_merchant_rules"
+_CURRENCY_TOKENS = [("тенге", "KZT"), ("euro", "EUR"), ("евро", "EUR"), ("kzt", "KZT"), ("eur", "EUR"),
+                    ("тг", "KZT"), ("€", "EUR"), ("₸", "KZT")]
+_OTHER_CURRENCY = re.compile(r"[$£¥₽₺]|\b(usd|gbp|rub|try|chf|jpy|cny|aed)\b", re.IGNORECASE)
+
+
+def parse_applepay_amount(text, default_cur: str) -> tuple[Decimal, str, bool]:
+    """Сумма из «Команд» в любом виде → (Decimal, валюта, это возврат?). Валюта не EUR/KZT — 422."""
+    raw = str(text or "").strip()
+    low = raw.lower()
+    currency = next((cur for token, cur in _CURRENCY_TOKENS if token in low), None)
+    if currency is None and _OTHER_CURRENCY.search(low):
+        raise MoneyError(422, f"Валюта этой покупки не поддерживается (только {', '.join(CURRENCIES)})", "bad_currency")
+    refund = "-" in raw or "−" in raw
+    num = re.sub(r"[^\d.,]", "", raw)
+    if not re.search(r"\d", num):
+        raise MoneyError(422, "Не нашёл сумму покупки", "bad_amount")
+    if "," in num and "." in num:  # десятичный знак — тот, что правее
+        num = num.replace(".", "").replace(",", ".") if num.rfind(",") > num.rfind(".") else num.replace(",", "")
+    else:
+        sep = "," if "," in num else "." if "." in num else None
+        if sep:
+            head, _, tail = num.rpartition(sep)
+            num = (head.replace(sep, "") + "." + tail) if len(tail) in (1, 2) else num.replace(sep, "")
+    return parse_amount(num), currency or default_cur, refund
+
+
+def merchant_key(merchant: Optional[str]) -> Optional[str]:
+    """«ESSELUNGA SpA 123» → «esselunga spa»: без цифр и знаков, регистр и ё не важны."""
+    text = (merchant or "").lower().replace("ё", "е")
+    text = re.sub(r"[.'’`-]", "", text)  # «S.p.A.» = «SpA», «McDonald's» = «McDonalds»
+    text = re.sub(r"[^a-zа-я ]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text[:60] or None
+
+
+def remember_merchant(user_id: str, merchant: Optional[str], category_id: str) -> None:
+    """Запомнить, что покупки в этом магазине — в этой категории (своей, расходной)."""
+    key = merchant_key(merchant)
+    cat = get_category(category_id, user_id)
+    if not key or not cat or cat["kind"] != "expense":
+        return
+    existing = supabase.table(MERCHANT_TABLE).select("user_id").eq("user_id", user_id).eq("merchant_key", key).execute().data
+    now = datetime.now(timezone.utc).isoformat()
+    if existing:
+        supabase.table(MERCHANT_TABLE).update({"category_id": cat["id"], "updated_at": now}).eq(
+            "user_id", user_id).eq("merchant_key", key).execute()
+    else:
+        supabase.table(MERCHANT_TABLE).insert({"user_id": user_id, "merchant_key": key, "category_id": cat["id"]}).execute()
+
+
+def category_for_merchant(user_id: str, merchant: Optional[str]) -> tuple[dict, str]:
+    """(категория, откуда: 'memory' | 'model' | 'fallback')."""
+    key = merchant_key(merchant)
+    if key:
+        rows = supabase.table(MERCHANT_TABLE).select("category_id").eq("user_id", user_id).eq("merchant_key", key).execute().data
+        cat = get_category(rows[0]["category_id"], user_id) if rows else None
+        if cat and cat["kind"] == "expense":
+            return cat, "memory"
+        try:
+            from groq_client import classify_merchant
+
+            names = [c["name"] for c in list_categories(user_id, "expense")]
+            guess = classify_merchant(merchant, names)
+            if guess and guess.strip().lower() in {n.lower() for n in names}:
+                return resolve_category(user_id, "expense", guess), "model"
+        except Exception as exc:
+            logger.warning("Категория магазина не подобрана: %s", type(exc).__name__)
+    return resolve_category(user_id, "expense", None), "fallback"
+
+
+def record_applepay(user_id: str, amount_text, merchant: Optional[str]) -> tuple[dict, bool, str]:
+    """Покупка из Apple Pay → операция. Возвращает (операция, это повтор?, откуда категория)."""
+    amount, currency, refund = parse_applepay_amount(amount_text, default_currency(user_id))
+    if refund:
+        raise MoneyError(422, "Возвраты пока не записываются", "refund")
+    note = (merchant or "").strip()[:NOTE_MAX] or "Apple Pay"
+    cutoff = (datetime.now(timezone.utc) - APPLEPAY_DEDUP).isoformat()
+    recent = supabase.table(TX_TABLE).select("*").eq("user_id", user_id).eq("source", "applepay").gte(
+        "created_at", cutoff).execute().data
+    for row in recent:
+        if row.get("note") == note and row["currency"] == currency and Decimal(str(row["amount"])) == amount:
+            return _tx_out(row), True, "duplicate"
+    cat, how = category_for_merchant(user_id, note)
+    tx = create_transaction(user_id, {"kind": "expense", "amount": str(amount), "currency": currency,
+                                      "category_id": cat["id"], "note": note}, source="applepay")
+    return tx, False, how

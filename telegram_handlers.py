@@ -52,6 +52,7 @@ BOT_COMMANDS = [
     BotCommand("last", "Последние операции"),
     BotCommand("currency", "Валюта по умолчанию: /currency EUR или KZT"),
     BotCommand("digest", "Утренняя и вечерняя сводка: /digest on или off"),
+    BotCommand("applepay", "Как подключить траты из Apple Pay"),
     BotCommand("categories", "Категории задач"),
     BotCommand("web", "Ссылка на приложение для браузера"),
     BotCommand("start", "Помощь"),
@@ -364,12 +365,12 @@ def _cat_names(user_id: str) -> dict:
     return {c["id"]: c["name"] for c in money_service.list_categories(user_id)}
 
 
-def _tx_markup(tx_id: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[
-        InlineKeyboardButton("Отменить", callback_data=f"m:u:{tx_id}"),
-        InlineKeyboardButton("Категория", callback_data=f"m:c:{tx_id}"),
-        InlineKeyboardButton("Это задача", callback_data=f"m:t:{tx_id}"),
-    ]])
+def _tx_markup(tx_id: str, with_task: bool = True) -> InlineKeyboardMarkup:
+    row = [InlineKeyboardButton("Отменить", callback_data=f"m:u:{tx_id}"),
+           InlineKeyboardButton("Категория", callback_data=f"m:c:{tx_id}")]
+    if with_task:  # у покупок Apple Pay «Это задача» не нужна
+        row.append(InlineKeyboardButton("Это задача", callback_data=f"m:t:{tx_id}"))
+    return InlineKeyboardMarkup([row])
 
 
 def _command_text(text: str) -> str:
@@ -432,6 +433,33 @@ async def _money_command(update: Update, kind: str) -> None:
         return
     await update.message.chat.send_action("typing")
     await _record_money(update, user, text, force_kind=kind, source="text")
+
+
+async def applepay_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/applepay — инструкция для автоматизации «Транзакция» в «Командах» с адресом и личным ключом."""
+    user = _known_user(update)
+    if not user:
+        await update.message.reply_text(NO_ACCESS_TEXT)
+        return
+    await update.message.reply_text(
+        "💳 Траты из Apple Pay — автоматически (iPhone, iOS 17 и новее)\n\n"
+        "1. Откройте «Команды» → вкладка «Автоматизация» → «+» → «Транзакция».\n"
+        "2. Карты: выберите свои карты. Остальное не трогайте. Внизу «Выполнять сразу» и выключите «Уведомлять». → «Далее».\n"
+        "3. «Новая пустая автоматизация» → «Добавить действие» → найдите «Получить содержимое URL».\n"
+        f"4. URL: {APP_URL}money/applepay\n"
+        "5. Нажмите стрелку «>» у действия:\n"
+        "   • Метод: POST\n"
+        "   • Заголовки → «Добавить новый»: ключ X-Access-Key, значение — ключ ниже\n"
+        "   • Текст запроса: JSON. Добавьте три поля «Текст» (названия ровно такие):\n"
+        "     amount → значение: переменная «Ввод команды» (Shortcut Input), в ней «Сумма» (Amount)\n"
+        "     merchant → «Ввод команды» → «Продавец» (Merchant)\n"
+        "     card → «Ввод команды» → «Карта или пропуск» (Card or Pass)\n"
+        "   Названия на iPhone могут немного отличаться — ищите сумму, магазин и карту.\n"
+        "6. «Готово». Заплатите телефоном — я пришлю «💳 Apple Pay: …» с категорией.\n\n"
+        "Ваш ключ (никому не пересылайте, по нему открываются ваши данные):",
+        disable_web_page_preview=True,
+    )
+    await update.message.reply_text(user["access_key"])
 
 
 async def task_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -585,9 +613,11 @@ async def money_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if not cat:
             await query.answer("Категория не найдена")
             return
-        tx = money_service.update_transaction(tx["id"], uid, {"category_id": cat["id"]})
-        await query.answer(f"Категория: {cat['name']}")
-        await query.edit_message_text("Добавлено: " + _money_line(tx, _cat_names(uid)), reply_markup=_tx_markup(tx["id"]))
+        tx = money_service.update_transaction(tx["id"], uid, {"category_id": cat["id"]})  # Apple Pay — запомнит магазин
+        applepay = tx.get("source") == "applepay"
+        await query.answer(f"Категория: {cat['name']}" + (" — запомнил для этого магазина" if applepay else ""))
+        await query.edit_message_text(("💳 Apple Pay: " if applepay else "Добавлено: ") + _money_line(tx, _cat_names(uid)),
+                                      reply_markup=_tx_markup(tx["id"], with_task=not applepay))
         return
 
     if action == "t":
@@ -716,6 +746,7 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("last", last_command))
     app.add_handler(CommandHandler("currency", currency_command))
     app.add_handler(CommandHandler("today", today_command))
+    app.add_handler(CommandHandler("applepay", applepay_command))
     app.add_handler(CommandHandler("digest", digest_command))
     app.add_handler(CallbackQueryHandler(access_decision, pattern=r"^(approve|deny):\d+$"))
     app.add_handler(CallbackQueryHandler(money_callback, pattern=r"^m:"))

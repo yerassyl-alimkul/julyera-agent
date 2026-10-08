@@ -498,7 +498,7 @@ def google_checks(db, client, owner, A, B):
 
     saved = (gcal.build, gcal._refresh, gcal.Flow, notifier.send_telegram)
     gcal.build, gcal._refresh, gcal.Flow = fake_build, fake_refresh, FakeFlow
-    notifier.send_telegram = lambda chat_id, text, with_app_button=False: sent.append((chat_id, text)) or True
+    notifier.send_telegram = lambda chat_id, text, *_, **__: sent.append((chat_id, text)) or True
     gcal._status_cache.clear()
     task = lambda h, name, deadline: client.post("/tasks", headers=h, json={"task": name, "category": "Work", "deadline": deadline})
     try:

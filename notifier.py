@@ -6,6 +6,7 @@
 import json
 import logging
 import os
+from typing import Optional
 
 import httpx
 
@@ -15,11 +16,14 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 APP_URL = (os.environ.get("WEBHOOK_BASE_URL") or "https://julyera-agent.onrender.com").rstrip("/") + "/"
 
 
-def send_telegram(chat_id: int, text: str, with_app_button: bool = False) -> bool:
+def send_telegram(chat_id: int, text: str, with_app_button: bool = False, buttons: Optional[list] = None) -> bool:
+    """buttons — строки inline-кнопок [[{"text", "callback_data"}]]; with_app_button — кнопка открытия приложения."""
     if not TELEGRAM_BOT_TOKEN:
         return False
     payload = {"chat_id": chat_id, "text": text}
-    if with_app_button:
+    if buttons:
+        payload["reply_markup"] = json.dumps({"inline_keyboard": buttons})
+    elif with_app_button:
         payload["reply_markup"] = json.dumps(
             {"inline_keyboard": [[{"text": "Открыть приложение", "web_app": {"url": APP_URL}}]]}
         )
@@ -31,12 +35,12 @@ def send_telegram(chat_id: int, text: str, with_app_button: bool = False) -> boo
         return False
 
 
-def notify_user(user_id: str, text: str, with_app_button: bool = False) -> int:
+def notify_user(user_id: str, text: str, with_app_button: bool = False, buttons: Optional[list] = None) -> int:
     """Шлёт сообщение во все чаты пользователя; возвращает, сколько отправлено."""
     import users_service
 
     sent = 0
     for chat_id in users_service.get_chat_ids(user_id):
-        if send_telegram(chat_id, text, with_app_button):
+        if send_telegram(chat_id, text, with_app_button, buttons):
             sent += 1
     return sent

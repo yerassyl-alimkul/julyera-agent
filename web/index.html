@@ -4557,6 +4557,7 @@ function moneyRowEl(tx) {
   const metaParts = [];
   if (tx.note) metaParts.push(cat.name);
   if (tx.recurring_id || tx.source === 'recurring') metaParts.push('повторяется');
+  if (tx.source === 'applepay') metaParts.push('Apple Pay');
   if (metaParts.length) {
     const meta = document.createElement('div');
     meta.className = 'money-row-meta';
