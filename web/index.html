@@ -1114,8 +1114,11 @@ applyTheme();
   /* Форма операции */
   .money-form { display: flex; flex-direction: column; gap: var(--gap-section); padding-top: var(--gap-header); }
   .money-form .segmented { margin-top: 0; }
-  .money-describe { display: flex; gap: var(--gap-s); align-items: flex-end; }
-  .money-describe textarea { flex: 1; min-height: var(--touch); height: 52px; resize: none; }
+  .money-describe { display: flex; gap: var(--gap-s); align-items: center; }
+  /* одна высота с кнопками рядом; текст — по центру строки */
+  .money-describe textarea { flex: 1; min-width: 0; height: var(--touch); min-height: var(--touch); padding: 9px 14px;
+    line-height: 22px; resize: none; scrollbar-width: none; }
+  .money-describe textarea::-webkit-scrollbar { display: none; }
   .money-describe .tb-btn { flex: 0 0 auto; }
   .field-amount { height: 64px; font-family: var(--font-display); font-size: 28px; }
   .money-drafts { display: flex; flex-direction: column; gap: var(--gap-s); }

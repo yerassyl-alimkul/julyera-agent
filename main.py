@@ -143,6 +143,16 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def html_no_cache(request: Request, call_next):
+    """Страница приложения: браузер каждый раз сверяется с сервером (по ETag — без повторной загрузки, если не
+    менялась). Иначе после релиза телефон и Telegram показывают старую версию из кэша."""
+    response = await call_next(request)
+    if request.method == "GET" and response.headers.get("content-type", "").startswith("text/html"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 @app.exception_handler(CategoryError)
 async def category_error_handler(request: Request, exc: CategoryError):
     # 404 — чужая или несуществующая, 409 — дубль / последняя / есть задачи, 422 — неверное название или цвет
