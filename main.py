@@ -50,6 +50,7 @@ import notes_service
 import subtasks_service
 import users_service
 import google_calendar_service as gcal
+from database import supabase
 from categories_service import CategoryError
 from telegram_auth import InitDataError, verify_init_data
 from models import (
@@ -298,7 +299,17 @@ async def run_reminders(request: Request):
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "telegram_webhook": bool(telegram_app and WEBHOOK_BASE_URL)}
+    """Публичная проверка: жив ли сервис, ходит ли он в базу и стоит ли webhook.
+    Ответ всегда 200 (сбой базы не должен валить проверки Render), состояние базы — в поле "database".
+    После перевыпуска ключей "database": "ok" значит, что новый SUPABASE_KEY на Render рабочий."""
+    try:
+        supabase.table("users").select("id").limit(1).execute()
+        database = "ok"
+    except Exception as exc:
+        # Только тип ошибки: текст исключения может содержать адрес или фрагменты запроса.
+        logger.warning("Проверка базы в /health не прошла: %s", type(exc).__name__)
+        database = "error"
+    return {"status": "ok", "database": database, "telegram_webhook": bool(telegram_app and WEBHOOK_BASE_URL)}
 
 
 def _google_auth_url(user: dict) -> str:
