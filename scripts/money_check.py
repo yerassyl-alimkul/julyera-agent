@@ -157,6 +157,11 @@ def http_checks(client, token, A, B, db_insert):
           [(c["name"], c["amount"], c["share"]) for c in eur.get("by_category", [])] == [("Еда", "40.00", 80), ("Прочее", "10.00", 20)],
           str(eur.get("by_category")))
     check("предыдущий месяц для сравнения (июль: 20.00 EUR)", eur.get("previous", {}).get("expense") == "20.00")
+    check("разница расходов с прошлым месяцем считается на сервере (+30.00)",
+          eur.get("previous", {}).get("expense_change") == "30.00")
+    check("суммы по дням для заголовков списка",
+          [(d["day"], d["expense"], d["income"]) for d in eur.get("days", [])] ==
+          [("2026-08-04", "10.00", "0.00"), ("2026-08-03", "40.00", "0.00"), ("2026-08-01", "0.00", "1800.00")])
     s_sep = client.get("/money/summary", headers=hA, params={"month": "2026-05"}).json()
     check("валюта без операций в месяце не появляется", s_sep.get("currencies") == [])
     check("месяц в неверном виде → 422", client.get("/money/summary", headers=hA, params={"month": "2026-8"}).status_code == 422)

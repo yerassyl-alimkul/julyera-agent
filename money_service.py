@@ -437,7 +437,8 @@ def _period_rows(user_id: str, start: date, end_exclusive: date) -> list[dict]:
 
 def summary(user_id: str, month: Optional[str] = None) -> dict:
     """Итоги месяца по каждой валюте: доходы, расходы, баланс, расходы по категориям (сумма и доля),
-    плюс доходы и расходы предыдущего месяца. Валюта без операций в этом месяце не появляется."""
+    суммы по дням (для заголовков дней в списке), доходы и расходы предыдущего месяца и разница расходов.
+    Валюта без операций в этом месяце не появляется. Клиент суммы не считает, только показывает."""
     start = _parse_month(month, user_id)
     prev_start, next_start = _add_months(start, -1), _add_months(start, 1)
     rows = _period_rows(user_id, prev_start, next_start)
@@ -446,9 +447,11 @@ def summary(user_id: str, month: Optional[str] = None) -> dict:
     def totals(selected):
         out = {}
         for r in selected:
-            t = out.setdefault(r["currency"], {"income": Decimal(0), "expense": Decimal(0), "by_cat": {}})
+            t = out.setdefault(r["currency"], {"income": Decimal(0), "expense": Decimal(0), "by_cat": {}, "by_day": {}})
             amount = Decimal(str(r["amount"]))
             t[r["kind"]] += amount
+            day = t["by_day"].setdefault(str(r["spent_on"])[:10], {"income": Decimal(0), "expense": Decimal(0)})
+            day[r["kind"]] += amount
             if r["kind"] == "expense":
                 t["by_cat"][r["category_id"]] = t["by_cat"].get(r["category_id"], Decimal(0)) + amount
         return out
@@ -470,7 +473,10 @@ def summary(user_id: str, month: Optional[str] = None) -> dict:
         currencies.append({
             "currency": cur, "income": fmt(t["income"]), "expense": fmt(t["expense"]),
             "balance": fmt(t["income"] - t["expense"]), "by_category": by_category,
-            "previous": {"income": fmt(p["income"]), "expense": fmt(p["expense"])},
+            "days": [{"day": d, "income": fmt(v["income"]), "expense": fmt(v["expense"])}
+                     for d, v in sorted(t["by_day"].items(), reverse=True)],
+            "previous": {"income": fmt(p["income"]), "expense": fmt(p["expense"]),
+                         "expense_change": fmt(t["expense"] - p["expense"])},
         })
     return {"month": start.strftime("%Y-%m"), "currencies": currencies}
 

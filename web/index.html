@@ -826,7 +826,7 @@ applyTheme();
     background: var(--dock-bg);
   }
   .dock-btn {
-    flex: 1;
+    flex: 1 1 auto;
     min-width: var(--touch);
     padding: 0;
     border: none;
@@ -839,6 +839,7 @@ applyTheme();
     transition: background-color var(--dur-chip) ease, color var(--dur-chip) ease;
   }
   .dock-btn.active { background: var(--dock-active-bg); color: var(--dock-active-ink); font-weight: 600; }
+  @media (max-width: 400px) { .dock { gap: 2px; padding: 6px 4px; } .dock-btn { font-size: 13px; padding: 0 2px; } }
   .fab {
     flex: 0 0 var(--touch-l);
     width: var(--touch-l);
@@ -977,6 +978,103 @@ applyTheme();
   .all-group-title { margin: 0; font-family: var(--font-text); font-size: 16px; font-weight: 600; }
   .all-group-title.overdue { color: var(--danger); }
   .all-group-count { font-size: 13px; color: var(--ink-muted); }
+
+  /* ---------- Деньги ---------- */
+  .money-head { display: flex; align-items: center; justify-content: space-between; gap: var(--gap-s); padding-top: var(--gap-s); }
+  .money-head .t-h1-month { margin: 0; }
+  .money-tools { display: flex; flex-wrap: wrap; gap: var(--gap-s); padding-top: var(--gap-l); }
+  .money-cards { display: flex; flex-direction: column; gap: var(--gap-m); padding-top: var(--gap-section); }
+  .money-card {
+    padding: 16px 18px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+  }
+  .money-card-cur { font-size: 13px; font-weight: 600; color: var(--ink-muted); letter-spacing: 0.02em; }
+  .money-card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap-s) var(--gap-l); padding-top: var(--gap-s); }
+  .money-figure { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .money-figure span { font-size: 13px; color: var(--ink-muted); }
+  .money-figure b { font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
+  .money-figure.balance { grid-column: 1 / -1; }
+  .money-figure.balance b { font-family: var(--font-display); font-size: 22px; }
+  .money-figure.balance b.neg { color: var(--danger); }
+  .money-compare { margin: var(--gap-s) 0 0; font-size: 13px; color: var(--ink-muted); }
+  .money-block { padding-top: var(--gap-header); }
+  .money-h2 { margin: 0 0 var(--gap-l); font-family: var(--font-text); font-size: 16px; font-weight: 600; }
+  .money-bars { display: flex; flex-direction: column; gap: var(--gap-s); }
+  .money-bar {
+    display: flex; flex-direction: column; gap: 6px;
+    min-height: var(--touch);
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-compact);
+    background: var(--surface);
+    color: var(--ink);
+    text-align: left;
+    cursor: pointer;
+  }
+  .money-bar[aria-pressed="true"] { border-color: var(--ink); }
+  .money-bar-top { display: flex; justify-content: space-between; gap: var(--gap-s); font-size: 14px; }
+  .money-bar-top b { font-weight: 600; white-space: nowrap; }
+  .money-bar-track { display: block; height: 8px; border-radius: var(--radius-pill); background: var(--hairline); overflow: hidden; }
+  .money-bar-fill { display: block; height: 100%; border-radius: var(--radius-pill); background: var(--chip-color, var(--accent)); }
+  .money-cur-label { margin: var(--gap-l) 0 var(--gap-s); font-size: 13px; font-weight: 600; color: var(--ink-muted); }
+  .money-trend svg { display: block; width: 100%; height: auto; }
+  .trend-expense { fill: var(--ink); }
+  .trend-income { fill: var(--accent); opacity: 0.55; }
+  .trend-label { fill: var(--ink-muted); font-size: 11px; font-family: var(--font-text); }
+  .trend-legend { display: flex; gap: var(--gap-l); font-size: 13px; color: var(--ink-muted); padding-bottom: var(--gap-s); }
+  .trend-legend i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 3px; vertical-align: -1px; }
+  .trend-legend .e { background: var(--ink); }
+  .trend-legend .i { background: var(--accent); opacity: 0.55; }
+  .money-list-head { display: flex; align-items: center; justify-content: space-between; gap: var(--gap-s); }
+  .money-list-head .money-h2 { margin: 0; }
+  .money-list { display: flex; flex-direction: column; gap: var(--gap-s); padding-top: var(--gap-l); }
+  .money-day { display: flex; justify-content: space-between; gap: var(--gap-s); padding: var(--gap-m) 4px 2px; font-size: 13px; color: var(--ink-muted); }
+  .money-day b { font-weight: 600; color: var(--ink); }
+  .money-row {
+    display: flex; align-items: center; gap: var(--gap-m);
+    min-height: 56px;
+    padding: 10px 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-compact);
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .swipe-track > .money-row { flex: 0 0 calc(100% - 140px); }
+  .money-row .cat-dot { width: 14px; height: 14px; }
+  .money-row-body { flex: 1; min-width: 0; }
+  .money-row-title { font-size: 15px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .money-row-meta { font-size: 13px; color: var(--ink-muted); }
+  .money-row-amount { font-weight: 600; white-space: nowrap; }
+  .money-row-amount.income { color: var(--accent-text); }
+  .money-more { align-self: center; margin-top: var(--gap-s); }
+
+  /* Форма операции и повторяющиеся платежи */
+  .money-form { display: flex; flex-direction: column; gap: var(--gap-section); padding-top: var(--gap-header); }
+  .money-form .segmented { margin-top: 0; }
+  .money-describe { display: flex; gap: var(--gap-s); align-items: flex-end; }
+  .money-describe textarea { flex: 1; min-height: var(--touch); height: 52px; resize: none; }
+  .money-describe .tb-btn { flex: 0 0 auto; }
+  .field-amount { height: 64px; font-family: var(--font-display); font-size: 28px; }
+  .money-drafts { display: flex; flex-direction: column; gap: var(--gap-s); }
+  .money-draft { display: flex; align-items: center; gap: var(--gap-m); min-height: var(--touch); padding: 8px 12px;
+    border: 1px solid var(--line); border-radius: var(--radius-compact); background: var(--surface); }
+  .money-draft input { width: 22px; height: 22px; accent-color: var(--accent); }
+  .rec-row { display: flex; align-items: center; gap: var(--gap-m); min-height: 60px; padding: 10px 14px;
+    border: 1px solid var(--line); border-radius: var(--radius-compact); background: var(--surface); }
+  .rec-row .money-row-body { cursor: pointer; }
+  .rec-row.inactive .money-row-body { opacity: 0.55; }
+  .switch { position: relative; flex: 0 0 auto; width: 52px; height: var(--touch); display: flex; align-items: center;
+    border: 0; background: transparent; padding: 0; cursor: pointer; }
+  .switch::before { content: ""; width: 44px; height: 26px; border-radius: var(--radius-pill); background: var(--dashed);
+    transition: background-color var(--dur-chip) ease; }
+  .switch::after { content: ""; position: absolute; left: 3px; width: 20px; height: 20px; border-radius: 50%;
+    background: #FFFFFF; transition: transform var(--dur-chip) ease; }
+  .switch[aria-checked="true"]::before { background: var(--accent); }
+  .switch[aria-checked="true"]::after { transform: translateX(18px); }
+  #categoriesSheet .segmented { margin-top: var(--gap-l); }
 
   /* Edit: форма */
   .edit-form { display: flex; flex-direction: column; gap: var(--gap-section); padding-top: var(--gap-header); }
@@ -1485,6 +1583,38 @@ applyTheme();
       <div class="cal-day-list" id="calDayTasks"></div>
     </section>
 
+    <section id="moneyView" style="display: none;" aria-labelledby="moneyMonthLabel">
+      <div class="money-head">
+        <h1 class="t-h1-month" id="moneyMonthLabel"></h1>
+        <div class="cal-nav">
+          <button class="tb-btn" id="moneyPrev" aria-label="Предыдущий месяц"><svg viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></svg></button>
+          <button class="tb-btn" id="moneyNext" aria-label="Следующий месяц"><svg viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></svg></button>
+        </div>
+      </div>
+      <div class="money-tools">
+        <button class="pill-btn" id="moneyCurrent" hidden>Текущий</button>
+        <button class="pill-btn" id="moneyRecurringBtn">Повторяющиеся</button>
+        <button class="pill-btn" id="moneyCategoriesBtn">Категории</button>
+      </div>
+      <div class="money-cards" id="moneyCards"></div>
+      <section class="money-block" id="moneyBarsBlock" aria-labelledby="moneyBarsTitle">
+        <h2 class="money-h2" id="moneyBarsTitle">Расходы по категориям</h2>
+        <div id="moneyBars"></div>
+      </section>
+      <section class="money-block" id="moneyTrendBlock" aria-labelledby="moneyTrendTitle">
+        <h2 class="money-h2" id="moneyTrendTitle">Динамика за 6 месяцев</h2>
+        <div class="trend-legend" aria-hidden="true"><span><i class="i"></i>доходы</span><span><i class="e"></i>расходы</span></div>
+        <div class="money-trend" id="moneyTrend"></div>
+      </section>
+      <section class="money-block" aria-labelledby="moneyListTitle">
+        <div class="money-list-head">
+          <h2 class="money-h2" id="moneyListTitle">Операции</h2>
+          <button class="link-btn" id="moneyFilterClear" type="button" hidden>Показать все</button>
+        </div>
+        <div class="money-list" id="moneyList"></div>
+      </section>
+    </section>
+
     <section id="notesView" style="display: none;" aria-labelledby="notesTitle">
       <div class="day-head">
         <div class="day-head-text">
@@ -1512,6 +1642,7 @@ applyTheme();
     <button class="dock-btn active" data-page="list" aria-current="page">Задачи</button>
     <button class="dock-btn" data-page="calendar">Календарь</button>
     <button class="dock-btn" data-page="notes">Заметки</button>
+    <button class="dock-btn" data-page="money">Деньги</button>
   </nav>
   <button class="fab" id="fabBtn" aria-label="Добавить задачу">
     <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
@@ -1601,6 +1732,11 @@ applyTheme();
       <h2 class="t-modal-title" id="categoriesTitle">Категории</h2>
       <span></span>
     </div>
+    <div class="segmented" role="group" aria-label="Чьи категории">
+      <button type="button" data-cat-scope="tasks" aria-pressed="true">Задачи</button>
+      <button type="button" data-cat-scope="expense" aria-pressed="false">Расходы</button>
+      <button type="button" data-cat-scope="income" aria-pressed="false">Доходы</button>
+    </div>
     <div class="cat-list" id="catList"></div>
     <section class="form-section" style="padding-top: var(--gap-section);">
       <label class="form-label" for="catNewName">Новая категория</label>
@@ -1610,6 +1746,78 @@ applyTheme();
   </div>
   <div class="sheet-footer">
     <button class="btn-primary" id="catAdd">Добавить категорию</button>
+  </div>
+</div>
+
+<!-- Форма операции (деньги) -->
+<div class="sheet" id="moneySheet" role="dialog" aria-modal="true" aria-labelledby="moneySheetTitle" hidden>
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <button class="tb-btn" id="moneySheetClose" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <h2 class="t-modal-title" id="moneySheetTitle">Новая операция</h2>
+      <span></span>
+    </div>
+    <div class="money-form">
+      <div class="segmented" role="group" aria-label="Тип операции">
+        <button type="button" id="moneyKindExpense" aria-pressed="true">Расход</button>
+        <button type="button" id="moneyKindIncome" aria-pressed="false">Доход</button>
+      </div>
+      <section class="form-section" id="moneyDescribeSection">
+        <label class="form-label" for="moneyDescribe">Опиши трату своими словами</label>
+        <div class="money-describe">
+          <textarea class="field" id="moneyDescribe" placeholder="кофе 3,5 евро"></textarea>
+          <button class="tb-btn" id="moneyMicBtn" type="button" aria-label="Наговорить голосом"><svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+          <button class="btn-small" id="moneyParseBtn" type="button">Разобрать</button>
+        </div>
+        <div class="money-drafts" id="moneyDrafts" hidden></div>
+      </section>
+      <section class="form-section">
+        <label class="form-label" for="moneyAmount">Сумма</label>
+        <input class="field field-amount" id="moneyAmount" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00">
+      </section>
+      <section class="form-section">
+        <h3 class="form-label" id="moneyCurLabel">Валюта</h3>
+        <div class="chip-group" id="moneyCurrency" role="group" aria-labelledby="moneyCurLabel"></div>
+      </section>
+      <section class="form-section">
+        <h3 class="form-label" id="moneyCatLabel">Категория</h3>
+        <div class="chip-group" id="moneyCategory" role="group" aria-labelledby="moneyCatLabel"></div>
+      </section>
+      <section class="form-section" id="moneyDateSection">
+        <label class="form-label" for="moneyDate">Дата</label>
+        <input class="field" id="moneyDate" type="date">
+      </section>
+      <section class="form-section" id="moneyDomSection" hidden>
+        <label class="form-label" for="moneyDom">День месяца</label>
+        <input class="field" id="moneyDom" type="number" inputmode="numeric" min="1" max="31">
+      </section>
+      <section class="form-section">
+        <label class="form-label" for="moneyNote">Заметка</label>
+        <input class="field" id="moneyNote" type="text" maxlength="200" autocomplete="off" placeholder="Например: кофе">
+      </section>
+      <button class="btn-danger" id="moneyDelete" type="button" hidden>
+        <svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/></svg>
+        <span id="moneyDeleteLabel">Удалить операцию</span>
+      </button>
+    </div>
+  </div>
+  <div class="sheet-footer">
+    <button class="btn-primary" id="moneySave">Сохранить</button>
+  </div>
+</div>
+
+<!-- Повторяющиеся платежи -->
+<div class="sheet" id="recurringSheet" role="dialog" aria-modal="true" aria-labelledby="recurringTitle" hidden>
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <button class="tb-btn" id="recurringClose" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <h2 class="t-modal-title" id="recurringTitle">Повторяющиеся</h2>
+      <span></span>
+    </div>
+    <div class="money-list" id="recurringList" style="padding-top: var(--gap-header);"></div>
+  </div>
+  <div class="sheet-footer">
+    <button class="btn-primary" id="recurringAdd">Добавить платёж</button>
   </div>
 </div>
 
@@ -2120,6 +2328,8 @@ function renderCurrentPage() {
     else renderTaskList();
   } else if (currentPage === 'calendar') {
     renderCalendar();
+  } else if (currentPage === 'money') {
+    renderMoney();
   }
 }
 
@@ -2135,8 +2345,11 @@ function switchPage(page) {
   document.getElementById('listView').style.display = page === 'list' ? '' : 'none';
   document.getElementById('calendarView').style.display = page === 'calendar' ? '' : 'none';
   document.getElementById('notesView').style.display = page === 'notes' ? '' : 'none';
-  document.getElementById('fabBtn').setAttribute('aria-label', page === 'notes' ? 'Добавить заметку' : 'Добавить задачу');
+  document.getElementById('moneyView').style.display = page === 'money' ? '' : 'none';
+  document.getElementById('fabBtn').setAttribute('aria-label',
+    page === 'notes' ? 'Добавить заметку' : page === 'money' ? 'Добавить операцию' : 'Добавить задачу');
   if (page === 'notes') loadNotes();
+  else if (page === 'money') loadMoney();
   else renderCurrentPage();
 }
 
@@ -2415,20 +2628,22 @@ let openSwipe = null;  // { track, id }
 let swipeDrag = null;  // текущее перетаскивание
 let suppressRowClickUntil = 0;
 
-function swipeWrapEl(row, taskId) {
+// actions — для строк не-задач (операции денег): { edit, del, noun }; по умолчанию — задача.
+function swipeWrapEl(row, taskId, actions) {
   const wrap = document.createElement('div');
   wrap.className = 'swipe';
   const track = document.createElement('div');
   track.className = 'swipe-track';
-  const actions = document.createElement('div');
-  actions.className = 'swipe-actions';
-  actions.setAttribute('aria-hidden', 'true');
-  actions.innerHTML =
-    '<button class="swipe-edit" tabindex="-1" aria-label="Изменить задачу"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg>Изменить</button>' +
-    '<button class="swipe-delete" tabindex="-1" aria-label="Удалить задачу"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/></svg>Удалить</button>';
-  actions.querySelector('.swipe-edit').onclick = () => { closeSwipe(); openEdit(taskId); };
-  actions.querySelector('.swipe-delete').onclick = () => { closeSwipe(); deleteTask(taskId); };
-  track.append(row, actions);
+  const handlers = actions || { edit: () => openEdit(taskId), del: () => deleteTask(taskId), noun: 'задачу' };
+  const actionsEl = document.createElement('div');
+  actionsEl.className = 'swipe-actions';
+  actionsEl.setAttribute('aria-hidden', 'true');
+  actionsEl.innerHTML =
+    `<button class="swipe-edit" tabindex="-1" aria-label="Изменить ${handlers.noun}"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg>Изменить</button>` +
+    `<button class="swipe-delete" tabindex="-1" aria-label="Удалить ${handlers.noun}"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/></svg>Удалить</button>`;
+  actionsEl.querySelector('.swipe-edit').onclick = () => { closeSwipe(); handlers.edit(); };
+  actionsEl.querySelector('.swipe-delete').onclick = () => { closeSwipe(); handlers.del(); };
+  track.append(row, actionsEl);
   wrap.appendChild(track);
 
   track.addEventListener('pointerdown', (e) => {
@@ -2502,7 +2717,7 @@ let renderDeferred = false;
 function isRowInteractionBusy() {
   if (openSwipe || (swipeDrag && swipeDrag.active)) return true;
   const a = document.activeElement;
-  return !!(a && a.matches('input, textarea') && a.closest('#dayTasks, #allList'));
+  return !!(a && a.matches('input, textarea') && a.closest('#dayTasks, #allList, #moneyList'));
 }
 
 function flushDeferredRender() {
@@ -3653,17 +3868,29 @@ async function loadPalette() {
 }
 
 const categoriesSheet = document.getElementById('categoriesSheet');
+let catScope = 'tasks';      // 'tasks' — категории задач, 'expense' / 'income' — категории денег
 let catOpenPalette = null;   // id категории с открытой палитрой
 let catMovePrompt = null;    // { id, count } — спрашиваем, куда перенести задачи
 let catNewColor = null;
+
+// Список и адреса для открытой вкладки экрана «Категории».
+function catItems() {
+  return catScope === 'tasks' ? allCategories : moneyCategories.filter(c => c.kind === catScope);
+}
+function catBase() { return catScope === 'tasks' ? '/categories' : '/money/categories'; }
 
 async function categoryRequest(path, options, okMessage) {
   try {
     const res = await api(path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, options));
     if (res.ok) {
       if (okMessage) toast(okMessage);
-      await loadCategories();
-      await loadTasks();  // переименование и удаление меняют категории задач
+      if (catScope === 'tasks') {
+        await loadCategories();
+        await loadTasks();  // переименование и удаление меняют категории задач
+      } else {
+        await loadMoneyCategories();
+        moneyDirty = true;  // итоги и список перечитаются при возврате на вкладку
+      }
       renderCategoriesScreen();
       return { ok: true };
     }
@@ -3708,8 +3935,11 @@ function iconButton(svgPath, label, onClick, extraClass) {
 function renderCategoriesScreen() {
   const list = document.getElementById('catList');
   const focusKey = list.contains(document.activeElement) ? document.activeElement.dataset.focusKey : null;
+  document.querySelectorAll('[data-cat-scope]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.catScope === catScope)));
+  const items = catItems();
+  const itemsWord = catScope === 'tasks' ? 'Задачи' : 'Операции';
   list.innerHTML = '';
-  allCategories.forEach((cat, index) => {
+  items.forEach((cat, index) => {
     const card = document.createElement('div');
     card.className = 'cat-card';
     const row = document.createElement('div');
@@ -3735,31 +3965,32 @@ function renderCategoriesScreen() {
     const saveName = async () => {
       const value = name.value.trim();
       if (!value || value === cat.name) { name.value = cat.name; return; }
-      const r = await categoryRequest(`/categories/${cat.id}`, { method: 'PATCH', body: JSON.stringify({ name: value }) }, 'Категория переименована');
+      const r = await categoryRequest(`${catBase()}/${cat.id}`, { method: 'PATCH', body: JSON.stringify({ name: value }) }, 'Категория переименована');
       if (!r.ok) { toast(r.message); name.value = cat.name; }
     };
     name.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); name.blur(); } if (e.key === 'Escape') { e.stopPropagation(); name.value = cat.name; name.blur(); } };
     name.onblur = saveName;
 
     const move = async (delta) => {
-      const ids = allCategories.map(c => c.id);
+      const ids = items.map(c => c.id);
       const j = index + delta;
       [ids[index], ids[j]] = [ids[j], ids[index]];
-      const r = await categoryRequest('/categories/order', { method: 'PUT', body: JSON.stringify({ ids }) });
+      const body = catScope === 'tasks' ? { ids } : { kind: catScope, ids };
+      const r = await categoryRequest(`${catBase()}/order`, { method: 'PUT', body: JSON.stringify(body) });
       if (!r.ok) toast(r.message);
     };
     const up = iconButton('M12 19V5M5 12l7-7 7 7', `Поднять ${cat.name}`, () => move(-1));
     up.disabled = index === 0;
     up.dataset.focusKey = 'cat-up-' + cat.id;
     const down = iconButton('M12 5v14M5 12l7 7 7-7', `Опустить ${cat.name}`, () => move(1));
-    down.disabled = index === allCategories.length - 1;
+    down.disabled = index === items.length - 1;
     down.dataset.focusKey = 'cat-down-' + cat.id;
     const del = iconButton('M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12', `Удалить ${cat.name}`, async () => {
-      if (allCategories.length <= 1) { toast('Последнюю категорию удалить нельзя'); return; }
-      const r = await categoryRequest(`/categories/${cat.id}`, { method: 'DELETE' }, 'Категория удалена');
+      if (items.length <= 1) { toast('Последнюю категорию удалить нельзя'); return; }
+      const r = await categoryRequest(`${catBase()}/${cat.id}`, { method: 'DELETE' }, 'Категория удалена');
       if (r.ok) return;
-      if (r.code === 'has_tasks') {
-        catMovePrompt = { id: cat.id, message: r.message, target: allCategories.find(c => c.id !== cat.id).id };
+      if (r.code === 'has_tasks' || r.code === 'has_items') {
+        catMovePrompt = { id: cat.id, message: r.message, target: items.find(c => c.id !== cat.id).id };
         renderCategoriesScreen();
       } else {
         toast(r.message);
@@ -3771,7 +4002,7 @@ function renderCategoriesScreen() {
     if (catOpenPalette === cat.id) {
       card.appendChild(paletteEl(cat.color, `Цвет категории ${cat.name}`, async (color) => {
         catOpenPalette = null;
-        const r = await categoryRequest(`/categories/${cat.id}`, { method: 'PATCH', body: JSON.stringify({ color }) });
+        const r = await categoryRequest(`${catBase()}/${cat.id}`, { method: 'PATCH', body: JSON.stringify({ color }) });
         if (!r.ok) toast(r.message);
       }));
     }
@@ -3783,7 +4014,7 @@ function renderCategoriesScreen() {
       text.textContent = `${catMovePrompt.message}:`;
       const chips = document.createElement('div');
       chips.className = 'chip-group';
-      allCategories.filter(c => c.id !== cat.id).forEach(other => {
+      items.filter(c => c.id !== cat.id).forEach(other => {
         const [btn, label] = choiceChipEl(other.name, catMovePrompt.target === other.id, 'cat',
           () => { catMovePrompt.target = other.id; renderCategoriesScreen(); });
         btn.style.setProperty('--chip-color', other.color);
@@ -3800,7 +4031,7 @@ function renderCategoriesScreen() {
       go.onclick = async () => {
         const target = catMovePrompt.target;
         catMovePrompt = null;
-        const r = await categoryRequest(`/categories/${cat.id}?move_to=${encodeURIComponent(target)}`, { method: 'DELETE' }, 'Задачи перенесены, категория удалена');
+        const r = await categoryRequest(`${catBase()}/${cat.id}?move_to=${encodeURIComponent(target)}`, { method: 'DELETE' }, `${itemsWord} перенесены, категория удалена`);
         if (!r.ok) toast(r.message);
       };
       const cancel = document.createElement('button');
@@ -3816,7 +4047,7 @@ function renderCategoriesScreen() {
 
   // палитра новой категории: по умолчанию первый цвет, которого ещё нет в списке
   if (!catNewColor) {
-    const used = new Set(allCategories.map(c => c.color));
+    const used = new Set(items.map(c => c.color));
     catNewColor = categoryPalette.find(c => !used.has(c)) || categoryPalette[0];
   }
   const newPalette = document.getElementById('catNewPalette');
@@ -3835,13 +4066,16 @@ async function addCategory() {
   const input = document.getElementById('catNewName');
   const name = input.value.trim();
   if (!name) { input.focus(); return; }
-  const r = await categoryRequest('/categories', { method: 'POST', body: JSON.stringify({ name, color: catNewColor }) }, 'Категория добавлена');
+  const body = catScope === 'tasks' ? { name, color: catNewColor } : { kind: catScope, name, color: catNewColor };
+  const r = await categoryRequest(catBase(), { method: 'POST', body: JSON.stringify(body) }, 'Категория добавлена');
   if (r.ok) { input.value = ''; catNewColor = null; renderCategoriesScreen(); }
   else toast(r.message);
 }
 
-function openCategories() {
+function openCategories(scope) {
   closeMobileMenu();
+  catScope = typeof scope === 'string' ? scope : 'tasks';
+  if (catScope !== 'tasks') loadMoneyCategories().then(renderCategoriesScreen);
   catOpenPalette = null;
   catMovePrompt = null;
   catNewColor = null;
@@ -3858,14 +4092,659 @@ function closeCategories() {
   categoriesSheet.hidden = true;
   document.body.classList.remove('no-scroll');
   setBackgroundInert(false);
-  renderCurrentPage();
-  document.getElementById('menuBtn').focus();
+  if (currentPage === 'money') loadMoney();
+  else renderCurrentPage();
+  document.getElementById(currentPage === 'money' ? 'moneyCategoriesBtn' : 'menuBtn').focus();
 }
+document.querySelectorAll('[data-cat-scope]').forEach(btn => {
+  btn.onclick = () => {
+    catScope = btn.dataset.catScope;
+    catOpenPalette = null;
+    catMovePrompt = null;
+    catNewColor = null;
+    if (catScope !== 'tasks') loadMoneyCategories().then(renderCategoriesScreen);
+    renderCategoriesScreen();
+  };
+});
 
-document.getElementById('menuCategories').onclick = openCategories;
+document.getElementById('menuCategories').onclick = () => openCategories('tasks');
 document.getElementById('categoriesClose').onclick = closeCategories;
 document.getElementById('catAdd').onclick = addCategory;
 document.getElementById('catNewName').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); addCategory(); } };
+
+// ---------- Деньги (задача №3) ----------
+// Суммы приходят строками ("1240.50") и в JS не складываются: итоги, суммы дней и разницу считает сервер.
+// Даты операций — "YYYY-MM-DD", разбираются по частям (без new Date(isoString)).
+const MONEY_PAGE = 200;
+let moneyMonth = null;          // 'YYYY-MM'; null — текущий
+let moneySummary = null;
+let moneyTrendData = null;
+let moneyTx = [];
+let moneyHasMore = false;
+let moneyFilterCat = null;      // id категории, по которой отфильтрован список (нажатие на полосу)
+let moneyCategories = [];
+let moneyMe = null;             // { default_currency, currencies }
+let moneyDirty = false;
+let moneyLoaded = false;
+const pendingMoneyDeletions = {};
+
+function moneyFmt(amount, currency, sign) {
+  let text;
+  try {
+    text = new Intl.NumberFormat('ru-RU', { style: 'currency', currency, currencyDisplay: 'narrowSymbol', minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      .format(Number(amount));  // Number — только для показа; расчёты на сервере
+  } catch (e) {
+    text = `${amount} ${currency}`;
+  }
+  return (sign || '') + text;
+}
+function ymd(str) { const [y, m, d] = String(str).slice(0, 10).split('-').map(Number); return { y, m, d }; }
+function currentMonthKey() { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}`; }
+function shiftMonth(key, delta) {
+  const [y, m] = key.split('-').map(Number);
+  const dt = new Date(y, m - 1 + delta, 1);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+}
+function monthTitle(key) { const [y, m] = key.split('-').map(Number); return `${MONTH_NAMES_RU[m - 1]} ${y}`; }
+function monthBounds(key) {
+  const [y, m] = key.split('-').map(Number);
+  const last = new Date(y, m, 0).getDate();
+  return { from: `${key}-01`, to: `${key}-${String(last).padStart(2, '0')}` };
+}
+function moneyCat(id) { return moneyCategories.find(c => c.id === id); }
+function todayKey() { return localDateKey(new Date()); }
+
+async function apiJson(path, options) {
+  const res = await api(path, options);
+  if (!res.ok) {
+    let message = null;
+    try { const d = (await res.clone().json()).detail; message = d && (d.message || (typeof d === 'string' ? d : null)); } catch (e) { message = null; }
+    const err = new Error(message || requestCode((options && options.method) || 'GET', path.split('?')[0], res.status));
+    err.status = res.status;
+    throw err;
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+async function loadMoneyCategories() {
+  try { moneyCategories = await apiJson('/money/categories'); } catch (e) { /* остаётся прежний список */ }
+}
+
+async function loadMoney(more) {
+  const key = moneyMonth || currentMonthKey();
+  const { from, to } = monthBounds(key);
+  const params = new URLSearchParams({ from, to, limit: String(MONEY_PAGE), offset: String(more ? moneyTx.length : 0) });
+  if (moneyFilterCat) params.set('category_id', moneyFilterCat);
+  // Каждый запрос сам по себе: сбой одного не мешает показать остальное.
+  const jobs = [apiJson(`/money/transactions?${params}`)];
+  if (!more) {
+    jobs.push(apiJson(`/money/summary?month=${key}`), apiJson('/money/trend?months=6'));
+    if (!moneyCategories.length || moneyDirty) jobs.push(loadMoneyCategories());
+    if (!moneyMe) jobs.push(apiJson('/me').then(me => { moneyMe = me; }));
+  }
+  const [txRes, sumRes, trendRes] = await Promise.allSettled(jobs);
+  if (txRes.status === 'fulfilled') {
+    const rows = txRes.value.filter(t => !pendingMoneyDeletions[t.id]);
+    moneyTx = more ? moneyTx.concat(rows) : rows;
+    moneyHasMore = txRes.value.length === MONEY_PAGE;
+  }
+  if (!more) {
+    if (sumRes && sumRes.status === 'fulfilled') moneySummary = sumRes.value;
+    if (trendRes && trendRes.status === 'fulfilled') moneyTrendData = trendRes.value;
+    moneyDirty = false;
+  }
+  const failed = [txRes, sumRes, trendRes].find(r => r && r.status === 'rejected');
+  if (failed && !failed.reason.status) toast('Нет связи с сервером, показаны не все данные');
+  moneyLoaded = true;
+  if (currentPage === 'money') renderMoney();
+}
+
+function renderMoney() {
+  const key = moneyMonth || currentMonthKey();
+  document.getElementById('moneyMonthLabel').textContent = monthTitle(key);
+  document.getElementById('moneyCurrent').hidden = key === currentMonthKey();
+  document.getElementById('moneyNext').disabled = key >= currentMonthKey();
+  if (!moneyLoaded) return;
+  const summary = moneySummary && moneySummary.month === key ? moneySummary : { currencies: [] };
+
+  // Карточки валют
+  const cards = document.getElementById('moneyCards');
+  cards.innerHTML = '';
+  summary.currencies.forEach(cur => {
+    const card = document.createElement('div');
+    card.className = 'money-card';
+    const balanceNeg = cur.balance.startsWith('-');
+    const change = cur.previous.expense_change;
+    const changeAbs = change.replace('-', '');
+    const compare = Number(change) === 0 ? 'Расходы как в прошлом месяце'
+      : `Расходы на ${moneyFmt(changeAbs, cur.currency)} ${change.startsWith('-') ? 'меньше' : 'больше'}, чем в прошлом месяце`;
+    card.innerHTML = `<div class="money-card-cur"></div><div class="money-card-grid">
+      <div class="money-figure"><span>Расходы</span><b class="e"></b></div>
+      <div class="money-figure"><span>Доходы</span><b class="i"></b></div>
+      <div class="money-figure balance"><span>Баланс</span><b class="b"></b></div></div><p class="money-compare"></p>`;
+    card.querySelector('.money-card-cur').textContent = cur.currency;
+    card.querySelector('.e').textContent = moneyFmt(cur.expense, cur.currency);
+    card.querySelector('.i').textContent = moneyFmt(cur.income, cur.currency);
+    const b = card.querySelector('.b');
+    b.textContent = moneyFmt(cur.balance.replace('-', ''), cur.currency, balanceNeg ? '−' : '+');
+    b.classList.toggle('neg', balanceNeg);
+    card.querySelector('.money-compare').textContent = compare;
+    cards.appendChild(card);
+  });
+
+  // Полосы расходов по категориям (по валютам)
+  const bars = document.getElementById('moneyBars');
+  bars.innerHTML = '';
+  const withExpense = summary.currencies.filter(c => c.by_category.length);
+  document.getElementById('moneyBarsBlock').hidden = !withExpense.length;
+  withExpense.forEach(cur => {
+    if (summary.currencies.length > 1) {
+      const label = document.createElement('div');
+      label.className = 'money-cur-label';
+      label.textContent = cur.currency;
+      bars.appendChild(label);
+    }
+    const wrap = document.createElement('div');
+    wrap.className = 'money-bars';
+    const top = Math.max(...cur.by_category.map(c => c.share), 1);
+    cur.by_category.forEach(c => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'money-bar';
+      btn.dataset.focusKey = `mbar-${cur.currency}-${c.category_id}`;
+      btn.setAttribute('aria-pressed', String(moneyFilterCat === c.category_id));
+      btn.setAttribute('aria-label', `${c.name}: ${moneyFmt(c.amount, cur.currency)}, ${c.share}%. Показать операции категории`);
+      btn.style.setProperty('--chip-color', c.color || 'var(--accent)');
+      btn.innerHTML = '<span class="money-bar-top"><span class="n"></span><b></b></span><span class="money-bar-track"><span class="money-bar-fill"></span></span>';
+      btn.querySelector('.n').textContent = c.name;
+      btn.querySelector('b').textContent = `${moneyFmt(c.amount, cur.currency)} · ${c.share}%`;
+      btn.querySelector('.money-bar-fill').style.width = `${Math.max(2, Math.round(c.share / top * 100))}%`;
+      btn.onclick = () => {
+        moneyFilterCat = moneyFilterCat === c.category_id ? null : c.category_id;
+        loadMoney();
+      };
+      wrap.appendChild(btn);
+    });
+    bars.appendChild(wrap);
+  });
+
+  // Динамика: пары столбиков по месяцам, отдельный график на валюту
+  const trend = document.getElementById('moneyTrend');
+  trend.innerHTML = '';
+  const trendCurs = (moneyTrendData && moneyTrendData.currencies) || [];
+  document.getElementById('moneyTrendBlock').hidden = !trendCurs.length;
+  trendCurs.forEach(cur => {
+    if (trendCurs.length > 1) {
+      const label = document.createElement('div');
+      label.className = 'money-cur-label';
+      label.textContent = cur.currency;
+      trend.appendChild(label);
+    }
+    const W = 340, H = 130, base = 108, slot = W / cur.points.length;
+    const max = Math.max(...cur.points.map(p => Math.max(Number(p.income), Number(p.expense))), 1);
+    const h = v => Math.round(Number(v) / max * 92);
+    const parts = cur.points.map((p, i) => {
+      const x = i * slot + slot / 2;
+      const m = Number(p.month.slice(5)) - 1;
+      return `<rect class="trend-income" x="${x - 13}" y="${base - h(p.income)}" width="12" height="${h(p.income)}" rx="3"/>` +
+        `<rect class="trend-expense" x="${x + 1}" y="${base - h(p.expense)}" width="12" height="${h(p.expense)}" rx="3"/>` +
+        `<text class="trend-label" x="${x}" y="${H - 6}" text-anchor="middle">${MONTH_SHORT[m]}</text>`;
+    }).join('');
+    const desc = cur.points.map(p => `${monthTitle(p.month)}: доходы ${moneyFmt(p.income, cur.currency)}, расходы ${moneyFmt(p.expense, cur.currency)}`).join('; ');
+    const svg = document.createElement('div');
+    svg.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img"><title></title>${parts}</svg>`;
+    svg.querySelector('title').textContent = `Динамика ${cur.currency}. ${desc}`;
+    trend.appendChild(svg);
+  });
+
+  renderMoneyList(summary);
+}
+
+function moneyRowEl(tx) {
+  const cat = moneyCat(tx.category_id) || { name: '?', color: null };
+  const row = document.createElement('div');
+  row.className = 'money-row';
+  row.dataset.focusKey = 'mrow-' + tx.id;
+  row.tabIndex = 0;
+  row.setAttribute('role', 'button');
+  const income = tx.kind === 'income';
+  row.setAttribute('aria-label', `${income ? 'Доход' : 'Расход'} ${tx.note || cat.name}, ${moneyFmt(tx.amount, tx.currency)}. Изменить`);
+  const dot = document.createElement('span');
+  dot.className = 'cat-dot';
+  if (cat.color) dot.style.setProperty('--chip-color', cat.color);
+  const body = document.createElement('div');
+  body.className = 'money-row-body';
+  const title = document.createElement('div');
+  title.className = 'money-row-title';
+  title.textContent = tx.note || cat.name;
+  body.appendChild(title);
+  if (tx.note) {
+    const meta = document.createElement('div');
+    meta.className = 'money-row-meta';
+    meta.textContent = cat.name + (tx.source === 'recurring' ? ' · повторяющийся' : '');
+    body.appendChild(meta);
+  }
+  const amount = document.createElement('span');
+  amount.className = 'money-row-amount' + (income ? ' income' : '');
+  amount.textContent = moneyFmt(tx.amount, tx.currency, income ? '+' : '−');
+  row.append(dot, body, amount);
+  const open = () => {
+    if (Date.now() < suppressRowClickUntil) return;
+    if (openSwipe && openSwipe.id === tx.id) { closeSwipe(); return; }
+    openMoneyForm(tx);
+  };
+  row.addEventListener('click', open);
+  row.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openMoneyForm(tx); } };
+  return swipeWrapEl(row, tx.id, { edit: () => openMoneyForm(tx), del: () => deleteMoneyTx(tx), noun: 'операцию' });
+}
+
+function renderMoneyList(summary) {
+  const list = document.getElementById('moneyList');
+  const active = document.activeElement;
+  const focusKey = active && active.dataset ? active.dataset.focusKey : null;
+  openSwipe = null;
+  list.innerHTML = '';
+  document.getElementById('moneyFilterClear').hidden = !moneyFilterCat;
+  const filterCat = moneyFilterCat && moneyCat(moneyFilterCat);
+  document.getElementById('moneyListTitle').textContent = filterCat ? `Операции: ${filterCat.name}` : 'Операции';
+  const rows = moneyTx.filter(t => !pendingMoneyDeletions[t.id]);
+  if (!rows.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-dashed';
+    empty.textContent = moneyFilterCat ? 'В этой категории операций нет'
+      : 'Пока нет операций. Напишите боту «кофе 3 евро» или нажмите «+»';
+    list.appendChild(empty);
+  }
+  // Суммы дня — из /money/summary (сервер), только без фильтра по категории.
+  const daySums = {};
+  if (!moneyFilterCat) {
+    summary.currencies.forEach(cur => cur.days.forEach(d => {
+      const parts = [];
+      if (Number(d.expense)) parts.push(moneyFmt(d.expense, cur.currency, '−'));
+      if (Number(d.income)) parts.push(moneyFmt(d.income, cur.currency, '+'));
+      (daySums[d.day] = daySums[d.day] || []).push(...parts);
+    }));
+  }
+  let lastDay = null;
+  rows.forEach(tx => {
+    if (tx.spent_on !== lastDay) {
+      lastDay = tx.spent_on;
+      const { y, m, d } = ymd(tx.spent_on);
+      const dt = new Date(y, m - 1, d);
+      const head = document.createElement('div');
+      head.className = 'money-day';
+      const label = document.createElement('b');
+      label.textContent = `${d} ${MONTH_GENITIVE[m - 1]}, ${WEEKDAY_FULL[dt.getDay()].toLowerCase()}`;
+      const sums = document.createElement('span');
+      sums.textContent = (daySums[tx.spent_on] || []).join(' · ');
+      head.append(label, sums);
+      list.appendChild(head);
+    }
+    list.appendChild(moneyRowEl(tx));
+  });
+  if (moneyHasMore) {
+    const more = document.createElement('button');
+    more.className = 'btn-small money-more';
+    more.textContent = 'Ещё';
+    more.dataset.focusKey = 'money-more';
+    more.onclick = () => loadMoney(true);
+    list.appendChild(more);
+  }
+  if (focusKey) {
+    const again = document.querySelector(`[data-focus-key="${focusKey}"]`);
+    if (again) again.focus({ preventScroll: true });
+  }
+}
+
+function deleteMoneyTx(tx) {
+  const timeoutId = setTimeout(async () => {
+    delete pendingMoneyDeletions[tx.id];
+    try { await apiJson(`/money/transactions/${tx.id}`, { method: 'DELETE' }); }
+    catch (e) { if (e.status !== 404) toast('Не удалось удалить операцию'); }
+    loadMoney();
+  }, 5000);
+  pendingMoneyDeletions[tx.id] = { timeoutId, tx };
+  renderMoney();
+  toast('Операция удалена', 'Отменить', () => {
+    clearTimeout(timeoutId);
+    delete pendingMoneyDeletions[tx.id];
+    renderMoney();
+  });
+}
+
+document.getElementById('moneyPrev').onclick = () => {
+  moneyMonth = shiftMonth(moneyMonth || currentMonthKey(), -1); moneyFilterCat = null; loadMoney();
+};
+document.getElementById('moneyNext').onclick = () => {
+  const next = shiftMonth(moneyMonth || currentMonthKey(), 1);
+  if (next > currentMonthKey()) return;
+  moneyMonth = next; moneyFilterCat = null; loadMoney();
+};
+document.getElementById('moneyCurrent').onclick = () => { moneyMonth = null; moneyFilterCat = null; loadMoney(); };
+document.getElementById('moneyFilterClear').onclick = () => { moneyFilterCat = null; loadMoney(); };
+document.getElementById('moneyCategoriesBtn').onclick = () => openCategories('expense');
+
+// ---------- Форма операции (и повторяющегося платежа) ----------
+const moneySheet = document.getElementById('moneySheet');
+const MONEY_CUR_STORAGE = 'task_agent_money_currency';
+const MONEY_CAT_STORAGE = 'task_agent_money_category';
+let moneyForm = null;  // { mode: 'tx' | 'rec', id, kind, currency, category_id }
+let moneyReturnFocus = null;
+
+function rememberedCurrency() {
+  let cur = null;
+  try { cur = localStorage.getItem(MONEY_CUR_STORAGE); } catch (e) { cur = null; }
+  const allowed = (moneyMe && moneyMe.currencies) || ['EUR', 'KZT'];
+  return allowed.includes(cur) ? cur : ((moneyMe && moneyMe.default_currency) || allowed[0]);
+}
+function rememberedCategory(kind) {
+  let id = null;
+  try { id = localStorage.getItem(`${MONEY_CAT_STORAGE}_${kind}`); } catch (e) { id = null; }
+  const cats = moneyCategories.filter(c => c.kind === kind);
+  return (cats.find(c => c.id === id) || cats[0] || {}).id || null;
+}
+
+function renderMoneyFormChips() {
+  const curWrap = document.getElementById('moneyCurrency');
+  curWrap.innerHTML = '';
+  ((moneyMe && moneyMe.currencies) || ['EUR', 'KZT']).forEach(cur => {
+    const [btn, text] = choiceChipEl(cur, moneyForm.currency === cur, 'solid', () => { moneyForm.currency = cur; renderMoneyFormChips(); });
+    btn.appendChild(text);
+    curWrap.appendChild(btn);
+  });
+  const catWrap = document.getElementById('moneyCategory');
+  catWrap.innerHTML = '';
+  moneyCategories.filter(c => c.kind === moneyForm.kind).forEach(cat => {
+    const [btn, text] = choiceChipEl(cat.name, moneyForm.category_id === cat.id, 'cat', () => { moneyForm.category_id = cat.id; renderMoneyFormChips(); });
+    btn.style.setProperty('--chip-color', cat.color);
+    const dot = document.createElement('span');
+    dot.className = 'cat-dot';
+    btn.append(dot, text);
+    catWrap.appendChild(btn);
+  });
+  const expense = moneyForm.kind === 'expense';
+  document.getElementById('moneyKindExpense').setAttribute('aria-pressed', String(expense));
+  document.getElementById('moneyKindIncome').setAttribute('aria-pressed', String(!expense));
+}
+
+function setMoneyKind(kind) {
+  if (moneyForm.kind === kind) return;
+  moneyForm.kind = kind;
+  moneyForm.category_id = rememberedCategory(kind);
+  renderMoneyFormChips();
+}
+
+async function openMoneyForm(item, mode) {
+  if (!moneyCategories.length) await loadMoneyCategories();
+  if (!moneyMe) { try { moneyMe = await apiJson('/me'); } catch (e) { /* валюта из памяти браузера */ } }
+  const rec = mode === 'rec';
+  const kind = item ? item.kind : 'expense';
+  moneyForm = {
+    mode: rec ? 'rec' : 'tx', id: item ? item.id : null, kind,
+    currency: item ? item.currency : rememberedCurrency(),
+    category_id: item ? item.category_id : rememberedCategory(kind),
+  };
+  moneyReturnFocus = document.activeElement;
+  document.getElementById('moneySheetTitle').textContent = rec
+    ? (item ? 'Изменить платёж' : 'Новый платёж') : (item ? 'Изменить операцию' : 'Новая операция');
+  document.getElementById('moneyDescribeSection').hidden = !!item || rec;
+  document.getElementById('moneyDrafts').hidden = true;
+  document.getElementById('moneyDescribe').value = '';
+  document.getElementById('moneyAmount').value = item ? item.amount.replace('.', ',') : '';
+  document.getElementById('moneyDateSection').hidden = rec;
+  document.getElementById('moneyDomSection').hidden = !rec;
+  document.getElementById('moneyDate').value = item && !rec ? item.spent_on : todayKey();
+  document.getElementById('moneyDom').value = item && rec ? item.day_of_month : String(new Date().getDate());
+  document.getElementById('moneyNote').value = item ? (item.note || '') : '';
+  document.getElementById('moneyDelete').hidden = !item;
+  document.getElementById('moneyDeleteLabel').textContent = rec ? 'Удалить платёж' : 'Удалить операцию';
+  renderMoneyFormChips();
+  moneySheet.hidden = false;
+  moneySheet.scrollTop = 0;
+  document.body.classList.add('no-scroll');
+  setBackgroundInert(true);
+  document.getElementById(item || rec ? 'moneyAmount' : 'moneyDescribe').focus();
+}
+
+function closeMoneyForm() {
+  moneySheet.hidden = true;
+  moneyForm = null;
+  if (recurringSheet.hidden) {
+    document.body.classList.remove('no-scroll');
+    setBackgroundInert(false);
+  }
+  if (moneyReturnFocus && document.body.contains(moneyReturnFocus)) moneyReturnFocus.focus({ preventScroll: true });
+  flushDeferredRender();
+}
+
+async function saveMoneyForm() {
+  const btn = document.getElementById('moneySave');
+  const drafts = document.getElementById('moneyDrafts');
+  if (!drafts.hidden && drafts.querySelector('input[type="checkbox"]')) return saveMoneyDrafts();
+  const rec = moneyForm.mode === 'rec';
+  const amount = document.getElementById('moneyAmount').value.trim();
+  if (!amount) { toast('Укажите сумму'); document.getElementById('moneyAmount').focus(); return; }
+  if (!moneyForm.category_id) { toast('Выберите категорию'); return; }
+  const payload = {
+    kind: moneyForm.kind, amount, currency: moneyForm.currency, category_id: moneyForm.category_id,
+    note: document.getElementById('moneyNote').value.trim() || null,
+  };
+  if (rec) payload.day_of_month = document.getElementById('moneyDom').value.trim();
+  else payload.spent_on = document.getElementById('moneyDate').value || todayKey();
+  const base = rec ? '/money/recurring' : '/money/transactions';
+  btn.disabled = true;
+  try {
+    await apiJson(moneyForm.id ? `${base}/${moneyForm.id}` : base, {
+      method: moneyForm.id ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    try {
+      localStorage.setItem(MONEY_CUR_STORAGE, moneyForm.currency);
+      localStorage.setItem(`${MONEY_CAT_STORAGE}_${moneyForm.kind}`, moneyForm.category_id);
+    } catch (e) { /* без памяти браузера */ }
+    toast(moneyForm.id ? 'Сохранено' : (rec ? 'Платёж добавлен' : 'Операция добавлена'));
+    const spent = payload.spent_on;
+    closeMoneyForm();
+    if (rec) loadRecurring();
+    if (!rec && spent) moneyMonth = spent.slice(0, 7) === currentMonthKey() ? null : spent.slice(0, 7);  // показать месяц операции
+    moneyFilterCat = null;
+    loadMoney();
+  } catch (e) {
+    toast(e.message || 'Не удалось сохранить');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// «Опиши трату»: /money/parse возвращает черновики, сохраняет пользователь.
+async function parseMoneyText() {
+  const input = document.getElementById('moneyDescribe');
+  const text = input.value.trim();
+  if (!text) { input.focus(); return; }
+  const btn = document.getElementById('moneyParseBtn');
+  btn.disabled = true;
+  btn.textContent = 'Разбираю…';
+  try {
+    const { items } = await apiJson('/money/parse', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }),
+    });
+    if (items.length === 1) {
+      const d = items[0];
+      moneyForm.kind = d.kind;
+      moneyForm.currency = d.currency;
+      moneyForm.category_id = d.category_id;
+      document.getElementById('moneyAmount').value = d.amount.replace('.', ',');
+      document.getElementById('moneyDate').value = d.spent_on;
+      document.getElementById('moneyNote').value = d.note || '';
+      document.getElementById('moneyDrafts').hidden = true;
+      renderMoneyFormChips();
+      toast('Проверьте и сохраните');
+    } else {
+      renderMoneyDrafts(items);
+    }
+  } catch (e) {
+    toast(e.message || 'Не получилось разобрать текст');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Разобрать';
+  }
+}
+
+function renderMoneyDrafts(items) {
+  const box = document.getElementById('moneyDrafts');
+  box.innerHTML = '';
+  box.hidden = false;
+  box._items = items;
+  items.forEach((d, i) => {
+    const label = document.createElement('label');
+    label.className = 'money-draft';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = true;
+    cb.dataset.index = String(i);
+    const text = document.createElement('span');
+    const { d: day, m } = ymd(d.spent_on);
+    text.textContent = `${d.note || d.category} · ${moneyFmt(d.amount, d.currency, d.kind === 'income' ? '+' : '')} · ${d.category} · ${day} ${MONTH_SHORT[m - 1]}`;
+    label.append(cb, text);
+    box.appendChild(label);
+  });
+  toast(`Нашёл операций: ${items.length}. Отметьте нужные и нажмите «Сохранить»`);
+}
+
+async function saveMoneyDrafts() {
+  const box = document.getElementById('moneyDrafts');
+  const chosen = [...box.querySelectorAll('input[type="checkbox"]')].filter(cb => cb.checked).map(cb => box._items[Number(cb.dataset.index)]);
+  if (!chosen.length) { toast('Ничего не отмечено'); return; }
+  let saved = 0;
+  for (const d of chosen) {
+    try {
+      await apiJson('/money/transactions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: d.kind, amount: d.amount, currency: d.currency, category_id: d.category_id,
+                               spent_on: d.spent_on, note: d.note }),
+      });
+      saved++;
+    } catch (e) { /* остальные сохраняем дальше */ }
+  }
+  toast(saved === chosen.length ? `Сохранено операций: ${saved}` : `Сохранено ${saved} из ${chosen.length}`);
+  closeMoneyForm();
+  loadMoney();
+}
+
+async function deleteFromMoneyForm() {
+  const { mode, id } = moneyForm;
+  if (mode === 'tx') {
+    const tx = moneyTx.find(t => t.id === id);
+    closeMoneyForm();
+    if (tx) deleteMoneyTx(tx);
+    return;
+  }
+  closeMoneyForm();
+  try {
+    await apiJson(`/money/recurring/${id}`, { method: 'DELETE' });
+    toast('Платёж удалён. Уже созданные операции остались');
+  } catch (e) { toast(e.message || 'Не удалось удалить платёж'); }
+  loadRecurring();
+}
+
+document.getElementById('moneySheetClose').onclick = closeMoneyForm;
+document.getElementById('moneySave').onclick = saveMoneyForm;
+document.getElementById('moneyKindExpense').onclick = () => setMoneyKind('expense');
+document.getElementById('moneyKindIncome').onclick = () => setMoneyKind('income');
+document.getElementById('moneyParseBtn').onclick = parseMoneyText;
+document.getElementById('moneyDelete').onclick = deleteFromMoneyForm;
+document.getElementById('moneyDescribe').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); parseMoneyText(); }
+});
+document.getElementById('moneyAmount').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); saveMoneyForm(); }
+});
+setupVoiceInput('moneyMicBtn', 'moneyDescribe');
+
+// ---------- Повторяющиеся платежи ----------
+const recurringSheet = document.getElementById('recurringSheet');
+let recurringItems = [];
+
+async function loadRecurring() {
+  try { recurringItems = await apiJson('/money/recurring'); } catch (e) { toast(e.message || 'Не удалось загрузить платежи'); }
+  renderRecurring();
+}
+
+function renderRecurring() {
+  const list = document.getElementById('recurringList');
+  const focusKey = list.contains(document.activeElement) ? document.activeElement.dataset.focusKey : null;
+  list.innerHTML = '';
+  if (!recurringItems.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-dashed';
+    empty.textContent = 'Повторяющихся платежей нет. Аренда, подписки — добавьте их, и операции будут создаваться сами';
+    list.appendChild(empty);
+  }
+  recurringItems.forEach(rec => {
+    const cat = moneyCat(rec.category_id) || { name: '?' };
+    const row = document.createElement('div');
+    row.className = 'rec-row' + (rec.active ? '' : ' inactive');
+    const dot = document.createElement('span');
+    dot.className = 'cat-dot';
+    if (cat.color) dot.style.setProperty('--chip-color', cat.color);
+    const body = document.createElement('div');
+    body.className = 'money-row-body';
+    body.tabIndex = 0;
+    body.setAttribute('role', 'button');
+    body.dataset.focusKey = 'rec-' + rec.id;
+    const title = document.createElement('div');
+    title.className = 'money-row-title';
+    title.textContent = `${rec.note || cat.name} · ${moneyFmt(rec.amount, rec.currency, rec.kind === 'income' ? '+' : '')}`;
+    const meta = document.createElement('div');
+    meta.className = 'money-row-meta';
+    const { d, m } = ymd(rec.next_run);
+    meta.textContent = `Каждое ${rec.day_of_month}-е · ${rec.active ? `ближайший ${d} ${MONTH_GENITIVE[m - 1]}` : 'на паузе'}`;
+    body.append(title, meta);
+    body.onclick = () => openMoneyForm(rec, 'rec');
+    body.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openMoneyForm(rec, 'rec'); } };
+    const sw = document.createElement('button');
+    sw.type = 'button';
+    sw.className = 'switch';
+    sw.setAttribute('role', 'switch');
+    sw.setAttribute('aria-checked', String(rec.active));
+    sw.setAttribute('aria-label', `Платёж активен: ${rec.note || cat.name}`);
+    sw.dataset.focusKey = 'rec-sw-' + rec.id;
+    sw.onclick = async () => {
+      try {
+        await apiJson(`/money/recurring/${rec.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                                                     body: JSON.stringify({ active: !rec.active }) });
+      } catch (e) { toast(e.message || 'Не удалось сохранить'); }
+      loadRecurring();
+    };
+    row.append(dot, body, sw);
+    list.appendChild(row);
+  });
+  if (focusKey) {
+    const again = list.querySelector(`[data-focus-key="${focusKey}"]`);
+    if (again) again.focus({ preventScroll: true });
+  }
+}
+
+async function openRecurring() {
+  if (!moneyCategories.length) await loadMoneyCategories();
+  recurringSheet.hidden = false;
+  recurringSheet.scrollTop = 0;
+  document.body.classList.add('no-scroll');
+  setBackgroundInert(true);
+  document.getElementById('recurringClose').focus();
+  loadRecurring();
+}
+function closeRecurring() {
+  recurringSheet.hidden = true;
+  document.body.classList.remove('no-scroll');
+  setBackgroundInert(false);
+  loadMoney();
+  document.getElementById('moneyRecurringBtn').focus();
+}
+document.getElementById('moneyRecurringBtn').onclick = openRecurring;
+document.getElementById('recurringClose').onclick = closeRecurring;
+document.getElementById('recurringAdd').onclick = () => openMoneyForm(null, 'rec');
 
 // ---------- Экран «Фильтры» (макет Filters, раздел 5) ----------
 // Выбор копится в черновике; «Показать» применяет, крестик и Esc закрывают без изменений.
@@ -4017,6 +4896,7 @@ document.getElementById('newTaskClose').onclick = closeNewTask;
 document.getElementById('fabBtn').onclick = () => {
   // На вкладке «Заметки» «+» ведёт в поле новой заметки (раздел 5).
   if (currentPage === 'notes') document.getElementById('noteInput').focus();
+  else if (currentPage === 'money') openMoneyForm();
   else openNewTask();
 };
 
@@ -4310,6 +5190,8 @@ document.getElementById('editStepInput').onkeydown = (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (!editSheet.hidden) closeEdit();
+  else if (!moneySheet.hidden) closeMoneyForm();
+  else if (!recurringSheet.hidden) closeRecurring();
   else if (!filtersSheet.hidden) closeFilters();
   else if (!categoriesSheet.hidden) closeCategories();
   else if (!newTaskSheet.hidden) closeNewTask();
