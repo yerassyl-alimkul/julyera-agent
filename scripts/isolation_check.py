@@ -392,11 +392,19 @@ def telegram_checks(db, client, owner, A):
 
 
 def reminder_checks(client, A, B, wife):
+    from datetime import datetime as dt, timezone as tz
+    from zoneinfo import ZoneInfo
+
+    import digest_service
     import main
     import users_service
 
     section("Напоминания")
-    today = time.strftime("%Y-%m-%d")
+    # 13:15 по Риму — окно напоминания о дедлайнах (digest_service.SLOTS)
+    rome_now = dt.now(ZoneInfo("Europe/Rome"))
+    at = rome_now.replace(hour=13, minute=15, second=0, microsecond=0)
+    digest_service.utc_now = lambda: at.astimezone(tz.utc)
+    today = at.strftime("%Y-%m-%d")
     hA, hB = key_headers(A), key_headers(B)
     client.post("/tasks", headers=hA, json={"task": "Напомнить A", "category": "Work", "deadline": f"{today}T18:00:00"})
     client.post("/tasks", headers=hB, json={"task": "Напомнить B", "category": "Work", "deadline": f"{today}T19:00:00"})
@@ -406,7 +414,7 @@ def reminder_checks(client, A, B, wife):
 
     sent = []
 
-    async def fake_send(_client, chat_id, text):
+    async def fake_send(_client, chat_id, text, buttons=None):
         sent.append((chat_id, text))
         return True
 

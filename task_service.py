@@ -184,24 +184,3 @@ def delete_task(task_id: str, user_id: str) -> bool:
     gcal.sync_task_delete(task.get("google_event_id"), user_id)
     result = supabase.table(TABLE).delete().eq("id", task_id).eq("user_id", user_id).execute()
     return bool(result.data)
-
-
-def get_reminder_tasks(user_id: str, days_ahead: int = 2) -> list[dict]:
-    """
-    Задачи пользователя, которые не закрыты и у которых дедлайн уже прошёл или наступает
-    в течение ближайших `days_ahead` дней (по умолчанию 2 — сегодня/завтра/послезавтра).
-    Сравнение идёт по дате (без учёта времени суток), чтобы задача "сегодня в 23:59"
-    и "сегодня в 09:00" одинаково считались "сегодняшними".
-    """
-    cutoff = datetime.now().date() + timedelta(days=days_ahead)
-    result = []
-    for t in list_tasks(user_id):
-        if t.get("status") == Status.done.value:
-            continue
-        deadline = t.get("deadline")
-        if not deadline:
-            continue
-        if datetime.fromisoformat(deadline).date() <= cutoff:
-            result.append(t)
-    result.sort(key=lambda t: t["deadline"])
-    return result

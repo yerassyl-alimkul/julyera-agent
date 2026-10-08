@@ -290,7 +290,7 @@ def recurring_checks(db, client, A, B):
         r = client.post("/internal/reminders/run", headers={"X-Reminder-Secret": secret})
     finally:
         money_service.run_recurring = original
-    check("сбой платежей не ломает рассылку напоминаний", r.status_code == 200 and "tasks_found" in r.json(), str(r.status_code))
+    check("сбой платежей не ломает рассылку напоминаний", r.status_code == 200 and "messages" in r.json(), str(r.status_code))
 
 
 def detection_checks():

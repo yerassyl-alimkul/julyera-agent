@@ -23,7 +23,7 @@ def _now() -> str:
 # Значения по умолчанию и первичные ключи — как в schema.sql (после миграции multi-user).
 DEFAULTS = {
     "users": lambda: {"id": str(uuid.uuid4()), "is_admin": False, "telegram_user_id": None,
-                      "access_key": secrets.token_hex(32), "timezone": "Europe/Rome", "default_currency": "EUR",
+                      "access_key": secrets.token_hex(32), "timezone": "Europe/Rome", "default_currency": "EUR", "digest_enabled": True,
                       "created_at": _now()},
     "money_categories": lambda: {"id": str(uuid.uuid4()), "sort_order": 0, "created_at": _now()},
     "money_transactions": lambda: {"id": str(uuid.uuid4()), "note": None, "source": "app", "recurring_id": None,
@@ -31,7 +31,8 @@ DEFAULTS = {
     "money_recurring": lambda: {"id": str(uuid.uuid4()), "note": None, "active": True, "created_at": _now()},
     "tasks": lambda: {"id": str(uuid.uuid4()), "source": None, "deadline": None, "priority": "Mid",
                       "status": "To Do", "note": None, "is_recurring": False, "recurrence_pattern": None,
-                      "tags": [], "google_event_id": None, "created_at": _now(), "updated_at": _now()},
+                      "tags": [], "google_event_id": None, "snoozed_until": None, "created_at": _now(), "updated_at": _now()},
+    "digest_log": lambda: {"sent_at": _now()},
     "notes": lambda: {"id": str(uuid.uuid4()), "created_at": _now(), "updated_at": _now()},
     "subtasks": lambda: {"id": str(uuid.uuid4()), "is_done": False, "created_at": _now()},
     "telegram_chats": lambda: {"created_at": _now()},
@@ -128,6 +129,10 @@ class Query:
         for col in NOT_NULL.get(self.table, []):
             if row.get(col) is None:
                 raise FakeError(f'null value in column "{col}" of relation "{self.table}"')
+        if self.table == "digest_log":  # primary key (user_id, kind, day)
+            for other in self._rows():
+                if other is not row and (other["user_id"], other["kind"], other["day"]) == (row["user_id"], row["kind"], row["day"]):
+                    raise FakeError('duplicate key value violates unique constraint "digest_log_pkey"', "23505")
         if self.table == "money_categories":  # unique (user_id, kind, lower(name))
             for other in self._rows():
                 if other is not row and other["user_id"] == row["user_id"] and other["kind"] == row["kind"] \
@@ -232,7 +237,7 @@ class Query:
                 self.db.tables["subtasks"] = [s for s in self.db.tables.get("subtasks", []) if s["task_id"] not in ids]
             if self.table == "users":  # categories.user_id и money_*.user_id ... on delete cascade
                 ids = {r["id"] for r in gone}
-                for t in ("categories", "money_transactions", "money_recurring", "money_categories"):
+                for t in ("categories", "money_transactions", "money_recurring", "money_categories", "digest_log"):
                     self.db.tables[t] = [c for c in self.db.tables.get(t, []) if c["user_id"] not in ids]
             return SimpleNamespace(data=[copy.deepcopy(r) for r in gone])
 

@@ -46,6 +46,7 @@ load_dotenv()
 
 import task_service
 import categories_service
+import digest_service
 import money_service
 import notes_service
 import subtasks_service
@@ -419,30 +420,30 @@ async def telegram_webhook(token: str, request: Request):
     return {"ok": True}
 
 
-async def _send_telegram_message(client: httpx.AsyncClient, chat_id: int, text: str) -> bool:
-    resp = await client.post(
-        f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
-        json={"chat_id": chat_id, "text": text},
-    )
+async def _send_telegram_message(client: httpx.AsyncClient, chat_id: int, text: str, buttons=None) -> bool:
+    payload = {"chat_id": chat_id, "text": text}
+    if buttons:
+        payload["reply_markup"] = {"inline_keyboard": buttons}
+    resp = await client.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage", json=payload)
     return resp.status_code == 200
 
 
 @app.post("/internal/reminders/run")
 async def run_reminders(request: Request):
     """
-    Каждому пользователю в его чаты — только его задачи с приближающимся/просроченным дедлайном.
-    Вызывается по расписанию извне (см. GitHub Actions workflow .github/workflows/reminders.yml) —
-    сам backend расписание не хранит. Защищено секретным заголовком.
+    Рассылки по расписанию пользователя: утренняя (08:00) и вечерняя (20:00) сводка, напоминания о дедлайнах
+    (13:00 и 17:00) с кнопками, отложенные задачи, срок которых наступил; до них — повторяющиеся платежи.
+    Расписание считает digest_service по users.timezone; endpoint можно звать часто (cron-job.org каждые
+    15 минут, плюс GitHub Actions) — каждая рассылка уходит один раз в своё окно (digest_log).
+    Каждому только его задачи. Сбой у одного пользователя не мешает остальным. Защищено секретным заголовком.
     """
     if not REMINDERS_SECRET or request.headers.get("X-Reminder-Secret") != REMINDERS_SECRET:
         raise HTTPException(status_code=403, detail="Forbidden")
     if not TELEGRAM_BOT_TOKEN:
         raise HTTPException(status_code=500, detail="TELEGRAM_BOT_TOKEN не настроен")
 
-    from telegram_handlers import format_reminder_message
-
     sent = 0
-    tasks_found = 0
+    messages = 0
     recurring_messages = []
     try:
         recurring_messages = money_service.run_recurring()
@@ -456,16 +457,21 @@ async def run_reminders(request: Request):
                 except Exception as exc:
                     logger.warning("Сообщение о платеже не отправлено: %s", type(exc).__name__)
         for user in users_service.list_users():
-            tasks = task_service.get_reminder_tasks(user["id"])
-            tasks_found += len(tasks)
-            if not tasks:
+            try:
+                due = digest_service.due_messages(user)
+            except Exception as exc:
+                logger.warning("Рассылка пользователю %s не собрана: %s", user["id"], type(exc).__name__)
                 continue
-            message = format_reminder_message(tasks)
-            for chat_id in users_service.get_chat_ids(user["id"]):
-                if await _send_telegram_message(client, chat_id, message):
-                    sent += 1
+            messages += len(due)
+            for text, buttons in due:
+                for chat_id in users_service.get_chat_ids(user["id"]):
+                    try:
+                        if await _send_telegram_message(client, chat_id, text, buttons):
+                            sent += 1
+                    except Exception as exc:
+                        logger.warning("Сообщение не отправлено: %s", type(exc).__name__)
 
-    return {"sent": sent, "tasks_found": tasks_found, "recurring_notices": len(recurring_messages)}
+    return {"sent": sent, "messages": messages, "recurring_notices": len(recurring_messages)}
 
 
 @app.get("/health")

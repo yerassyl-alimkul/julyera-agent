@@ -22,6 +22,7 @@ from telegram.ext import Application, CallbackQueryHandler, CommandHandler, Cont
 
 from groq_client import transcribe_audio
 import categories_service
+import digest_service
 import money_service
 import task_service
 import users_service
@@ -42,6 +43,7 @@ NO_ACCESS_TEXT = "Нет доступа. Напиши /start, чтобы поп�
 
 # Меню команд бота (ставится при запуске сервиса, main.py → set_my_commands).
 BOT_COMMANDS = [
+    BotCommand("today", "План на сегодня: просроченное, сегодня, ближайшие 24 часа"),
     BotCommand("list", "Активные задачи"),
     BotCommand("task", "Записать задачу, даже если в тексте есть сумма"),
     BotCommand("spent", "Записать расход: /spent кофе 3,5 евро"),
@@ -49,6 +51,7 @@ BOT_COMMANDS = [
     BotCommand("month", "Итоги месяца по деньгам"),
     BotCommand("last", "Последние операции"),
     BotCommand("currency", "Валюта по умолчанию: /currency EUR или KZT"),
+    BotCommand("digest", "Утренняя и вечерняя сводка: /digest on или off"),
     BotCommand("categories", "Категории задач"),
     BotCommand("web", "Ссылка на приложение для браузера"),
     BotCommand("start", "Помощь"),
@@ -85,13 +88,6 @@ def _format_task_line(task: dict) -> str:
     return f"{emoji_p} {task['task']} · {task.get('category', '')} — {deadline}"
 
 
-def format_reminder_message(tasks: list[dict]) -> str:
-    """Сообщение для проактивного напоминания — с человекочитаемыми датой и временем."""
-    lines = ["⏰ Напоминание о дедлайнах:"]
-    lines += [_format_task_line(t) for t in tasks]
-    return "\n".join(lines)
-
-
 def open_app_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[InlineKeyboardButton("Открыть приложение", web_app=WebAppInfo(url=APP_URL))]])
 
@@ -114,7 +110,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             f"Привет, {user['name']}! Напиши мне задачу текстом или голосом — я разберу её и сохраню.\n\n"
             "Траты и доходы тоже сюда: «кофе 3,5 евро», «получил зарплату 1800 евро».\n\n"
             "Команды:\n"
-            "/list — активные задачи\n"
+            "/today — план на сегодня, /list — все активные задачи\n"
+            "/digest off — выключить сводки (утром в 08:00 и вечером в 20:00)\n"
             "/spent, /income — записать расход или доход\n"
             "/task — записать задачу, даже если в тексте есть сумма\n"
             "/month — итоги месяца, /last — последние операции, /currency — валюта по умолчанию\n"
@@ -609,6 +606,98 @@ async def money_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await query.answer()
 
 
+# ---------------------------------------------------------------- сводки и напоминания
+
+async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/today — просроченные, на сегодня и в ближайшие 24 часа; только свои задачи."""
+    user = _known_user(update)
+    if not user:
+        await update.message.reply_text(NO_ACCESS_TEXT)
+        return
+    await update.message.reply_text(digest_service.today_text(user["id"]), reply_markup=open_app_markup())
+
+
+async def digest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/digest on|off — утренняя и вечерняя сводка."""
+    user = _known_user(update)
+    if not user:
+        await update.message.reply_text(NO_ACCESS_TEXT)
+        return
+    arg = _command_text(update.message.text).lower()
+    if arg not in ("on", "off"):
+        state = "включены" if user.get("digest_enabled", True) is not False else "выключены"
+        await update.message.reply_text(f"Сводки сейчас {state}. Включить: /digest on, выключить: /digest off.")
+        return
+    digest_service.set_enabled(user["id"], arg == "on")
+    await update.message.reply_text("Сводки включены: утром в 08:00 и вечером в 20:00." if arg == "on"
+                                    else "Сводки выключены. Напоминания о дедлайнах остаются.")
+
+
+def _without_rows(message, needle: str):
+    """Клавиатура сообщения без строк, где есть кнопка с needle в callback_data."""
+    markup = getattr(message, "reply_markup", None)
+    rows = [list(row) for row in (getattr(markup, "inline_keyboard", None) or [])
+            if not any(needle in (getattr(b, "callback_data", "") or "") for b in row)]
+    return InlineKeyboardMarkup(rows) if rows else None
+
+
+async def _append_and_trim(query, line: str, needle: str) -> None:
+    text = ((query.message.text if query.message else "") or "").rstrip()
+    try:
+        await query.edit_message_text(f"{text}\n{line}" if text else line,
+                                      reply_markup=_without_rows(query.message, needle))
+    except Exception as exc:  # например, сообщение уже изменено — нажатие всё равно обработано
+        logger.warning("Сообщение напоминания не обновлено: %s", type(exc).__name__)
+
+
+async def reminder_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """«Готово» (done:<id>) и «Отложить на час» (snooze:<id>) под напоминанием.
+    Пользователь — по from.id; чужая или удалённая задача — «Задача не найдена», без изменений.
+    Повторное нажатие безопасно. answerCallbackQuery вызывается всегда."""
+    query = update.callback_query
+    user = users_service.get_by_telegram_id(query.from_user.id)
+    if not user:
+        await query.answer()
+        return
+    action, _, task_id = (query.data or "").partition(":")
+    task = task_service.get_task(task_id, user["id"]) if task_id else None
+    if not task:
+        await query.answer("Задача не найдена")
+        return
+    if action == "done":
+        status, _ = digest_service.complete(task_id, user["id"])
+        await query.answer("Уже выполнено" if status == "already" else "Готово ✅")
+        await _append_and_trim(query, f"✅ Выполнено: {task['task']}", task_id)
+        return
+    status, until = digest_service.snooze(task_id, user["id"])
+    if status == "already":
+        await query.answer("Задача уже выполнена")
+        await _append_and_trim(query, f"✅ Выполнено: {task['task']}", task_id)
+        return
+    await query.answer(f"Напомню в {until:%H:%M}")
+    await _append_and_trim(query, f"⏰ Отложено до {until:%H:%M}: {task['task']}", task_id)
+
+
+async def digest_move_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """«Перенести невыполненное на завтра» под вечерней сводкой (dmove:<YYYY-MM-DD>)."""
+    query = update.callback_query
+    user = users_service.get_by_telegram_id(query.from_user.id)
+    if not user:
+        await query.answer()
+        return
+    try:
+        day = date.fromisoformat((query.data or "").partition(":")[2])
+    except ValueError:
+        await query.answer()
+        return
+    status, moved = digest_service.move_unfinished(user["id"], day)
+    if status == "stale":
+        await query.answer("Эта сводка уже устарела", show_alert=True)
+        return
+    await query.answer(f"Перенесено: {moved}" if moved else "Уже перенесено")
+    await _append_and_trim(query, f"➡️ Перенесено на завтра: {moved}" if moved else "➡️ Переносить уже нечего", "dmove:")
+
+
 def register_handlers(app: Application) -> None:
     """Одинаковый набор обработчиков для webhook (main.py) и локального polling (bot.py)."""
     app.add_handler(CommandHandler("start", start))
@@ -621,7 +710,11 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("month", month_command))
     app.add_handler(CommandHandler("last", last_command))
     app.add_handler(CommandHandler("currency", currency_command))
+    app.add_handler(CommandHandler("today", today_command))
+    app.add_handler(CommandHandler("digest", digest_command))
     app.add_handler(CallbackQueryHandler(access_decision, pattern=r"^(approve|deny):\d+$"))
     app.add_handler(CallbackQueryHandler(money_callback, pattern=r"^m:"))
+    app.add_handler(CallbackQueryHandler(reminder_callback, pattern=r"^(done|snooze):[0-9a-fA-F-]{36}$"))
+    app.add_handler(CallbackQueryHandler(digest_move_callback, pattern=r"^dmove:\d{4}-\d{2}-\d{2}$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
