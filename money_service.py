@@ -420,13 +420,16 @@ def list_transactions(user_id: str, date_from=None, date_to=None, kind=None, cat
         query = query.eq("category_id", str(category_id))
     if currency:
         query = query.eq("currency", clean_currency(currency))
-    rows = query.order("spent_on", desc=True).order("created_at", desc=True).range(offset, offset + limit - 1).execute().data
+    # id — последний ключ: у операций одной пачки совпадают дата и created_at, а без однозначного порядка
+    # страницы через offset пересекаются (одна строка дважды, другая пропадает)
+    rows = query.order("spent_on", desc=True).order("created_at", desc=True).order("id").range(
+        offset, offset + limit - 1).execute().data
     return [_tx_out(r) for r in rows]
 
 
 def last_transactions(user_id: str, n: int = 5) -> list[dict]:
     rows = supabase.table(TX_TABLE).select("*").eq("user_id", user_id).order(
-        "created_at", desc=True).range(0, n - 1).execute().data
+        "created_at", desc=True).order("id").range(0, n - 1).execute().data
     return [_tx_out(r) for r in rows]
 
 

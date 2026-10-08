@@ -9,6 +9,7 @@ main.py и сервисы, но без сети и без настоящей б�
 запрет удалить категорию, на которую ссылаются операции).
 """
 import copy
+import random
 import secrets
 import uuid
 from datetime import datetime, timezone
@@ -162,6 +163,10 @@ class Query:
         rows = self._rows()
         if self.op == "select":
             found = [r for r in rows if self._match(r)]
+            if self.window and self.order_by:
+                # Postgres не обещает порядок строк с равными ключами сортировки: перемешиваем,
+                # чтобы постраничные выборки без однозначного порядка ловились и здесь
+                found = random.sample(found, len(found))
             for col, desc, nullsfirst in reversed(self.order_by):  # устойчивая сортировка: первый ключ главный
                 present = sorted([r for r in found if r.get(col) is not None], key=lambda r: str(r[col]), reverse=desc)
                 nulls = [r for r in found if r.get(col) is None]
@@ -173,6 +178,7 @@ class Query:
         if self.op in ("insert", "upsert"):
             items = self.payload if isinstance(self.payload, list) else [self.payload]
             out = []
+            batch_time = _now()  # как now() в Postgres: у всех строк одного insert одно время создания
             for item in items:
                 pk = PRIMARY_KEYS.get(self.table, "id")
                 existing = next((r for r in rows if pk in item and r.get(pk) == item[pk]), None)
@@ -184,6 +190,8 @@ class Query:
                 if existing:
                     raise FakeError(f'duplicate key value violates unique constraint "{self.table}_pkey"')
                 row = DEFAULTS.get(self.table, dict)()
+                if "created_at" in row:
+                    row["created_at"] = batch_time
                 row.update(copy.deepcopy(item))
                 self._numeric(row)
                 self._check(row)
