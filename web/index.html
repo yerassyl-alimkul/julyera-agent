@@ -970,6 +970,7 @@ applyTheme();
   #newTaskSheet .newtask-body { padding-top: var(--gap-header); }
   #newTaskSheet.manual .btn-mic { display: none; }
   .newtask-manual { padding-top: var(--gap-header); }
+  .newtask-day { margin-bottom: var(--gap-l); background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
 
   /* Все задачи: разделы по датам */
   .all-list { display: flex; flex-direction: column; gap: var(--gap-section); padding-top: 20px; }
@@ -1719,6 +1720,7 @@ applyTheme();
       <button type="button" id="newModeManual" aria-pressed="false">Вручную</button>
     </div>
     <div class="newtask-body" id="newTaskAi">
+      <button class="pill-btn newtask-day" id="newTaskDay" type="button" hidden></button>
       <label class="newtask-label" for="composerInput">Опиши задачу своими словами</label>
       <textarea class="newtask-input" id="composerInput"></textarea>
       <p class="newtask-hint">Дату и время можно писать словами («завтра в 18:00»), теги через решётку («#экзамен»). Категорию и приоритет приложение определит само.<span id="micBtnHint" hidden> Голосом удобнее через бота: просто отправьте ему голосовое сообщение.</span></p>
@@ -3649,7 +3651,7 @@ async function submitComposer() {
     const res = await api(`/tasks/parse`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, default_date: newTaskDefaultDay }),
     });
     if (!res.ok) {
       // 422 и 502 — разбор не удался, задач нет. Другая ошибка могла случиться уже после
@@ -5288,8 +5290,33 @@ function setNewTaskMode(mode, focus) {
   if (focus) document.getElementById(manual ? 'newText' : 'composerInput').focus();
 }
 
+// День, открытый в календаре или в полосе дней (не сегодня): задача без даты в тексте встанет на него.
+let newTaskDefaultDay = null;
+function pickedTaskDay() {
+  let key = null;
+  if (currentPage === 'calendar') key = calSelectedDate;
+  else if (currentPage === 'list' && listLayout !== 'all' && viewMode !== 'archive') key = selectedDay;
+  return key && /^\d{4}-\d{2}-\d{2}$/.test(key) && key !== localDateKey(new Date()) ? key : null;
+}
+function renderNewTaskDay() {
+  const chip = document.getElementById('newTaskDay');
+  chip.hidden = !newTaskDefaultDay;
+  if (!newTaskDefaultDay) return;
+  const { d, m } = ymd(newTaskDefaultDay);
+  chip.textContent = `📅 На ${d} ${MONTH_GENITIVE[m - 1]} ✕`;
+  chip.setAttribute('aria-label', `Задача на ${d} ${MONTH_GENITIVE[m - 1]}. Нажмите, чтобы не подставлять день`);
+}
+document.getElementById('newTaskDay').onclick = () => {
+  newTaskDefaultDay = null;
+  renderNewTaskDay();
+  document.getElementById('composerInput').focus();
+};
+
 function openNewTask() {
   sheetReturnFocus = document.activeElement;
+  newTaskDefaultDay = pickedTaskDay();
+  renderNewTaskDay();
+  if (newTaskDefaultDay) document.getElementById('newDate').value = newTaskDefaultDay;  // «Вручную» — сразу эта дата
   setNewTaskMode(newTaskMode, false);
   newTaskSheet.hidden = false;
   newTaskSheet.scrollTop = 0;

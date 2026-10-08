@@ -6,7 +6,7 @@
 Каждая функция получает user_id владельца задач, и каждый запрос к таблице tasks
 фильтруется по нему: backend ходит в базу с ключом service_role, другой защиты нет.
 """
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 import categories_service
@@ -73,10 +73,18 @@ def create_task(payload: TaskCreate, user_id: str) -> dict:
     return _sync_google_upsert(task, user_id)
 
 
-def create_tasks_from_text(raw_text: str, user_id: str, source_hint: Optional[str] = None) -> list[dict]:
+def create_tasks_from_text(raw_text: str, user_id: str, source_hint: Optional[str] = None,
+                           default_date: Optional[str] = None) -> list[dict]:
+    """default_date ("YYYY-MM-DD") — день, открытый в приложении: задачи без даты в тексте встают на него
+    (время — из текста или 23:59). Своя дата в тексте главнее."""
+    try:
+        default_date = date.fromisoformat(default_date).isoformat() if default_date else None
+    except ValueError:
+        default_date = None
     names = categories_service.names(user_id) or [categories_service.fallback_name(user_id)]
+    extra = {"default_date": default_date} if default_date else {}
     raw_tasks = parse_text_to_tasks(raw_text, names, source_hint=source_hint,
-                                    timezone=users_service.timezone_of(user_id))
+                                    timezone=users_service.timezone_of(user_id), **extra)
     fallback = names[0]
     created = []
     for raw in raw_tasks:
@@ -85,6 +93,8 @@ def create_tasks_from_text(raw_text: str, user_id: str, source_hint: Optional[st
         # Модель могла вернуть чужое или выдуманное название — подставляем запасную категорию,
         # парсер не должен падать из-за категории.
         raw = {**raw, "category": categories_service.resolve_name(user_id, str(raw.get("category") or "")) or fallback}
+        if default_date and not raw.get("deadline"):
+            raw["deadline"] = f"{default_date}T23:59:00"  # модель не поставила дату — значит, на открытый день
         try:
             validated = TaskCreate(**raw)
         except Exception:

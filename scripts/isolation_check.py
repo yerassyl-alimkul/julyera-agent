@@ -75,7 +75,7 @@ def setup_local():
 PARSE_CALLS = []
 
 
-def fake_parse(raw_text, categories, source_hint=None, timezone=None):
+def fake_parse(raw_text, categories, source_hint=None, timezone=None, default_date=None):
     """Вместо Groq: каждая строка текста — задача без даты. Запоминает, какие категории ей дали.
     Метки в тексте имитируют ошибку модели: «#чужая» — категория другого пользователя, «#выдумка» — несуществующая."""
     PARSE_CALLS.append(list(categories))

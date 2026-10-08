@@ -200,6 +200,16 @@ def main():
     answers, _ = press(A, "dmove:2026-10-08", message_text=ev.text)
     check("перенос из вчерашней сводки отклоняется", answers == ["Эта сводка уже устарела"])
 
+    section("Задача на открытый день")
+    hA = {"X-Access-Key": A["access_key"]}
+    r = client.post("/tasks/parse", headers=hA, json={"text": "Позвонить врачу", "default_date": "2026-10-15"})
+    check("задача без даты в тексте встаёт на открытый в приложении день",
+          r.status_code == 201 and r.json()[0]["deadline"].startswith("2026-10-15T23:59"), r.text[:120])
+    r = client.post("/tasks/parse", headers=hA, json={"text": "Без дня"})
+    check("без открытого дня задача остаётся без даты", r.status_code == 201 and r.json()[0]["deadline"] is None)
+    r = client.post("/tasks/parse", headers=hA, json={"text": "Кривой день", "default_date": "15.10.2026"})
+    check("неверная дата по умолчанию просто игнорируется", r.status_code == 201 and r.json()[0]["deadline"] is None)
+
     section("Панель кнопок и помощь")
     tasks_before = len(db.tables["tasks"])
     u = ic.tg_update(A["telegram_user_id"], text=h.BTN_TODAY)

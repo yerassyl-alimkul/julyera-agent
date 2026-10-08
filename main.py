@@ -194,7 +194,8 @@ def create_task(payload: TaskCreate, user: dict = Depends(current_user)):
 @app.post("/tasks/parse", response_model=list[Task], status_code=201)
 def parse_and_create_tasks(payload: ParseRequest, user: dict = Depends(current_user)):
     try:
-        created = task_service.create_tasks_from_text(payload.text, user["id"], source_hint=payload.source)
+        created = task_service.create_tasks_from_text(payload.text, user["id"], source_hint=payload.source,
+                                                      default_date=payload.default_date)
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=f"Ошибка разбора LLM: {exc}")
 

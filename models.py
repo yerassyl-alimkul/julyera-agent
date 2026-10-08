@@ -53,6 +53,9 @@ class ParseRequest(BaseModel):
     source: Optional[str] = Field(
         None, description="Подсказка об источнике, например название курса"
     )
+    default_date: Optional[str] = Field(
+        None, description="YYYY-MM-DD: день, открытый в приложении; задачи без даты в тексте встают на него"
+    )
 
 
 class TaskUpdate(BaseModel):

@@ -66,7 +66,7 @@ SYSTEM_PROMPT = """Ты — ассистент, который превраща�
 
 
 def parse_text_to_tasks(raw_text: str, categories: list[str], source_hint: Optional[str] = None,
-                        timezone: Optional[str] = None) -> list[dict]:
+                        timezone: Optional[str] = None, default_date: Optional[str] = None) -> list[dict]:
     """
     Отправляет сырой текст в Groq и возвращает список словарей,
     готовых к вставке в таблицу tasks (без id/created_at/updated_at).
@@ -78,6 +78,11 @@ def parse_text_to_tasks(raw_text: str, categories: list[str], source_hint: Optio
         today=datetime.now(ZoneInfo(timezone) if timezone else USER_TIMEZONE).date().isoformat(),
         categories=", ".join(json.dumps(name, ensure_ascii=False) for name in categories),
     )
+    if default_date:
+        # человек добавляет задачу, открыв в приложении этот день
+        system += (f"\n- Если в тексте НЕ названа дата, это задачи на {default_date}: дедлайн {default_date}, "
+                   "время — из текста или 23:59:00. Если дата в тексте есть («завтра», «в пятницу», «3 ноября») — "
+                   "бери её, а не эту.")
     user_content = raw_text
     if source_hint:
         user_content = f"[Источник: {source_hint}]\n{raw_text}"
