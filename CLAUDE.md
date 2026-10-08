@@ -28,7 +28,8 @@
   (он же зашит в `reminders.yml` и как запасной `BASE_URL` в `web/index.html`).
   После простоя засыпает, холодный старт до ~50 секунд.
   Версия Python закреплена переменной `PYTHON_VERSION=3.12.7` в Render (`runtime.txt` Render игнорирует, поэтому его в репозитории нет).
-- Расписание: `/internal/reminders/run` зовут снаружи — cron-job.org каждые 15 минут (настраивает владелец) и
+- Расписание: `/internal/reminders/run` зовут снаружи — cron-job.org каждые 15 минут (настроен владельцем
+  8 октября 2026, POST с заголовком `X-Reminder-Secret`) и
   прежний GitHub Actions (`.github/workflows/reminders.yml`, 3 раза в день; файл не редактировать — нужен PAT
   со scope `workflow`). Частые вызовы заодно не дают Render засыпать.
 - Календарь: Google Calendar API (OAuth, scope `calendar.events`).
