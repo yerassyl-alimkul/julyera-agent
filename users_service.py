@@ -81,3 +81,13 @@ def timezone_of(user_id: str) -> str:
     except Exception:
         return DEFAULT_TIMEZONE
     return name
+
+
+def set_calendar_import(user_id: str, enabled: bool) -> None:
+    """Выключатель «Переносить события из Google Calendar в задачи» (users.calendar_import, миграция 007)."""
+    supabase.table(TABLE).update({"calendar_import": bool(enabled)}).eq("id", user_id).execute()
+
+
+def calendar_import_enabled(user_id: str) -> bool:
+    user = get_by_id(user_id)
+    return bool(user) and user.get("calendar_import") is not False

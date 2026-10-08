@@ -398,3 +398,6 @@ alter table google_credentials add column if not exists imported_at timestamptz;
 -- Если эта строка выдаст ошибку «could not create unique index», напишите — значит, уже есть дубли.
 create unique index if not exists tasks_user_google_event_uniq
     on tasks (user_id, google_event_id) where google_event_id is not null;
+
+-- ---------------------------------------------------------------- 007 (migrations/007_calendar_import_switch.sql)
+alter table users add column if not exists calendar_import boolean not null default true;

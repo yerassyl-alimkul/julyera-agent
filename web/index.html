@@ -311,6 +311,9 @@ applyTheme();
   .status-dot.ok { border-color: var(--accent); background: var(--accent); }
   .status-dot.err { border-color: var(--danger); background: var(--danger); }
   .menu-status-row.err { color: var(--danger); }
+  /* Под строкой «Google Calendar подключён»: подпись — вровень с её текстом (после точки статуса) */
+  .menu-switch-row { justify-content: space-between; margin-top: calc(-1 * var(--gap-m));
+    padding-left: calc(8px + var(--gap-m)); line-height: 1.3; }
 
   /* Точка на кнопке фильтров, когда включён любой фильтр */
   .tb-btn { position: relative; }
@@ -1586,6 +1589,10 @@ applyTheme();
     <div class="menu-status-row" id="googleStatusRow">
       <span class="status-dot" id="googleDot"></span>
       <span id="googleStatusText">Google Calendar…</span>
+    </div>
+    <div class="menu-status-row menu-switch-row" id="calendarImportRow" hidden>
+      <span id="calendarImportLabel">Переносить события в задачи</span>
+      <button type="button" class="switch" id="calendarImportSwitch" role="switch" aria-checked="true" aria-labelledby="calendarImportLabel"></button>
     </div>
   </div>
 </aside>
@@ -3705,6 +3712,7 @@ async function checkGoogleStatus() {
     } else if (data.connected) {
       dot.classList.add('ok');
       text.textContent = 'Google Calendar подключён';
+      showCalendarImportSwitch();
     } else {
       text.appendChild(link('Подключить Google Calendar'));
       prefetchGoogleAuthUrl();
@@ -3714,6 +3722,31 @@ async function checkGoogleStatus() {
     text.textContent = 'Google Calendar: нет связи';
   }
 }
+
+// Выключатель «Переносить события в задачи» (users.calendar_import): виден, только когда календарь подключён.
+// Выключен — новые события, правки и удаления из Google не приходят; уже перенесённые задачи остаются.
+async function showCalendarImportSwitch() {
+  const row = document.getElementById('calendarImportRow');
+  const sw = document.getElementById('calendarImportSwitch');
+  try {
+    if (!moneyMe) moneyMe = await apiJson('/me');
+  } catch (e) { return; }
+  sw.setAttribute('aria-checked', String(moneyMe.calendar_import !== false));
+  row.hidden = false;
+}
+
+document.getElementById('calendarImportSwitch').addEventListener('click', async (e) => {
+  const sw = e.currentTarget;
+  const on = sw.getAttribute('aria-checked') !== 'true';
+  sw.setAttribute('aria-checked', String(on));
+  try {
+    moneyMe = await apiJson('/me', { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify({ calendar_import: on }) });
+    toast(on ? 'События из календаря снова переносятся в задачи' : 'События из календаря больше не переносятся');
+  } catch (err) {
+    sw.setAttribute('aria-checked', String(!on));
+    toast('Не удалось сохранить, попробуйте ещё раз');
+  }
+});
 
 async function updateStatus(id, status) {
   try {

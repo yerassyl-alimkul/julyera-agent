@@ -338,12 +338,18 @@ def get_me(user: dict = Depends(current_user)):
     return {"name": user.get("name"), "is_admin": bool(user.get("is_admin")),
             "timezone": user.get("timezone") or users_service.DEFAULT_TIMEZONE,
             "default_currency": money_service.default_currency(user["id"]),
-            "currencies": list(money_service.CURRENCIES)}
+            "currencies": list(money_service.CURRENCIES),
+            "calendar_import": user.get("calendar_import") is not False}
 
 
 @app.patch("/me")
-def update_me(payload: MeUpdate, user: dict = Depends(current_user)):
-    money_service.set_default_currency(user["id"], payload.default_currency)
+def update_me(payload: MeUpdate, background: BackgroundTasks, user: dict = Depends(current_user)):
+    if payload.default_currency is not None:
+        money_service.set_default_currency(user["id"], payload.default_currency)
+    if payload.calendar_import is not None:
+        users_service.set_calendar_import(user["id"], payload.calendar_import)
+        if payload.calendar_import:  # включили обратно — сразу подтянуть, что накопилось в календаре
+            background.add_task(calendar_sync.sync_after_connect, user["id"])
     return get_me(users_service.get_by_id(user["id"]))
 
 

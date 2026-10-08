@@ -13,6 +13,9 @@
 - событие, удалённое в Google, удаляет незакрытую задачу (закрытая остаётся в архиве без ссылки).
 Удаляем только при явном признаке (status = cancelled или 404/410 на запрос события), не по отсутствию в списке.
 
+Выключатель в меню приложения (users.calendar_import = false, миграция 007) останавливает это направление
+целиком: ни новых задач, ни правок и удалений из календаря; уже перенесённые задачи остаются.
+
 События, созданные самим JulYera (метка JULYERA_MARK или префикс-эмодзи приоритета у старых), задачами
 не становятся, а прошлые события не переносятся. В логи — только количества.
 """
@@ -282,10 +285,11 @@ def run_all(now_utc: Optional[datetime] = None) -> list[tuple[str, str]]:
     if not gcal.is_configured():
         return []
     rows = supabase.table(gcal.CREDENTIALS_TABLE).select("user_id,needs_reconnect,imported_at").execute().data
+    switched_off = {u["id"] for u in users_service.list_users() if u.get("calendar_import") is False}
     messages = []
     for row in rows:
-        if row.get("needs_reconnect"):
-            continue
+        if row.get("needs_reconnect") or row["user_id"] in switched_off:
+            continue  # выключатель в меню: ни новых задач, ни правок и удалений из календаря
         try:
             stats = sync_user(row["user_id"], now_utc)
         except Exception as exc:
@@ -309,6 +313,8 @@ def sync_after_connect(user_id: str) -> None:
     """Сразу после подключения календаря (фоном из /google/callback): перенести события и написать об этом."""
     try:
         row = gcal._get_row(user_id) or {}
+        if not users_service.calendar_import_enabled(user_id):
+            return
         stats = sync_user(user_id)
         if stats is None or row.get("imported_at"):
             return

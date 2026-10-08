@@ -336,6 +336,27 @@ def main():
     r = client.patch(f"/tasks/{mine['id']}", headers=hA, json={"status": "Done"})
     check("закрыли задачу JulYera — её событие удаляется, как раньше", calA.events[ev_id]["status"] == "cancelled")
 
+    # --------------------------------------------------------------- выключатель
+    section("Выключатель «Переносить события в задачи»")
+    check("по умолчанию включён", client.get("/me", headers=hA).json().get("calendar_import") is True)
+    r = client.patch("/me", headers=hA, json={"calendar_import": False})
+    check("выключение сохраняется, валюта не трогается",
+          r.status_code == 200 and r.json()["calendar_import"] is False and r.json()["default_currency"])
+    calA.add("whileoff", "Пока выключено", at(d(6), 9), at(d(6), 10))
+    calA.edit("one", summary="Переименовал, пока выключено")
+    calA.calls.clear()
+    calendar_sync.run_all()
+    check("выключено — календарь не читается, новых задач и правок нет",
+          not calA.calls and by_event(A, "whileoff") is None and by_event(A, "one")["task"] == "Созвон (итог)")
+    check("у B (включено) всё работает как раньше", client.get("/me", headers=hB).json()["calendar_import"] is True)
+    r = client.patch("/me", headers=hA, json={"calendar_import": True})
+    check("включили — сразу подтянулось накопившееся",
+          r.json()["calendar_import"] is True and by_event(A, "whileoff") is not None
+          and by_event(A, "one")["task"] == "Переименовал, пока выключено")
+    check("чужой выключатель не меняется", client.get("/me", headers=hB).json()["calendar_import"] is True)
+    check("смена валюты по-прежнему работает",
+          client.patch("/me", headers=hB, json={"default_currency": "KZT"}).json()["default_currency"] == "KZT")
+
     # --------------------------------------------------------------- переподключение и подключение
     section("Подключение и сбои")
     calB.calls.clear()

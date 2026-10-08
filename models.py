@@ -232,4 +232,5 @@ class ApplePayIn(BaseModel):
 
 
 class MeUpdate(BaseModel):
-    default_currency: str
+    default_currency: Optional[str] = None
+    calendar_import: Optional[bool] = None  # переносить ли события Google Calendar в задачи
