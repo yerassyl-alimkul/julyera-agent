@@ -49,9 +49,10 @@ def _sync_google_upsert(task: dict, user_id: str) -> dict:
 
 def _sync_google_clear(task: dict, user_id: str) -> dict:
     """Удаляет событие из Google Calendar пользователя (если было) и чистит ссылку на него."""
-    gcal.sync_task_delete(task.get("google_event_id"), user_id)
+    gcal.sync_task_delete(task.get("google_event_id"), user_id, task.get("gcal_calendar_id"))
     if task.get("google_event_id"):
-        _set_event_id(task, user_id, None, {"gcal_imported": False} if task.get("gcal_imported") else None)
+        extra = {"gcal_imported": False, "gcal_calendar_id": None} if task.get("gcal_imported") else None
+        _set_event_id(task, user_id, None, extra)
     return task
 
 
@@ -194,7 +195,7 @@ def delete_task(task_id: str, user_id: str) -> bool:
     task = get_task(task_id, user_id)
     if not task:
         return False
-    gcal.sync_task_delete(task.get("google_event_id"), user_id)
+    gcal.sync_task_delete(task.get("google_event_id"), user_id, task.get("gcal_calendar_id"))
     import comments_service  # файлы комментариев — из хранилища; строки уйдут каскадом вместе с задачей
     comments_service.delete_task_files(task_id, user_id)
     result = supabase.table(TABLE).delete().eq("id", task_id).eq("user_id", user_id).execute()

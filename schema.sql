@@ -401,3 +401,9 @@ create unique index if not exists tasks_user_google_event_uniq
 
 -- ---------------------------------------------------------------- 007 (migrations/007_calendar_import_switch.sql)
 alter table users add column if not exists calendar_import boolean not null default true;
+
+-- ---------------------------------------------------------------- 008 (migrations/008_calendar_choice.sql)
+-- Какие календари читать ("primary" — основной); пусто — только основной, как раньше.
+alter table google_credentials add column if not exists import_calendars text[];
+-- В каком календаре событие задачи; пусто — в основном (все задачи до этой миграции).
+alter table tasks add column if not exists gcal_calendar_id text;

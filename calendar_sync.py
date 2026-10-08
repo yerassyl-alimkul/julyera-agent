@@ -1,8 +1,10 @@
 """
 Синхронизация из Google Calendar в задачи (обратное направление к google_calendar_service).
 
-Зовётся из /internal/reminders/run (каждые 15 минут) и сразу после подключения календаря. Для каждого
-пользователя с подключённым календарём читает основной календарь с начала сегодняшнего дня:
+Зовётся из /internal/reminders/run (каждые 15 минут), сразу после подключения календаря и после выбора календарей.
+Для каждого пользователя с подключённым календарём читает выбранные им календари (google_credentials.
+import_calendars, по умолчанию только основной; id календаря у задачи — tasks.gcal_calendar_id, пусто = основной)
+с начала сегодняшнего дня:
 - разовые события — все будущие;
 - повторяющиеся — каждое повторение отдельной задачей, но только на RECURRING_DAYS вперёд (окно сдвигается
   каждый день, новые повторения появляются сами);
@@ -109,11 +111,11 @@ def _declined(event: dict) -> bool:
     return any(a.get("self") and a.get("responseStatus") == "declined" for a in event.get("attendees") or [])
 
 
-def _list(service, **params) -> tuple[list[dict], bool]:
+def _list(service, calendar_id: str, **params) -> tuple[list[dict], bool]:
     """Все страницы списка событий. Второе значение — прочитан ли список целиком."""
     items, token = [], None
     for _ in range(MAX_PAGES):
-        page = service.events().list(calendarId="primary", showDeleted=True, maxResults=PAGE_SIZE,
+        page = service.events().list(calendarId=calendar_id, showDeleted=True, maxResults=PAGE_SIZE,
                                      pageToken=token, **params).execute()
         items.extend(page.get("items") or [])
         token = page.get("nextPageToken")
@@ -122,14 +124,14 @@ def _list(service, **params) -> tuple[list[dict], bool]:
     return items, False
 
 
-def fetch_events(service, tz: str, now_utc: Optional[datetime] = None) -> tuple[list[dict], bool]:
-    """События основного календаря с начала сегодняшнего дня: всё в окне RECURRING_DAYS (повторения раскрыты)
+def fetch_events(service, tz: str, now_utc: Optional[datetime] = None, calendar_id: str = "primary") -> tuple[list[dict], bool]:
+    """События календаря с начала сегодняшнего дня: всё в окне RECURRING_DAYS (повторения раскрыты)
     и разовые события дальше окна."""
     now_local = (now_utc or datetime.now(timezone.utc)).astimezone(ZoneInfo(tz))
     day_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
     window_end = day_start + timedelta(days=RECURRING_DAYS)
-    near, ok_near = _list(service, singleEvents=True, timeMin=day_start.isoformat(), timeMax=window_end.isoformat())
-    far, ok_far = _list(service, singleEvents=False, timeMin=window_end.isoformat())
+    near, ok_near = _list(service, calendar_id, singleEvents=True, timeMin=day_start.isoformat(), timeMax=window_end.isoformat())
+    far, ok_far = _list(service, calendar_id, singleEvents=False, timeMin=window_end.isoformat())
     seen, events = set(), []
     for ev in near + [e for e in far if not e.get("recurrence") and not e.get("recurringEventId")]:
         if ev.get("id") and ev["id"] not in seen:
@@ -146,7 +148,7 @@ def _linked_tasks(user_id: str) -> dict:
 def _drop_task(task: dict, user_id: str) -> str:
     """Событие удалено в Google: незакрытую задачу удаляем, закрытую оставляем в архиве без ссылки."""
     if task.get("status") == "Done":
-        supabase.table(TABLE).update({"google_event_id": None, "gcal_imported": False}) \
+        supabase.table(TABLE).update({"google_event_id": None, "gcal_imported": False, "gcal_calendar_id": None}) \
             .eq("id", task["id"]).eq("user_id", user_id).execute()
         return "unlinked"
     comments_service.delete_task_files(task["id"], user_id)
@@ -202,10 +204,24 @@ def sync_user(user_id: str, now_utc: Optional[datetime] = None) -> Optional[dict
     if not service:
         return None
     tz = users_service.timezone_of(user_id)
-    try:
-        events, complete = fetch_events(service, tz, now_utc)
-    except Exception as exc:
-        gcal._note_sync_failure(user_id, exc, "import")
+    calendars = gcal.import_calendars(gcal._get_row(user_id))
+    events, complete = [], {}  # complete: календарь → прочитан ли целиком
+    for cal in calendars:
+        try:
+            got, complete[cal] = fetch_events(service, tz, now_utc, cal)
+        except HttpError as exc:
+            status = getattr(getattr(exc, "resp", None), "status", None)
+            if cal != "primary" and status in (403, 404):
+                logger.info("Выбранный календарь недоступен — пропущен")  # удалили или закрыли доступ
+                continue
+            gcal._note_sync_failure(user_id, exc, "import")
+            return None
+        except Exception as exc:
+            gcal._note_sync_failure(user_id, exc, "import")
+            return None
+        known = {e["id"] for e in events}
+        events += [{**e, "_cal": cal} for e in got if e.get("id") not in known]
+    if not complete:
         return None
 
     linked = _linked_tasks(user_id)
@@ -235,20 +251,24 @@ def sync_user(user_id: str, now_utc: Optional[datetime] = None) -> Optional[dict
                    "note": _plain(ev.get("description")), "is_recurring": False, "tags": [],
                    "google_event_id": ev["id"], "gcal_imported": True, "gcal_all_day": all_day,
                    "gcal_updated": ev.get("updated")}
+            if ev["_cal"] != "primary":  # у задач из основного календаря колонка пустая, как до миграции 008
+                row["gcal_calendar_id"] = ev["_cal"]
             try:
                 supabase.table(TABLE).insert(row).execute()
                 stats["created"] += 1
             except Exception as exc:  # параллельный проход уже создал эту задачу (уникальный индекс)
                 logger.info("Событие не перенесено: %s", type(exc).__name__)
 
-    # Незакрытые задачи с событием, которого нет в полном списке: спрашиваем событие напрямую.
-    if complete:
+    # Незакрытые задачи с событием, которого нет в полном списке своего календаря: спрашиваем событие напрямую.
+    # Задачи из календарей, которые сейчас не выбраны или прочитаны не целиком, не трогаем.
+    if any(complete.values()):
         today = (now_utc or datetime.now(timezone.utc)).astimezone(ZoneInfo(tz)).replace(tzinfo=None)
         today = today.replace(hour=0, minute=0, second=0, microsecond=0)
         window_end = today + timedelta(days=RECURRING_DAYS)
         lookups = 0
         for event_id, task in linked.items():
-            if event_id in seen_ids or task.get("status") == "Done" or lookups >= MAX_LOOKUPS:
+            cal = task.get("gcal_calendar_id") or "primary"
+            if event_id in seen_ids or task.get("status") == "Done" or lookups >= MAX_LOOKUPS or not complete.get(cal):
                 continue
             deadline = _naive(task.get("deadline"))
             if not deadline or deadline < today:
@@ -256,7 +276,7 @@ def sync_user(user_id: str, now_utc: Optional[datetime] = None) -> Optional[dict
             if deadline >= window_end and "_" in event_id:
                 continue  # повторение серии за окном не читается — не повод удалять
             lookups += 1
-            if _event_gone(service, event_id, user_id):
+            if _event_gone(service, event_id, user_id, cal):
                 stats["deleted"] += _drop_task(task, user_id) == "deleted"
     if any(stats.values()):
         logger.info("Календарь → задачи: создано %s, изменено %s, удалено %s",
@@ -264,9 +284,9 @@ def sync_user(user_id: str, now_utc: Optional[datetime] = None) -> Optional[dict
     return stats
 
 
-def _event_gone(service, event_id: str, user_id: str) -> bool:
+def _event_gone(service, event_id: str, user_id: str, calendar_id: str = "primary") -> bool:
     try:
-        event = service.events().get(calendarId="primary", eventId=event_id).execute()
+        event = service.events().get(calendarId=calendar_id, eventId=event_id).execute()
     except HttpError as exc:
         status = getattr(getattr(exc, "resp", None), "status", None)
         if status in (404, 410):

@@ -1037,6 +1037,14 @@ applyTheme();
     padding: 0 18px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface);
     color: var(--ink); font-size: 17px; font-weight: 600; cursor: pointer; }
   .cur-option[aria-checked="true"] { border: 2px solid var(--ink); }
+  /* Календари для переноса событий: точка цвета календаря, название, подпись «только чтение», галочка */
+  .cal-option { justify-content: flex-start; gap: var(--gap-m); text-align: left; }
+  .cal-option .cal-dot { width: 12px; height: 12px; flex: 0 0 auto; border-radius: 50%; background: var(--cal-color, var(--accent)); }
+  .cal-option .cal-name { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
+  .cal-option .cal-name small { font-size: 13px; font-weight: 500; color: var(--ink-muted); }
+  .cal-option svg { visibility: hidden; flex: 0 0 auto; }
+  .cal-option[aria-checked="true"] svg { visibility: visible; }
+  #calendarsSheet .btn-primary { margin-top: var(--gap-header); width: 100%; }
   .cur-option svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
   .money-card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap-s) var(--gap-l); padding-top: var(--gap-s); }
   .money-figure { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -1594,6 +1602,9 @@ applyTheme();
       <span id="calendarImportLabel">Переносить события в задачи</span>
       <button type="button" class="switch" id="calendarImportSwitch" role="switch" aria-checked="true" aria-labelledby="calendarImportLabel"></button>
     </div>
+    <div class="menu-status-row menu-switch-row" id="calendarChoiceRow" hidden>
+      <span>Из календарей: <a href="#" id="calendarChoiceLink">выбрать</a></span>
+    </div>
   </div>
 </aside>
 
@@ -1968,6 +1979,20 @@ applyTheme();
     <button class="tb-btn" id="photoViewerClose" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
   <img id="photoViewerImg" alt="Фото из комментария">
+</div>
+
+<!-- Из каких календарей Google переносить события в задачи -->
+<div class="sheet" id="calendarsSheet" role="dialog" aria-modal="true" aria-labelledby="calendarsTitle" hidden>
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <button class="tb-btn" id="calendarsClose" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <h2 class="t-modal-title" id="calendarsTitle">Календари</h2>
+      <span></span>
+    </div>
+    <p class="newtask-hint">События из отмеченных календарей становятся задачами, изменения переносятся в обе стороны. Новые задачи из JulYera попадают в основной календарь.</p>
+    <div class="cur-options" id="calendarsOptions" aria-labelledby="calendarsTitle"></div>
+    <button class="btn-primary" id="calendarsSave" type="button" hidden>Сохранить</button>
+  </div>
 </div>
 
 <!-- Основная валюта кошелька -->
@@ -3733,7 +3758,101 @@ async function showCalendarImportSwitch() {
   } catch (e) { return; }
   sw.setAttribute('aria-checked', String(moneyMe.calendar_import !== false));
   row.hidden = false;
+  document.getElementById('calendarChoiceRow').hidden = moneyMe.calendar_import === false;
+  loadCalendarChoice();
 }
+
+// Выбор календарей (GET/PUT /google/calendars). needs_upgrade — старое подключение без права видеть список.
+let calendarsData = null;      // { needs_upgrade, calendars: [{id, name, color, primary, read_only, selected}] }
+let calendarsPicked = null;    // Set выбранных id в открытом экране
+async function loadCalendarChoice() {
+  const link = document.getElementById('calendarChoiceLink');
+  try {
+    calendarsData = await apiJson('/google/calendars');
+  } catch (e) { calendarsData = null; link.textContent = 'выбрать'; return; }
+  const names = calendarsData.calendars.filter(c => c.selected).map(c => c.name);
+  link.textContent = names.length ? names.join(', ') : 'основного';
+}
+
+const calendarsSheet = document.getElementById('calendarsSheet');
+function renderCalendarsSheet() {
+  const box = document.getElementById('calendarsOptions');
+  const save = document.getElementById('calendarsSave');
+  box.innerHTML = '';
+  if (!calendarsData) {
+    box.innerHTML = '<p class="newtask-hint">Не удалось получить список календарей. Попробуйте ещё раз чуть позже.</p>';
+    save.hidden = true;
+    return;
+  }
+  if (calendarsData.needs_upgrade) {
+    const p = document.createElement('p');
+    p.className = 'newtask-hint';
+    p.textContent = 'Сейчас события переносятся только из основного календаря. Чтобы выбрать другие, переподключите Google Calendar — Google попросит разрешить JulYera видеть список ваших календарей.';
+    box.appendChild(p);
+    save.hidden = false;
+    save.textContent = 'Переподключить Google Calendar';
+    save.onclick = () => { closeCalendars(); connectGoogle(); };
+    return;
+  }
+  calendarsData.calendars.forEach(cal => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'cur-option cal-option';
+    btn.setAttribute('role', 'checkbox');
+    btn.setAttribute('aria-checked', String(calendarsPicked.has(cal.id)));
+    btn.dataset.focusKey = 'cal-' + cal.id;
+    if (cal.color) btn.style.setProperty('--cal-color', cal.color);
+    btn.innerHTML = '<span class="cal-dot"></span><span class="cal-name"><span></span></span><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+    btn.querySelector('.cal-name span').textContent = cal.name;
+    if (cal.read_only) {
+      const note = document.createElement('small');
+      note.textContent = 'только чтение: правки задач в календарь не попадут';
+      btn.querySelector('.cal-name').appendChild(note);
+    }
+    btn.onclick = () => {
+      if (calendarsPicked.has(cal.id)) calendarsPicked.delete(cal.id); else calendarsPicked.add(cal.id);
+      renderCalendarsSheet();
+    };
+    box.appendChild(btn);
+  });
+  save.hidden = false;
+  save.textContent = 'Сохранить';
+  save.disabled = calendarsPicked.size === 0;
+  save.onclick = saveCalendars;
+}
+async function saveCalendars() {
+  const save = document.getElementById('calendarsSave');
+  save.disabled = true;
+  save.textContent = 'Переношу события…';
+  try {
+    const res = await apiJson('/google/calendars', { method: 'PUT', headers: JSON_HEADERS,
+      body: JSON.stringify({ ids: [...calendarsPicked] }) });
+    toast(res.created ? `Готово, перенесено событий: ${res.created}` : 'Сохранено');
+    closeCalendars();
+    loadCalendarChoice();
+    loadTasks();
+  } catch (e) {
+    toast(e.message || 'Не удалось сохранить');
+    renderCalendarsSheet();
+  }
+}
+async function openCalendars() {
+  closeMobileMenu();
+  if (!calendarsData || calendarsData.needs_upgrade) await loadCalendarChoice();
+  calendarsPicked = new Set(((calendarsData && calendarsData.calendars) || []).filter(c => c.selected).map(c => c.id));
+  renderCalendarsSheet();
+  calendarsSheet.hidden = false;
+  document.body.classList.add('no-scroll');
+  setBackgroundInert(true);
+  document.getElementById('calendarsClose').focus();
+}
+function closeCalendars() {
+  calendarsSheet.hidden = true;
+  document.body.classList.remove('no-scroll');
+  setBackgroundInert(false);
+}
+document.getElementById('calendarChoiceLink').onclick = (e) => { e.preventDefault(); openCalendars(); };
+document.getElementById('calendarsClose').onclick = closeCalendars;
 
 document.getElementById('calendarImportSwitch').addEventListener('click', async (e) => {
   const sw = e.currentTarget;
@@ -3741,6 +3860,7 @@ document.getElementById('calendarImportSwitch').addEventListener('click', async 
   sw.setAttribute('aria-checked', String(on));
   try {
     moneyMe = await apiJson('/me', { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify({ calendar_import: on }) });
+    document.getElementById('calendarChoiceRow').hidden = !on;
     toast(on ? 'События из календаря снова переносятся в задачи' : 'События из календаря больше не переносятся');
   } catch (err) {
     sw.setAttribute('aria-checked', String(!on));
@@ -6236,6 +6356,7 @@ document.addEventListener('keydown', (e) => {
   else if (!editSheet.hidden) closeEdit();
   else if (!moneySheet.hidden) closeMoneyForm();
   else if (!currencySheet.hidden) closeCurrency();
+  else if (!calendarsSheet.hidden) closeCalendars();
   else if (!analyticsSheet.hidden) closeAnalytics();
   else if (!filtersSheet.hidden) closeFilters();
   else if (!categoriesSheet.hidden) closeCategories();

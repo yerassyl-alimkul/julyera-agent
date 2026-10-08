@@ -43,7 +43,13 @@ STATUS_CACHE_SECONDS = 600
 _status_cache: dict[str, tuple[float, bool]] = {}
 RECONNECT_MESSAGE = "Google Calendar отключился. Откройте приложение и переподключите его в меню."
 
-SCOPES = ["https://www.googleapis.com/auth/calendar.events"]
+# calendar.events — события во всех календарях пользователя; calendarlist.readonly — список его календарей
+# для выбора, откуда переносить события (добавлен 9 октября 2026: старым подключениям нужно переподключение,
+# до него работает только основной календарь).
+SCOPES = ["https://www.googleapis.com/auth/calendar.events",
+          "https://www.googleapis.com/auth/calendar.calendarlist.readonly"]
+# Google может вернуть больше прав, чем запрошено (include_granted_scopes) — oauthlib не должен на это падать.
+os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
 CREDENTIALS_TABLE = "google_credentials"
 
 CATEGORY_EMOJI = {"Study": "📚", "Work": "💼", "Personal": "🧍", "UniMe": "🎓"}
@@ -199,7 +205,8 @@ def _credentials_from_row(row: dict) -> Credentials:
         token_uri="https://oauth2.googleapis.com/token",
         client_id=GOOGLE_CLIENT_ID,
         client_secret=GOOGLE_CLIENT_SECRET,
-        scopes=SCOPES,
+        # scopes не передаём: при обновлении токена Google иначе требует ровно эти права, и старое подключение
+        # (без calendarlist) сломалось бы с invalid_scope. Без них токен получает те права, что были выданы.
         expiry=expiry,
     )
 
@@ -302,9 +309,16 @@ def sync_task_upsert_ex(task: dict, user_id: str) -> tuple[Optional[str], Option
     try:
         tz = users_service.timezone_of(user_id)
         if event_id and task.get("gcal_imported"):
-            event = service.events().get(calendarId="primary", eventId=event_id).execute()
-            saved = service.events().patch(calendarId="primary", eventId=event_id, sendUpdates="none",
-                                           body=_imported_patch(task, event, tz)).execute()
+            cal = task.get("gcal_calendar_id") or "primary"
+            try:
+                event = service.events().get(calendarId=cal, eventId=event_id).execute()
+                saved = service.events().patch(calendarId=cal, eventId=event_id, sendUpdates="none",
+                                               body=_imported_patch(task, event, tz)).execute()
+            except HttpError as exc:
+                if cal != "primary" and getattr(getattr(exc, "resp", None), "status", None) == 403:
+                    logger.info("Календарь только для чтения — правка задачи в событие не переносится")
+                    return event_id, None  # чужой календарь без права записи — это не повод переподключать
+                raise
             return event_id, (saved or {}).get("updated")
         body = _event_body(task, tz)
         if event_id:
@@ -324,17 +338,75 @@ def sync_task_upsert(task: dict, user_id: str) -> Optional[str]:
     return sync_task_upsert_ex(task, user_id)[0]
 
 
-def sync_task_delete(event_id: Optional[str], user_id: str) -> None:
+def sync_task_delete(event_id: Optional[str], user_id: str, calendar_id: Optional[str] = None) -> None:
     if not event_id:
         return
     service = _get_service(user_id)
     if not service:
         return
+    cal = calendar_id or "primary"
     try:
         # sendUpdates="none": если у события были гости, Google не рассылает им писем об отмене
-        service.events().delete(calendarId="primary", eventId=event_id, sendUpdates="none").execute()
+        service.events().delete(calendarId=cal, eventId=event_id, sendUpdates="none").execute()
+    except HttpError as exc:
+        if cal != "primary" and getattr(getattr(exc, "resp", None), "status", None) == 403:
+            logger.info("Календарь только для чтения — событие не удалено")
+            return
+        _note_sync_failure(user_id, exc, "delete")
     except Exception as exc:
         _note_sync_failure(user_id, exc, "delete")
+
+
+class CalendarListUnavailable(Exception):
+    """Подключение старое, без права видеть список календарей: нужно переподключить Google Calendar."""
+
+
+def list_calendars(user_id: str) -> Optional[list[dict]]:
+    """Календари пользователя для выбора, откуда переносить события. None — календарь не подключён.
+    Основной календарь всегда с id "primary". Календари «только занятость» не показываем."""
+    service = _get_service(user_id)
+    if not service:
+        return None
+    items, token = [], None
+    try:
+        for _ in range(5):
+            page = service.calendarList().list(minAccessRole="reader", pageToken=token).execute()
+            items.extend(page.get("items") or [])
+            token = page.get("nextPageToken")
+            if not token:
+                break
+    except HttpError as exc:
+        if getattr(getattr(exc, "resp", None), "status", None) == 403:
+            raise CalendarListUnavailable()
+        raise
+    out = []
+    for c in items:
+        if c.get("deleted") or c.get("hidden") and not c.get("primary"):
+            continue
+        out.append({"id": "primary" if c.get("primary") else c["id"],
+                    "name": "Основной" if c.get("primary") else (c.get("summaryOverride") or c.get("summary") or "Без названия"),
+                    "color": c.get("backgroundColor"), "primary": bool(c.get("primary")),
+                    "read_only": c.get("accessRole") not in ("owner", "writer")})
+    out.sort(key=lambda c: (not c["primary"], c["name"].lower()))
+    return out
+
+
+def import_calendars(row: Optional[dict]) -> list[str]:
+    """Из каких календарей переносить события (google_credentials.import_calendars, миграция 008).
+    Пусто — только основной."""
+    value = (row or {}).get("import_calendars")
+    return list(value) if value else ["primary"]
+
+
+def set_import_calendars(user_id: str, ids: list[str]) -> list[str]:
+    """Сохранить выбор. Только календари из списка пользователя (иначе ValueError). Пустой выбор нельзя:
+    чтобы ничего не переносить, есть выключатель."""
+    available = {c["id"] for c in (list_calendars(user_id) or [])}
+    chosen = list(dict.fromkeys(ids))
+    if not chosen or any(i not in available for i in chosen):
+        raise ValueError("unknown calendar")
+    supabase.table(CREDENTIALS_TABLE).update({"import_calendars": chosen}).eq("user_id", user_id).execute()
+    return chosen
 
 
 def _note_sync_failure(user_id: str, exc: Exception, action: str) -> None:

@@ -231,6 +231,11 @@ class ApplePayIn(BaseModel):
     card: Optional[str] = None      # карта (не сохраняется)
 
 
+class CalendarChoice(BaseModel):
+    """PUT /google/calendars: из каких календарей переносить события ("primary" — основной)."""
+    ids: List[str] = Field(..., min_length=1, max_length=30)
+
+
 class MeUpdate(BaseModel):
     default_currency: Optional[str] = None
     calendar_import: Optional[bool] = None  # переносить ли события Google Calendar в задачи

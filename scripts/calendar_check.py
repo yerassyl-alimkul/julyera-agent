@@ -114,6 +114,42 @@ class FakeCalendar:
         return SimpleNamespace(execute=run)
 
 
+def _http_error(status):
+    import httplib2
+    from googleapiclient.errors import HttpError
+    return HttpError(httplib2.Response({"status": status}), b'{"error": "x"}')
+
+
+class FakeAccount:
+    """Google-аккаунт: несколько календарей (по calendarId) и список календарей (calendarList)."""
+
+    def __init__(self):
+        self.cals = {"primary": FakeCalendar()}
+        self.readonly, self.list_forbidden, self.list_items = set(), False, []
+
+    def events(self):
+        account = self
+
+        class Dispatch:
+            def __getattr__(self, name):
+                def call(**kw):
+                    cal = kw.get("calendarId")
+                    if cal not in account.cals:
+                        return SimpleNamespace(execute=lambda: (_ for _ in ()).throw(_http_error(404)))
+                    if cal in account.readonly and name in ("patch", "delete", "update", "insert"):
+                        return SimpleNamespace(execute=lambda: (_ for _ in ()).throw(_http_error(403)))
+                    return getattr(account.cals[cal], name)(**kw)
+                return call
+        return Dispatch()
+
+    def calendarList(self):
+        def run():
+            if self.list_forbidden:
+                raise _http_error(403)
+            return {"items": self.list_items}
+        return SimpleNamespace(list=lambda **kw: SimpleNamespace(execute=run))
+
+
 def main():
     db = ic.setup_local()
     from fastapi.testclient import TestClient
@@ -141,9 +177,10 @@ def main():
         {"user_id": A["id"], "access_token": "tok-A", "refresh_token": "r-A", "token_expiry": future, "needs_reconnect": False},
         {"user_id": B["id"], "access_token": "tok-B", "refresh_token": "r-B", "token_expiry": future, "needs_reconnect": False},
     ]
-    cals = {"tok-A": FakeCalendar(), "tok-B": FakeCalendar()}
-    calA, calB = cals["tok-A"], cals["tok-B"]
-    gcal.build = lambda *_, credentials=None, **__: SimpleNamespace(events=lambda: cals[credentials.token])
+    cals = {"tok-A": FakeAccount(), "tok-B": FakeAccount()}
+    accA = cals["tok-A"]
+    calA, calB = cals["tok-A"].cals["primary"], cals["tok-B"].cals["primary"]
+    gcal.build = lambda *_, credentials=None, **__: cals[credentials.token]
     gcal._refresh = lambda creds: None
     titles_seen = []
 
@@ -357,6 +394,75 @@ def main():
     check("смена валюты по-прежнему работает",
           client.patch("/me", headers=hB, json={"default_currency": "KZT"}).json()["default_currency"] == "KZT")
 
+    # --------------------------------------------------------------- выбор календарей
+    section("Выбор календарей")
+    accA.list_forbidden = True
+    r = client.get("/google/calendars", headers=hA)
+    check("старое подключение (нет права на список) → «переподключите», без пометки «отключился»",
+          r.status_code == 200 and r.json()["needs_upgrade"] is True
+          and not next(c for c in db.tables["google_credentials"] if c["user_id"] == A["id"])["needs_reconnect"])
+    accA.list_forbidden = False
+    accA.list_items = [
+        {"id": "a@gmail.com", "summary": "a@gmail.com", "primary": True, "accessRole": "owner", "backgroundColor": "#9fe1e7"},
+        {"id": "study@group", "summary": "Учёба", "accessRole": "owner", "backgroundColor": "#f83a22"},
+        {"id": "hol@group", "summary": "Праздники", "accessRole": "reader"},
+        {"id": "hidden@group", "summary": "Скрытый", "accessRole": "owner", "hidden": True},
+    ]
+    accA.cals["study@group"], accA.cals["hol@group"] = FakeCalendar(), FakeCalendar()
+    study, hol = accA.cals["study@group"], accA.cals["hol@group"]
+    study.add("st1", "Лекция по экономике", at(d(2), 11), at(d(2), 12, 30))
+    for k in range(3):
+        day = d(3 + 7 * k)
+        study.add(f"strec_{day:%Y%m%d}", "Семинар", at(day, 15), at(day, 16), recurringEventId="strec")
+    hol.add("h1", "Праздник", {"date": d(10).isoformat()}, {"date": d(11).isoformat()})
+    r = client.get("/google/calendars", headers=hA).json()
+    names = [(c["id"], c["name"], c["selected"], c["read_only"]) for c in r["calendars"]]
+    check("список: основной первым и выбран, скрытые не показаны, «только чтение» помечен",
+          names == [("primary", "Основной", True, False), ("hol@group", "Праздники", False, True),
+                    ("study@group", "Учёба", False, False)], str(names))
+    check("чужой список не виден: у B свои календари",
+          client.get("/google/calendars", headers=hB).status_code in (200, 409) and not cals["tok-B"].list_items)
+    check("неизвестный календарь → 422", client.put("/google/calendars", headers=hA, json={"ids": ["evil@group"]}).status_code == 422)
+    check("пустой выбор → 422", client.put("/google/calendars", headers=hA, json={"ids": []}).status_code == 422)
+    before = len(tasks_of(A))
+    r = client.put("/google/calendars", headers=hA, json={"ids": ["primary", "study@group", "hol@group"]})
+    check("выбор сохранён, события перенесены сразу (1 + 3 + 1)", r.status_code == 200 and r.json()["created"] == 5
+          and len(tasks_of(A)) == before + 5, r.text[:200])
+    st1 = by_event(A, "st1")
+    check("у задачи записан её календарь", st1["gcal_calendar_id"] == "study@group"
+          and by_event(A, "h1")["gcal_calendar_id"] == "hol@group")
+    check("основной по-прежнему синхронизируется", by_event(A, "whileoff") is not None)
+    check("в списке теперь отмечены три", sum(c["selected"] for c in client.get("/google/calendars", headers=hA).json()["calendars"]) == 3)
+    study.calls.clear()
+    client.patch(f"/tasks/{st1['id']}", headers=hA, json={"deadline": f"{d(2)}T13:00:00"})
+    check("правка задачи уходит в её календарь, а не в основной",
+          any(c[0] == "patch" for c in study.calls) and _ts(study.events["st1"]["start"]).astimezone(ROME).hour == 13)
+    h1 = by_event(A, "h1")
+    r = client.patch(f"/tasks/{h1['id']}", headers=hA, json={"task": "Праздник!"})
+    check("календарь только для чтения: задача меняется, «переподключите» не появляется",
+          r.status_code == 200 and not next(c for c in db.tables["google_credentials"] if c["user_id"] == A["id"])["needs_reconnect"])
+    study.edit("st1", summary="Лекция перенесена")
+    calendar_sync.run_all()
+    check("правка в выбранном календаре → задача", by_event(A, "st1")["task"] == "Лекция перенесена")
+    study.edit(f"strec_{d(3):%Y%m%d}", status="cancelled")
+    calendar_sync.run_all()
+    check("удалили повторение в выбранном календаре → задача удалена", by_event(A, f"strec_{d(3):%Y%m%d}") is None)
+    st1 = by_event(A, "st1")
+    study.calls.clear()
+    client.delete(f"/tasks/{st1['id']}", headers=hA)
+    check("удалили задачу → событие удалено в её календаре", ("delete", "st1", "none") in study.calls)
+    client.put("/google/calendars", headers=hA, json={"ids": ["primary"]})
+    del study.events[f"strec_{d(10):%Y%m%d}"]
+    study.calls.clear()
+    calendar_sync.run_all()
+    check("календарь сняли с выбора — его задачи остаются и не проверяются",
+          by_event(A, f"strec_{d(10):%Y%m%d}") is not None and not study.calls)
+    accA.cals.pop("hol@group")
+    client.put("/google/calendars", headers=hA, json={"ids": ["primary", "hol@group"]})
+    calendar_sync.run_all()
+    check("выбранный календарь пропал (404) — основной всё равно синхронизируется, флаг не ставится",
+          not next(c for c in db.tables["google_credentials"] if c["user_id"] == A["id"])["needs_reconnect"])
+
     # --------------------------------------------------------------- переподключение и подключение
     section("Подключение и сбои")
     calB.calls.clear()
@@ -366,8 +472,8 @@ def main():
     check("у C нет календаря — задач не появилось", not tasks_of(C))
 
     class Boom:
-        def list(self, **_):
-            raise RuntimeError("сеть")
+        def events(self):
+            return SimpleNamespace(list=lambda **_: (_ for _ in ()).throw(RuntimeError("сеть")))
     cals["tok-A"] = Boom()
     count = len(tasks_of(A))
     calendar_sync.run_all()

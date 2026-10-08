@@ -59,6 +59,7 @@ from categories_service import CategoryError
 from money_service import MoneyError
 from telegram_auth import InitDataError, verify_init_data
 from models import (
+    CalendarChoice,
     CategoryCreate,
     CategoryOrder,
     CategoryUpdate,
@@ -636,6 +637,44 @@ def google_auth_callback(background: BackgroundTasks, code: Optional[str] = None
     background.add_task(calendar_sync.sync_after_connect, user_id)  # события календаря → задачи сразу
     return HTMLResponse(GOOGLE_DONE_PAGE.format(
         title="Готово ✅", text="Google Calendar подключён. Вернитесь в Telegram."))
+
+
+@app.get("/google/calendars")
+def google_calendars(user: dict = Depends(current_user)):
+    """Календари пользователя и отметка, из каких переносятся события.
+    needs_upgrade — подключение старое, без права видеть список: нужно переподключить календарь."""
+    row = gcal._get_row(user["id"])
+    if not row:
+        raise HTTPException(status_code=404, detail="Google Calendar не подключён")
+    selected = gcal.import_calendars(row)
+    try:
+        calendars = gcal.list_calendars(user["id"])
+    except gcal.CalendarListUnavailable:
+        return {"needs_upgrade": True, "calendars": []}
+    except Exception as exc:
+        logger.warning("Список календарей не получен: %s", type(exc).__name__)
+        raise HTTPException(status_code=502, detail="Google Calendar не ответил, попробуйте позже")
+    if calendars is None:
+        raise HTTPException(status_code=409, detail="Google Calendar нужно переподключить")
+    return {"needs_upgrade": False, "calendars": [{**c, "selected": c["id"] in selected} for c in calendars]}
+
+
+@app.put("/google/calendars")
+def choose_google_calendars(payload: CalendarChoice, user: dict = Depends(current_user)):
+    """Сохранить выбор и сразу перенести события из новых календарей (ответ — сколько задач появилось)."""
+    if not gcal._get_row(user["id"]):
+        raise HTTPException(status_code=404, detail="Google Calendar не подключён")
+    try:
+        chosen = gcal.set_import_calendars(user["id"], payload.ids)
+    except gcal.CalendarListUnavailable:
+        raise HTTPException(status_code=409, detail="Переподключите Google Calendar, чтобы выбрать календари")
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Нет такого календаря")
+    created = 0
+    if users_service.calendar_import_enabled(user["id"]):
+        stats = calendar_sync.sync_user(user["id"]) or {}
+        created = stats.get("created", 0)
+    return {"selected": chosen, "created": created}
 
 
 @app.get("/google/status")

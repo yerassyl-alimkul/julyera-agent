@@ -93,7 +93,7 @@ def main():
         return [m for m in msgs if m.chat_id == user["telegram_user_id"]]
 
     gone_events = []
-    gcal.sync_task_delete = lambda event_id, user_id: gone_events.append(event_id)
+    gcal.sync_task_delete = lambda event_id, user_id, *_: gone_events.append(event_id)
 
     section("/today")
     at(9, 30)
