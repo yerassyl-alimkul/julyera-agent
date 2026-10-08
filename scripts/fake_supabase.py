@@ -28,7 +28,10 @@ DEFAULTS = {
     "money_categories": lambda: {"id": str(uuid.uuid4()), "sort_order": 0, "created_at": _now()},
     "money_transactions": lambda: {"id": str(uuid.uuid4()), "note": None, "source": "app", "recurring_id": None,
                                    "created_at": _now()},
-    "money_recurring": lambda: {"id": str(uuid.uuid4()), "note": None, "active": True, "created_at": _now()},
+    "money_recurring": lambda: {"id": str(uuid.uuid4()), "note": None, "active": True, "frequency": "monthly",
+                                "anchor_date": None, "created_at": _now()},
+    "money_merchant_rules": lambda: {"updated_at": _now()},
+    "release_log": lambda: {"sent_at": _now()},
     "tasks": lambda: {"id": str(uuid.uuid4()), "source": None, "deadline": None, "priority": "Mid",
                       "status": "To Do", "note": None, "is_recurring": False, "recurrence_pattern": None,
                       "tags": [], "google_event_id": None, "snoozed_until": None, "created_at": _now(), "updated_at": _now()},
@@ -40,7 +43,7 @@ DEFAULTS = {
     "google_credentials": lambda: {"access_token": None, "token_expiry": None, "needs_reconnect": False,
                                    "created_at": _now(), "updated_at": _now()},
 }
-PRIMARY_KEYS = {"telegram_chats": "chat_id", "google_credentials": "user_id"}
+PRIMARY_KEYS = {"telegram_chats": "chat_id", "google_credentials": "user_id", "release_log": "id"}
 UNIQUE = {"users": ["telegram_user_id", "access_key"]}
 NOT_NULL = {"tasks": ["user_id", "task", "category"], "notes": ["user_id", "content"],
             "telegram_chats": ["user_id"], "google_credentials": ["user_id", "refresh_token"],

@@ -166,6 +166,7 @@ class TransactionCreate(BaseModel):
     category_id: str
     spent_on: Optional[str] = None  # без даты — сегодня в поясе пользователя
     note: Optional[str] = None
+    repeat: Optional[str] = None  # «Повторять»: weekly | biweekly | monthly | yearly — заодно создаётся правило
 
 
 class TransactionUpdate(BaseModel):
@@ -186,7 +187,9 @@ class RecurringCreate(BaseModel):
     amount: Amount
     currency: str
     category_id: str
-    day_of_month: Union[int, str]
+    day_of_month: Optional[Union[int, str]] = None  # прежний ежемесячный платёж без даты первой операции
+    frequency: Optional[str] = None                  # weekly | biweekly | monthly | yearly (по умолчанию monthly)
+    anchor_date: Optional[str] = None                # дата уже записанной первой операции
     note: Optional[str] = None
     active: bool = True
 
@@ -197,6 +200,8 @@ class RecurringUpdate(BaseModel):
     currency: Optional[str] = None
     category_id: Optional[str] = None
     day_of_month: Optional[Union[int, str]] = None
+    frequency: Optional[str] = None
+    next_run: Optional[str] = None  # дата следующего платежа, не раньше сегодня
     note: Optional[str] = None
     active: Optional[bool] = None
 

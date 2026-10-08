@@ -121,6 +121,11 @@ async def lifespan(app: FastAPI):
                 await telegram_app.bot.set_my_commands(BOT_COMMANDS)
             except Exception:
                 logger.exception("Не удалось установить список команд бота")
+            try:
+                import release_notes  # после деплоя — один раз сообщить владельцу, что изменилось
+                await release_notes.announce(telegram_app.bot, supabase, users_service.list_admins())
+            except Exception:
+                logger.exception("Заметка о релизе не отправлена")
     yield
     if telegram_app:
         await telegram_app.shutdown()
@@ -386,8 +391,8 @@ def money_trend(months: int = Query(6), user: dict = Depends(current_user)):
 
 
 @app.get("/money/recurring")
-def list_money_recurring(user: dict = Depends(current_user)):
-    return money_service.list_recurring(user["id"])
+def list_money_recurring(kind: Optional[str] = Query(None), user: dict = Depends(current_user)):
+    return money_service.list_recurring(user["id"], kind or None)
 
 
 @app.post("/money/recurring", status_code=201)

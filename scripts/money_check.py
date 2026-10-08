@@ -215,6 +215,69 @@ def http_checks(client, token, A, B, db_insert):
     return {"food_a": food_a, "rec": rec}
 
 
+def wallet_checks(client, token, B):
+    """Повтор из формы траты (переключатель «Повторять»), частоты, правка и остановка, доходы по категориям."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    section("Кошелёк: повтор из формы траты")
+    hB = ic.init_data_headers(B["telegram_user_id"], token, "Тест B")
+    today = datetime.now(ZoneInfo("Europe/Rome")).date()
+    cats = client.get("/money/categories", headers=hB, params={"kind": "expense"}).json()
+    cat = cats[0]["id"]
+
+    def tx(repeat, **extra):
+        return client.post("/money/transactions", headers=hB, json={
+            "kind": "expense", "amount": "9,99", "currency": "EUR", "category_id": cat,
+            "spent_on": today.isoformat(), "note": f"Повтор {repeat}", "repeat": repeat, **extra})
+
+    def rec_of(t):
+        return next((r for r in client.get("/money/recurring", headers=hB).json() if r["id"] == t.get("recurring_id")), {})
+
+    r = tx("monthly")
+    t_month = r.json()
+    rec = rec_of(t_month)
+    nm = date(today.year + (today.month == 12), today.month % 12 + 1, 1)
+    import calendar as _cal
+    expected_month = nm.replace(day=min(today.day, _cal.monthrange(nm.year, nm.month)[1]))
+    check("«Повторять: каждый месяц» создаёт операцию и правило, следующий раз через месяц",
+          r.status_code == 201 and rec.get("frequency") == "monthly" and rec.get("anchor_date") == today.isoformat()
+          and rec.get("next_run") == expected_month.isoformat(), f"{r.status_code} {rec}")
+    rec_w = rec_of(tx("weekly").json())
+    check("каждую неделю: следующий раз через 7 дней", rec_w.get("next_run") == (today + timedelta(days=7)).isoformat())
+    rec_b = rec_of(tx("biweekly").json())
+    check("каждые 2 недели: через 14 дней", rec_b.get("next_run") == (today + timedelta(days=14)).isoformat())
+    rec_y = rec_of(tx("yearly").json())
+    check("каждый год: через год", rec_y.get("next_run", "").startswith(str(today.year + 1)))
+    check("«каждый день» → 422", tx("daily").status_code == 422)
+    check("список повторяющихся по типу", all(x["kind"] == "expense" for x in
+          client.get("/money/recurring", headers=hB, params={"kind": "expense"}).json())
+          and client.get("/money/recurring", headers=hB, params={"kind": "income"}).json() == [])
+    r = client.patch(f"/money/recurring/{rec['id']}", headers=hB, json={"frequency": "weekly"})
+    check("смена частоты пересчитывает следующий платёж (не раньше сегодня)",
+          r.status_code == 200 and r.json()["frequency"] == "weekly" and r.json()["next_run"] >= today.isoformat())
+    r = client.patch(f"/money/recurring/{rec['id']}", headers=hB, json={"next_run": (today - timedelta(days=1)).isoformat()})
+    check("следующий платёж вчера → 422", r.status_code == 422)
+    tomorrow = today + timedelta(days=1)
+    r = client.patch(f"/money/recurring/{rec['id']}", headers=hB, json={"next_run": tomorrow.isoformat()})
+    check("дата следующего платежа меняется, число месяца берётся от неё",
+          r.status_code == 200 and r.json()["next_run"] == tomorrow.isoformat() and r.json()["day_of_month"] == tomorrow.day)
+    r = client.delete(f"/money/recurring/{rec['id']}", headers=hB)
+    left = client.get(f"/money/transactions/{t_month['id']}", headers=hB)
+    check("выключить «Повторять» = остановить правило; операция остаётся",
+          r.status_code == 204 and left.status_code == 200 and left.json()["recurring_id"] is None)
+    for x in (rec_w, rec_b, rec_y):
+        client.delete(f"/money/recurring/{x['id']}", headers=hB)
+    inc = client.get("/money/categories", headers=hB, params={"kind": "income"}).json()[0]
+    client.post("/money/transactions", headers=hB, json={"kind": "income", "amount": "100", "currency": "EUR",
+                                                         "category_id": inc["id"], "spent_on": "2026-06-10"})
+    s = client.get("/money/summary", headers=hB, params={"month": "2026-06"}).json()
+    eur = next(c for c in s["currencies"] if c["currency"] == "EUR")
+    check("итоги: доходы по категориям и разница доходов с прошлым месяцем",
+          eur["income_by_category"] and eur["income_by_category"][0]["name"] == inc["name"]
+          and eur["income_by_category"][0]["share"] == 100 and "income_change" in eur["previous"])
+
+
 # ---------------------------------------------------------------- локально: платежи, бот, распознавание денег
 
 def recurring_checks(db, client, A, B):
@@ -239,7 +302,11 @@ def recurring_checks(db, client, A, B):
     def tx_of(rec):
         return sorted(t["spent_on"] for t in db.tables.get("money_transactions", []) if t.get("recurring_id") == rec["id"])
 
+    weekly = make(A, cat_a, 16, "2026-09-16", note="Еженедельный")
+    db.table("money_recurring").update({"frequency": "weekly"}).eq("id", weekly["id"]).execute()
     msgs = money_service.run_recurring(today_of=lambda uid: today["value"])
+    check("еженедельный платёж догоняет пропущенные недели",
+          tx_of(weekly) == ["2026-09-16", "2026-09-23", "2026-09-30", "2026-10-07"], str(tx_of(weekly)))
     check("пропущенные месяцы догоняются по очереди", tx_of(rec2) == ["2026-08-05", "2026-09-05", "2026-10-05"], str(tx_of(rec2)))
     check("next_run сдвинулся на следующий месяц",
           next(r for r in db.tables["money_recurring"] if r["id"] == rec2["id"])["next_run"] == "2026-11-05")
@@ -291,6 +358,22 @@ def recurring_checks(db, client, A, B):
     finally:
         money_service.run_recurring = original
     check("сбой платежей не ломает рассылку напоминаний", r.status_code == 200 and "messages" in r.json(), str(r.status_code))
+
+
+def release_checks(db):
+    import release_notes
+    import users_service
+
+    section("Заметка о релизе")
+    admin = users_service.create_user("Владелец", 1001)
+    db.tables["users"][-1]["is_admin"] = True
+    admin["is_admin"] = True
+    bot = ic.FakeBot()
+    first = asyncio.run(release_notes.announce(bot, db, [admin]))
+    second = asyncio.run(release_notes.announce(bot, db, [admin]))
+    to_admin = [m for m in bot.sent if m.chat_id == 1001]
+    check("после деплоя заметка уходит владельцу один раз", first and not second and len(to_admin) == 1
+          and to_admin[0].text == release_notes.RELEASE_TEXT)
 
 
 def detection_checks():
@@ -516,7 +599,9 @@ def run_local(with_model):
 
     print("Локальная проверка денег (база в памяти, без сети)")
     http_checks(client, token, A, B, db_insert)
+    wallet_checks(client, token, B)
     recurring_checks(db, client, A, B)
+    release_checks(db)
     detection_checks()
     bot_checks(db, B, A)  # у B после HTTP-проверок нетронутые стартовые категории и валюта EUR
     privacy_and_log_checks()
@@ -554,6 +639,7 @@ def run_remote(base_url):
         with httpx.Client(base_url=base_url, timeout=90) as client:
             client.get("/health")
             http_checks(client, token, A, B, db_insert)
+            wallet_checks(client, token, B)
     finally:
         for user in created:
             for table in ("money_transactions", "money_recurring", "money_categories", "categories", "telegram_chats"):

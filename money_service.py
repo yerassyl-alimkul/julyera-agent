@@ -347,7 +347,10 @@ def get_transaction(tx_id: str, user_id: str) -> Optional[dict]:
 
 
 def create_transaction(user_id: str, data: dict, source: str = "app") -> dict:
+    """Операция. data["repeat"] — частота («Повторять» в форме): тогда заодно создаётся правило повтора
+    с этой операцией как первой (anchor_date = её дата), и операция привязывается к нему."""
     kind = clean_kind(data.get("kind"))
+    repeat = clean_frequency(data["repeat"]) if data.get("repeat") else None
     row = {
         "user_id": user_id,
         "kind": kind,
@@ -361,8 +364,15 @@ def create_transaction(user_id: str, data: dict, source: str = "app") -> dict:
     rows = supabase.table(TX_TABLE).insert(row).execute().data
     if not rows:
         raise RuntimeError("Не удалось сохранить операцию")
-    logger.info("Операция создана: %s, источник %s", rows[0]["id"], row["source"])
-    return _tx_out(rows[0])
+    tx = rows[0]
+    logger.info("Операция создана: %s, источник %s", tx["id"], row["source"])
+    if repeat:
+        rec = create_recurring(user_id, {
+            "kind": kind, "amount": row["amount"], "currency": row["currency"], "category_id": row["category_id"],
+            "note": row["note"], "frequency": repeat, "anchor_date": row["spent_on"]})
+        supabase.table(TX_TABLE).update({"recurring_id": rec["id"]}).eq("id", tx["id"]).eq("user_id", user_id).execute()
+        tx = {**tx, "recurring_id": rec["id"]}
+    return _tx_out(tx)
 
 
 def update_transaction(tx_id: str, user_id: str, data: dict) -> Optional[dict]:
@@ -450,9 +460,12 @@ def summary(user_id: str, month: Optional[str] = None) -> dict:
     def totals(selected):
         out = {}
         for r in selected:
-            t = out.setdefault(r["currency"], {"income": Decimal(0), "expense": Decimal(0), "by_cat": {}, "by_day": {}})
+            t = out.setdefault(r["currency"], {"income": Decimal(0), "expense": Decimal(0), "by_cat": {},
+                                               "by_cat_income": {}, "by_day": {}})
             amount = Decimal(str(r["amount"]))
             t[r["kind"]] += amount
+            if r["kind"] == "income":
+                t["by_cat_income"][r["category_id"]] = t["by_cat_income"].get(r["category_id"], Decimal(0)) + amount
             day = t["by_day"].setdefault(str(r["spent_on"])[:10], {"income": Decimal(0), "expense": Decimal(0)})
             day[r["kind"]] += amount
             if r["kind"] == "expense":
@@ -467,19 +480,25 @@ def summary(user_id: str, month: Optional[str] = None) -> dict:
         if cur not in current:
             continue
         t, p = current[cur], previous.get(cur, {"income": Decimal(0), "expense": Decimal(0)})
-        by_category = []
-        for cat_id, amount in sorted(t["by_cat"].items(), key=lambda kv: kv[1], reverse=True):
-            cat = cats.get(cat_id, {})
-            share = int((amount * 100 / t["expense"]).quantize(Decimal(1))) if t["expense"] else 0
-            by_category.append({"category_id": cat_id, "name": cat.get("name", "?"), "color": cat.get("color"),
-                                "amount": fmt(amount), "share": share})
+        def breakdown(parts, total):
+            out = []
+            for cat_id, amount in sorted(parts.items(), key=lambda kv: kv[1], reverse=True):
+                cat = cats.get(cat_id, {})
+                share = int((amount * 100 / total).quantize(Decimal(1))) if total else 0
+                out.append({"category_id": cat_id, "name": cat.get("name", "?"), "color": cat.get("color"),
+                            "amount": fmt(amount), "share": share})
+            return out
+
+        by_category = breakdown(t["by_cat"], t["expense"])
         currencies.append({
             "currency": cur, "income": fmt(t["income"]), "expense": fmt(t["expense"]),
             "balance": fmt(t["income"] - t["expense"]), "by_category": by_category,
+            "income_by_category": breakdown(t["by_cat_income"], t["income"]),
             "days": [{"day": d, "income": fmt(v["income"]), "expense": fmt(v["expense"])}
                      for d, v in sorted(t["by_day"].items(), reverse=True)],
             "previous": {"income": fmt(p["income"]), "expense": fmt(p["expense"]),
-                         "expense_change": fmt(t["expense"] - p["expense"])},
+                         "expense_change": fmt(t["expense"] - p["expense"]),
+                         "income_change": fmt(t["income"] - p["income"])},
         })
     return {"month": start.strftime("%Y-%m"), "currencies": currencies}
 
@@ -509,11 +528,19 @@ def trend(user_id: str, months: int = 6) -> dict:
 
 
 # ---------------------------------------------------------------- повторяющиеся платежи
+# Частота: неделя, 2 недели, месяц, год. Правило создаётся вместе с первой операцией (форма траты,
+# переключатель «Повторять»): anchor_date — её дата, следующие идут от неё. 31-е в коротком месяце
+# и 29 февраля в невисокосном году дают последний день месяца, day_of_month при этом не меняется.
+
+FREQUENCIES = ("weekly", "biweekly", "monthly", "yearly")
+
 
 def _rec_out(row: dict) -> dict:
     return {
         "id": row["id"], "kind": row["kind"], "amount": fmt(row["amount"]), "currency": row["currency"],
         "category_id": row["category_id"], "note": row.get("note"), "day_of_month": row["day_of_month"],
+        "frequency": row.get("frequency") or "monthly",
+        "anchor_date": str(row["anchor_date"])[:10] if row.get("anchor_date") else None,
         "next_run": str(row["next_run"])[:10], "active": row.get("active", True),
     }
 
@@ -537,8 +564,27 @@ def _clean_day_of_month(value) -> int:
     return dom
 
 
+def clean_frequency(value) -> str:
+    freq = value or "monthly"
+    if freq not in FREQUENCIES:
+        raise MoneyError(422, "Повтор: каждую неделю, каждые 2 недели, каждый месяц или каждый год", "bad_frequency")
+    return freq
+
+
+def advance(day: date, frequency: str, day_of_month: int) -> date:
+    """Следующая дата платежа после day."""
+    if frequency == "weekly":
+        return day + timedelta(days=7)
+    if frequency == "biweekly":
+        return day + timedelta(days=14)
+    if frequency == "yearly":
+        return _clamped(day.year + 1, day.month, day_of_month)
+    nxt = _add_months(_month_start(day), 1)
+    return _clamped(nxt.year, nxt.month, day_of_month)
+
+
 def next_occurrence(today: date, day_of_month: int) -> date:
-    """Ближайшая дата платежа не раньше сегодня: новый платёж не создаёт операций задним числом."""
+    """Ежемесячный платёж без даты первой операции: ближайшее число не раньше сегодня."""
     this_month = _clamped(today.year, today.month, day_of_month)
     if this_month >= today:
         return this_month
@@ -546,14 +592,37 @@ def next_occurrence(today: date, day_of_month: int) -> date:
     return _clamped(nxt.year, nxt.month, day_of_month)
 
 
-def list_recurring(user_id: str) -> list[dict]:
-    rows = supabase.table(REC_TABLE).select("*").eq("user_id", user_id).execute().data
+def _first_run_after(anchor: date, frequency: str, dom: int, today: date) -> date:
+    """Первая дата после anchor, не раньше сегодня: правило не создаёт операций задним числом."""
+    run = advance(anchor, frequency, dom)
+    while run < today:
+        run = advance(run, frequency, dom)
+    return run
+
+
+def list_recurring(user_id: str, kind: Optional[str] = None) -> list[dict]:
+    query = supabase.table(REC_TABLE).select("*").eq("user_id", user_id)
+    if kind:
+        query = query.eq("kind", clean_kind(kind))
+    rows = query.execute().data
     return [_rec_out(r) for r in sorted(rows, key=lambda r: (str(r["next_run"]), r.get("created_at") or ""))]
 
 
 def create_recurring(user_id: str, data: dict) -> dict:
+    """С anchor_date (дата уже записанной первой операции) следующий платёж — следующий период после неё.
+    Без anchor_date — прежний ежемесячный платёж по day_of_month с ближайшего числа."""
     kind = clean_kind(data.get("kind"))
-    dom = _clean_day_of_month(data.get("day_of_month"))
+    frequency = clean_frequency(data.get("frequency"))
+    today = today_for(user_id)
+    anchor = parse_day(data["anchor_date"], user_id) if data.get("anchor_date") else None
+    if anchor:
+        dom = anchor.day
+        next_run = _first_run_after(anchor, frequency, dom, today)
+    else:
+        dom = _clean_day_of_month(data.get("day_of_month"))
+        if frequency != "monthly":
+            raise MoneyError(422, "Для такого повтора нужна дата первого платежа", "bad_anchor")
+        next_run = next_occurrence(today, dom)
     row = {
         "user_id": user_id, "kind": kind,
         "amount": str(parse_amount(data.get("amount"))),
@@ -561,7 +630,9 @@ def create_recurring(user_id: str, data: dict) -> dict:
         "category_id": _own_category(user_id, data.get("category_id"), kind)["id"],
         "note": clean_note(data.get("note")),
         "day_of_month": dom,
-        "next_run": next_occurrence(today_for(user_id), dom).isoformat(),
+        "frequency": frequency,
+        "anchor_date": anchor.isoformat() if anchor else None,
+        "next_run": next_run.isoformat(),
         "active": bool(data.get("active", True)),
     }
     rows = supabase.table(REC_TABLE).insert(row).execute().data
@@ -571,10 +642,13 @@ def create_recurring(user_id: str, data: dict) -> dict:
 
 
 def update_recurring(rec_id: str, user_id: str, data: dict) -> Optional[dict]:
+    """Меняет переданные поля. next_run — дата следующего платежа (не раньше сегодня): от неё же
+    берётся число месяца. Смена частоты пересчитывает next_run от текущего, не раньше сегодня."""
     current = _get_rec_row(rec_id, user_id)
     if not current:
         return None
     changes = {}
+    today = today_for(user_id)
     kind = current["kind"]
     if data.get("kind") is not None:
         kind = clean_kind(data["kind"])
@@ -587,17 +661,34 @@ def update_recurring(rec_id: str, user_id: str, data: dict) -> Optional[dict]:
         changes["category_id"] = _own_category(user_id, data.get("category_id") or current["category_id"], kind)["id"]
     if "note" in data:
         changes["note"] = clean_note(data["note"])
-    if data.get("day_of_month") is not None:
-        dom = _clean_day_of_month(data["day_of_month"])
-        if dom != current["day_of_month"]:
-            changes["day_of_month"] = dom
-            changes["next_run"] = next_occurrence(today_for(user_id), dom).isoformat()
+    frequency = current.get("frequency") or "monthly"
+    dom = current["day_of_month"]
+    if data.get("frequency") is not None and data["frequency"] != frequency:
+        frequency = changes["frequency"] = clean_frequency(data["frequency"])
+    if data.get("next_run") is not None:
+        run = parse_day(data["next_run"], user_id)
+        if run < today:
+            raise MoneyError(422, "Следующий платёж — сегодня или позже", "bad_next_run")
+        dom = changes["day_of_month"] = run.day
+        changes["next_run"] = run.isoformat()
+    elif data.get("day_of_month") is not None:
+        new_dom = _clean_day_of_month(data["day_of_month"])
+        if new_dom != dom:
+            dom = changes["day_of_month"] = new_dom
+            changes["next_run"] = next_occurrence(today, dom).isoformat()
+    elif "frequency" in changes:
+        run = date.fromisoformat(str(current["next_run"])[:10])
+        while run < today:
+            run = advance(run, frequency, dom)
+        changes["next_run"] = run.isoformat()
     if data.get("active") is not None:
         changes["active"] = bool(data["active"])
-        if changes["active"] and not current.get("active", True):
+        if changes["active"] and not current.get("active", True) and "next_run" not in changes:
             # включили обратно — пропущенное за время паузы не догоняем
-            dom = changes.get("day_of_month", current["day_of_month"])
-            changes["next_run"] = next_occurrence(today_for(user_id), dom).isoformat()
+            run = date.fromisoformat(str(current["next_run"])[:10])
+            while run < today:
+                run = advance(run, frequency, dom)
+            changes["next_run"] = run.isoformat()
     if changes:
         supabase.table(REC_TABLE).update(changes).eq("id", rec_id).eq("user_id", user_id).execute()
     row = _get_rec_row(rec_id, user_id)
@@ -605,21 +696,16 @@ def update_recurring(rec_id: str, user_id: str, data: dict) -> Optional[dict]:
 
 
 def delete_recurring(rec_id: str, user_id: str) -> bool:
-    """Удаляет платёж; уже созданные им операции остаются (recurring_id станет null)."""
+    """Останавливает повтор навсегда; уже созданные им операции остаются (recurring_id станет null)."""
     if not _get_rec_row(rec_id, user_id):
         return False
     supabase.table(REC_TABLE).delete().eq("id", rec_id).eq("user_id", user_id).execute()
     return True
 
 
-def _advance(day: date, day_of_month: int) -> date:
-    nxt = _add_months(_month_start(day), 1)
-    return _clamped(nxt.year, nxt.month, day_of_month)
-
-
 def run_recurring(today_of=None, utc_today: Optional[date] = None) -> list[tuple[str, str]]:
     """Создаёт операции по активным платежам, у которых next_run не позже сегодняшней даты пользователя.
-    Догоняет пропущенные месяцы (не больше 12 за прогон). Повторный прогон ничего не дублирует
+    Догоняет пропущенные периоды (не больше 12 за прогон). Повторный прогон ничего не дублирует
     (уникальный индекс (recurring_id, spent_on)). Сбой одного платежа не останавливает остальные.
     Возвращает сообщения для пользователей: [(user_id, текст)].
     today_of и utc_today подменяются только в проверках (scripts/money_check.py)."""
@@ -633,6 +719,7 @@ def run_recurring(today_of=None, utc_today: Optional[date] = None) -> list[tuple
             if user_id not in today_cache:
                 today_cache[user_id] = today_of(user_id)
             today = today_cache[user_id]
+            frequency = rec.get("frequency") or "monthly"
             run_day = date.fromisoformat(str(rec["next_run"])[:10])
             created = 0
             for _ in range(CATCH_UP_MAX):
@@ -648,14 +735,14 @@ def run_recurring(today_of=None, utc_today: Optional[date] = None) -> list[tuple
                 except Exception as exc:
                     if not _is_duplicate(exc):
                         raise
-                run_day = _advance(run_day, rec["day_of_month"])
+                run_day = advance(run_day, frequency, rec["day_of_month"])
             supabase.table(REC_TABLE).update({"next_run": run_day.isoformat()}).eq("id", rec["id"]).eq(
                 "user_id", user_id).execute()
             if created:
                 name = rec.get("note") or (get_category(rec["category_id"], user_id) or {}).get("name", "Платёж")
                 text = f"Добавлен платёж: {name} · {fmt(rec['amount'])} {rec['currency']}"
                 if created > 1:
-                    text += f" (×{created}, за пропущенные месяцы)"
+                    text += f" (×{created}, за пропущенные периоды)"
                 messages.append((user_id, text))
             logger.info("Повторяющийся платёж %s: создано операций %d", rec["id"], created)
         except Exception as exc:
