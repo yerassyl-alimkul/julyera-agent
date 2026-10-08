@@ -5,6 +5,11 @@
       "name": "mock",
       "url": "http://localhost:8001",
       "port": 8001
+    },
+    {
+      "name": "dev",
+      "url": "http://localhost:8002",
+      "port": 8002
     }
   ]
 }
