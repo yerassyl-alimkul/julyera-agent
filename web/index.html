@@ -994,13 +994,26 @@ applyTheme();
     background: var(--surface);
   }
   .money-card-cur { font-size: 13px; font-weight: 600; color: var(--ink-muted); letter-spacing: 0.02em; }
-  .money-total { display: block; padding-top: 4px; font-family: var(--font-display); font-size: 26px; font-weight: 600; overflow-wrap: anywhere; }
+  .money-total { display: block; padding-top: 4px; font-family: var(--font-display); font-size: 26px; font-weight: 600;
+    color: var(--accent-text); overflow-wrap: anywhere; }
+  .money-parts { display: flex; flex-direction: column; margin-top: var(--gap-m); }
+  .money-parts div { display: flex; justify-content: space-between; gap: var(--gap-s); padding: 6px 0;
+    border-top: 1px solid var(--hairline); font-size: 14px; }
+  .money-parts span { color: var(--ink-muted); }
+  .money-rate { margin: var(--gap-l) 0 0; font-size: 13px; color: var(--ink-muted); }
+  .money-row-amount small { display: block; font-size: 12px; font-weight: 500; color: var(--ink-muted); text-align: right; }
+  .cur-options { display: flex; flex-direction: column; gap: var(--gap-m); padding-top: var(--gap-header); }
+  .cur-option { display: flex; align-items: center; justify-content: space-between; min-height: var(--touch-l);
+    padding: 0 18px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface);
+    color: var(--ink); font-size: 17px; font-weight: 600; cursor: pointer; }
+  .cur-option[aria-checked="true"] { border: 2px solid var(--ink); }
+  .cur-option svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
   .money-card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap-s) var(--gap-l); padding-top: var(--gap-s); }
   .money-figure { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .money-figure span { font-size: 13px; color: var(--ink-muted); }
   .money-figure b { font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
   .money-figure.balance { grid-column: 1 / -1; }
-  .money-figure.balance b { font-family: var(--font-display); font-size: 22px; }
+  .money-figure.balance b { font-family: var(--font-display); font-size: 22px; color: var(--accent-text); }
   .money-figure.balance b.neg { color: var(--danger); }
   .money-compare { margin: var(--gap-s) 0 0; font-size: 13px; color: var(--ink-muted); }
   .money-block { padding-top: var(--gap-header); }
@@ -1618,10 +1631,12 @@ applyTheme();
       <div class="money-tools">
         <button class="pill-btn" id="moneyCurrent" hidden>Текущий</button>
         <button class="pill-btn" id="moneyCategoriesBtn">Категории</button>
+        <button class="pill-btn" id="moneyCurrencyBtn">Валюта</button>
       </div>
 
       <div id="moneyKindView">
         <div class="money-cards" id="moneyCards"></div>
+        <p class="money-rate" id="moneyRate" hidden></p>
         <section class="money-block" id="moneyBarsBlock" aria-labelledby="moneyBarsTitle">
           <h2 class="money-h2" id="moneyBarsTitle">По категориям</h2>
           <div id="moneyBars"></div>
@@ -1645,6 +1660,7 @@ applyTheme();
       <div id="moneyTrendView" hidden>
         <div class="segmented" id="trendCurrency" role="group" aria-label="Валюта" style="margin-top: var(--gap-section);"></div>
         <div class="money-cards" id="trendBalance"></div>
+        <p class="money-rate" id="trendRate" hidden></p>
         <section class="money-block" id="trendBarsBlock" aria-labelledby="moneyTrendTitle">
           <h2 class="money-h2" id="moneyTrendTitle">Доходы и расходы за 6 месяцев</h2>
           <div class="trend-legend" aria-hidden="true"><span><i class="i"></i>доходы</span><span><i class="e"></i>расходы</span></div>
@@ -1849,6 +1865,19 @@ applyTheme();
   </div>
   <div class="sheet-footer">
     <button class="btn-primary" id="moneySave">Сохранить</button>
+  </div>
+</div>
+
+<!-- Основная валюта кошелька -->
+<div class="sheet" id="currencySheet" role="dialog" aria-modal="true" aria-labelledby="currencyTitle" hidden>
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <button class="tb-btn" id="currencyClose" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <h2 class="t-modal-title" id="currencyTitle">Основная валюта</h2>
+      <span></span>
+    </div>
+    <p class="newtask-hint">В ней показываются итоги, категории и графики, другие валюты пересчитываются по курсу Нацбанка РК. Её же подставляет бот, если в сообщении валюта не названа. У каждого своя.</p>
+    <div class="cur-options" id="currencyOptions" role="radiogroup" aria-labelledby="currencyTitle"></div>
   </div>
 </div>
 
@@ -4296,6 +4325,7 @@ function renderMoney() {
   document.querySelectorAll('#walletSwitch [data-wtab]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.wtab === moneyTab)));
   document.getElementById('moneyMonthLabel').textContent = monthTitle(key);
   document.getElementById('moneyCurrent').hidden = key === currentMonthKey();
+  document.getElementById('moneyCurrencyBtn').textContent = `Валюта: ${(moneyMe && moneyMe.default_currency) || 'EUR'}`;
   document.getElementById('moneyNext').disabled = key >= currentMonthKey();
   const trend = moneyTab === 'trend';
   document.getElementById('moneyKindView').hidden = trend;
@@ -4308,9 +4338,21 @@ function renderMoney() {
 }
 
 // ---------- Расходы / Доходы ----------
+const CURRENCY_NAMES = { EUR: 'Евро', KZT: 'Тенге' };
+
+function rateText(summary) {
+  const r = summary && summary.rate;
+  if (!r) return '';
+  return `Курс Нацбанка РК на ${dayLabel(r.date)}: 1 ${moneyFmt('1', r.currency).replace(/[\d\s,.]/g, '')} = ${moneyFmt(r.kzt, 'KZT')}`;
+}
+
 function renderKindView(summary) {
+  if (summary.main) return renderKindViewMain(summary);
   const income = moneyTab === 'income';
   const curs = summary.currencies.filter(c => Number(income ? c.income : c.expense) > 0);
+  const rateNote = document.getElementById('moneyRate');
+  rateNote.hidden = curs.length < 2;
+  rateNote.textContent = 'Курс сейчас недоступен — итоги показаны по валютам раздельно';
 
   const cards = document.getElementById('moneyCards');
   cards.innerHTML = '';
@@ -4370,6 +4412,69 @@ function renderKindView(summary) {
     });
     bars.appendChild(wrap);
   });
+
+  renderRecurringBlock();
+  renderMoneyList(summary);
+}
+
+// Итоги в основной валюте: крупно общий итог (с «≈», если в нём есть пересчёт), ниже строки по валютам.
+function renderKindViewMain(summary) {
+  const income = moneyTab === 'income';
+  const kind = income ? 'income' : 'expense';
+  const m = summary.main;
+  const parts = m.parts[kind];
+  const approx = parts.some(p => p.currency !== m.currency);
+  const change = income ? m.previous.income_change : m.previous.expense_change;
+
+  const cards = document.getElementById('moneyCards');
+  cards.innerHTML = '';
+  const card = document.createElement('div');
+  card.className = 'money-card';
+  card.innerHTML = '<div class="money-card-cur"></div><b class="money-total"></b><p class="money-compare"></p><div class="money-parts"></div>';
+  card.querySelector('.money-card-cur').textContent = income ? 'Получено всего' : 'Потрачено всего';
+  card.querySelector('.money-total').textContent = (approx ? '≈ ' : '') + moneyFmt(m[kind], m.currency);
+  card.querySelector('.money-compare').textContent = Number(change) === 0 ? 'Как в прошлом месяце'
+    : `На ${moneyFmt(change.replace('-', ''), m.currency)} ${change.startsWith('-') ? 'меньше' : 'больше'}, чем в прошлом месяце`;
+  const partsEl = card.querySelector('.money-parts');
+  if (approx || parts.length > 1) {
+    parts.forEach(p => {
+      const row = document.createElement('div');
+      const label = document.createElement('span');
+      label.textContent = `в ${p.currency === 'KZT' ? 'тенге' : 'евро'}`;
+      const value = document.createElement('b');
+      value.textContent = moneyFmt(p.amount, p.currency) + (p.currency !== m.currency ? ` ≈ ${moneyFmt(p.converted, m.currency)}` : '');
+      row.append(label, value);
+      partsEl.appendChild(row);
+    });
+  }
+  cards.appendChild(card);
+  const rateNote = document.getElementById('moneyRate');
+  rateNote.hidden = !approx;
+  rateNote.textContent = rateText(summary);
+
+  const bars = document.getElementById('moneyBars');
+  bars.innerHTML = '';
+  const list = income ? m.income_by_category : m.by_category;
+  document.getElementById('moneyBarsBlock').hidden = !list.length;
+  const wrap = document.createElement('div');
+  wrap.className = 'money-bars';
+  const top = Math.max(...list.map(c => c.share), 1);
+  list.forEach(c => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'money-bar';
+    btn.dataset.focusKey = `mbar-${c.category_id}`;
+    btn.setAttribute('aria-pressed', String(moneyFilterCat === c.category_id));
+    btn.setAttribute('aria-label', `${c.name}: ${moneyFmt(c.amount, m.currency)}, ${c.share}%. Показать операции категории`);
+    btn.style.setProperty('--chip-color', c.color || 'var(--accent)');
+    btn.innerHTML = '<span class="money-bar-top"><span class="n"></span><b></b></span><span class="money-bar-track"><span class="money-bar-fill"></span></span>';
+    btn.querySelector('.n').textContent = c.name;
+    btn.querySelector('b').textContent = `${c.approx ? '≈ ' : ''}${moneyFmt(c.amount, m.currency)} · ${c.share}%`;
+    btn.querySelector('.money-bar-fill').style.width = `${Math.max(2, Math.round(c.share / top * 100))}%`;
+    btn.onclick = () => { moneyFilterCat = moneyFilterCat === c.category_id ? null : c.category_id; loadMoney(); };
+    wrap.appendChild(btn);
+  });
+  bars.appendChild(wrap);
 
   renderRecurringBlock();
   renderMoneyList(summary);
@@ -4461,6 +4566,11 @@ function moneyRowEl(tx) {
   const amount = document.createElement('span');
   amount.className = 'money-row-amount' + (income ? ' income' : '');
   amount.textContent = moneyFmt(tx.amount, tx.currency, income ? '+' : '−');
+  if (tx.converted) {
+    const conv = document.createElement('small');
+    conv.textContent = '≈ ' + moneyFmt(tx.converted.amount, tx.converted.currency);
+    amount.appendChild(conv);
+  }
   row.append(dot, body, amount);
   row.addEventListener('click', () => {
     if (Date.now() < suppressRowClickUntil) return;
@@ -4490,9 +4600,16 @@ function renderMoneyList(summary) {
         : 'Пока нет трат. Напишите боту «кофе 3 евро» или нажмите «+»');
     list.appendChild(empty);
   }
-  // Суммы дня — из /money/summary (сервер), только без фильтра по категории.
+  // Суммы дня — из /money/summary (сервер), только без фильтра по категории; в основной валюте, если она есть.
   const daySums = {};
-  if (!moneyFilterCat) {
+  if (!moneyFilterCat && summary.main) {
+    const m = summary.main;
+    m.days.forEach(d => {
+      const value = income ? d.income : d.expense;
+      const approx = income ? d.approx_income : d.approx_expense;
+      if (Number(value)) daySums[d.day] = [(approx ? '≈ ' : '') + moneyFmt(value, m.currency, income ? '+' : '−')];
+    });
+  } else if (!moneyFilterCat) {
     summary.currencies.forEach(cur => cur.days.forEach(d => {
       const value = income ? d.income : d.expense;
       if (Number(value)) (daySums[d.day] = daySums[d.day] || []).push(moneyFmt(value, cur.currency, income ? '+' : '−'));
@@ -4530,6 +4647,9 @@ function renderMoneyList(summary) {
 
 // ---------- Динамика ----------
 function renderTrendView(summary) {
+  const mainSeries = moneyTrendData && moneyTrendData.main;
+  if (summary.main && mainSeries) return renderTrendMain(summary, mainSeries);
+  document.getElementById('trendRate').hidden = true;
   const trendCurs = (moneyTrendData && moneyTrendData.currencies) || [];
   const all = [...new Set(trendCurs.map(c => c.currency).concat(summary.currencies.map(c => c.currency)))];
   if (!all.includes(trendCurrency)) trendCurrency = all[0] || null;
@@ -4569,6 +4689,12 @@ function renderTrendView(summary) {
   }
   balance.appendChild(card);
 
+  renderTrendCharts(summary);
+}
+
+function renderTrendCharts(summary) {
+  const trendCurs = (moneyTrendData && moneyTrendData.currencies) || [];
+  const cur = summary.currencies.find(c => c.currency === trendCurrency);
   // Столбики за 6 месяцев (выбранная валюта)
   const trend = document.getElementById('moneyTrend');
   trend.innerHTML = '';
@@ -4628,6 +4754,40 @@ function renderTrendView(summary) {
   pie.appendChild(wrap);
 }
 
+// Динамика целиком в основной валюте: баланс месяца, столбики и круговая диаграмма (переключателя валют нет).
+function renderTrendMain(summary, series) {
+  const m = summary.main;
+  document.getElementById('trendCurrency').hidden = true;
+  const approx = ['income', 'expense'].some(k => m.parts[k].some(p => p.currency !== m.currency));
+  const ap = approx ? '≈ ' : '';
+  const balance = document.getElementById('trendBalance');
+  balance.innerHTML = '';
+  const neg = m.balance.startsWith('-');
+  const card = document.createElement('div');
+  card.className = 'money-card';
+  card.innerHTML = `<div class="money-card-cur"></div><div class="money-card-grid">
+    <div class="money-figure"><span>Доходы</span><b class="i"></b></div>
+    <div class="money-figure"><span>Расходы</span><b class="e"></b></div>
+    <div class="money-figure balance"><span>Баланс месяца</span><b class="b"></b></div></div>`;
+  card.querySelector('.money-card-cur').textContent = `${monthTitle(moneyMonth || currentMonthKey())} · в ${m.currency === 'KZT' ? 'тенге' : 'евро'}`;
+  card.querySelector('.i').textContent = ap + moneyFmt(m.income, m.currency);
+  card.querySelector('.e').textContent = ap + moneyFmt(m.expense, m.currency);
+  const b = card.querySelector('.b');
+  b.textContent = ap + moneyFmt(m.balance.replace('-', ''), m.currency, neg ? '−' : '+');
+  b.classList.toggle('neg', neg);
+  balance.appendChild(card);
+  const rateNote = document.getElementById('trendRate');
+  rateNote.hidden = !approx;
+  rateNote.textContent = rateText(summary);
+
+  // подменяем данные под общий отрисовщик: одна «валюта» — основная
+  trendCurrency = m.currency;
+  const fake = { ...summary, currencies: [{ currency: m.currency, by_category: m.by_category, income: m.income, expense: m.expense, balance: m.balance }] };
+  const saved = moneyTrendData;
+  moneyTrendData = { ...saved, currencies: [{ currency: m.currency, points: series.points }] };
+  try { renderTrendCharts(fake); } finally { moneyTrendData = saved; }
+}
+
 function deleteMoneyTx(tx) {
   const timeoutId = setTimeout(async () => {
     delete pendingMoneyDeletions[tx.id];
@@ -4656,6 +4816,50 @@ document.getElementById('moneyNext').onclick = () => {
 document.getElementById('moneyCurrent').onclick = () => { moneyMonth = null; moneyFilterCat = null; loadMoney(); };
 document.getElementById('moneyFilterClear').onclick = () => { moneyFilterCat = null; loadMoney(); };
 document.getElementById('moneyCategoriesBtn').onclick = () => openCategories(moneyTab === 'income' ? 'income' : 'expense');
+
+const currencySheet = document.getElementById('currencySheet');
+function renderCurrencyOptions() {
+  const box = document.getElementById('currencyOptions');
+  box.innerHTML = '';
+  const current = (moneyMe && moneyMe.default_currency) || 'EUR';
+  ((moneyMe && moneyMe.currencies) || ['EUR', 'KZT']).forEach(cur => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'cur-option';
+    btn.setAttribute('role', 'radio');
+    btn.setAttribute('aria-checked', String(cur === current));
+    btn.dataset.focusKey = 'cur-' + cur;
+    const symbol = moneyFmt('0', cur).replace(/[\d\s,.]/g, '');
+    btn.innerHTML = `<span></span>${cur === current ? '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>' : ''}`;
+    btn.querySelector('span').textContent = `${symbol}  ${CURRENCY_NAMES[cur] || cur}`;
+    btn.onclick = async () => {
+      if (cur === current) { closeCurrency(); return; }
+      try {
+        moneyMe = await apiJson('/me', { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify({ default_currency: cur }) });
+        toast(`Основная валюта: ${CURRENCY_NAMES[cur] || cur}`);
+      } catch (e) { toast(e.message || 'Не удалось сохранить'); }
+      closeCurrency();
+      loadMoney();
+    };
+    box.appendChild(btn);
+  });
+}
+function openCurrency() {
+  renderCurrencyOptions();
+  currencySheet.hidden = false;
+  document.body.classList.add('no-scroll');
+  setBackgroundInert(true);
+  document.getElementById('currencyClose').focus();
+}
+function closeCurrency() {
+  currencySheet.hidden = true;
+  document.body.classList.remove('no-scroll');
+  setBackgroundInert(false);
+  renderMoney();
+  document.getElementById('moneyCurrencyBtn').focus();
+}
+document.getElementById('moneyCurrencyBtn').onclick = openCurrency;
+document.getElementById('currencyClose').onclick = closeCurrency;
 document.getElementById('moneyRecAdd').onclick = () => openMoneyForm(null, 'tx', { kind: moneyTab === 'income' ? 'income' : 'expense', repeat: true });
 
 // ---------- Форма операции; она же — настройка повторяющегося платежа ----------
@@ -5403,6 +5607,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (!editSheet.hidden) closeEdit();
   else if (!moneySheet.hidden) closeMoneyForm();
+  else if (!currencySheet.hidden) closeCurrency();
   else if (!filtersSheet.hidden) closeFilters();
   else if (!categoriesSheet.hidden) closeCategories();
   else if (!newTaskSheet.hidden) closeNewTask();

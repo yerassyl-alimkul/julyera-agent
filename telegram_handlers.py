@@ -461,6 +461,11 @@ async def month_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text(f"{title}: операций пока нет. Напишите, например, «кофе 3 евро».")
         return
     lines = [title]
+    main = data.get("main")
+    if main and [c["currency"] for c in data["currencies"]] != [main["currency"]]:
+        sign = "" if main["balance"].startswith("-") else "+"
+        lines.append(f"Всего в {main['currency']}: расходы ≈ {main['expense']} · доходы ≈ {main['income']} · "
+                     f"баланс ≈ {sign}{main['balance']}")
     for cur in data["currencies"]:
         balance = cur["balance"] if cur["balance"].startswith("-") else "+" + cur["balance"]
         lines.append(f"\n{cur['currency']}: расходы {cur['expense']} · доходы {cur['income']} · баланс {balance}")

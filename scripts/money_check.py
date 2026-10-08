@@ -157,6 +157,27 @@ def http_checks(client, token, A, B, db_insert):
           [(c["name"], c["amount"], c["share"]) for c in eur.get("by_category", [])] == [("Еда", "40.00", 80), ("Прочее", "10.00", 20)],
           str(eur.get("by_category")))
     check("предыдущий месяц для сравнения (июль: 20.00 EUR)", eur.get("previous", {}).get("expense") == "20.00")
+    main = s.get("main") or {}
+    rate = Decimal((s.get("rate") or {}).get("kzt", "0") or "0")
+    kzt_in_eur = (Decimal("1500") / rate).quantize(Decimal("0.01")) if rate else None
+    check("курс в ответе: сколько тенге за 1 €", rate > 0 and s["rate"]["currency"] == "EUR", str(s.get("rate")))
+    check("основная валюта: общий итог расходов = 50.00 € + 1500 ₸ по курсу",
+          main.get("currency") == "EUR" and kzt_in_eur is not None
+          and main.get("expense") == str((Decimal("50.00") + kzt_in_eur)), f"{main.get('expense')} / {kzt_in_eur}")
+    check("строки по валютам: исходная сумма и пересчёт",
+          main.get("parts", {}).get("expense") == [{"currency": "EUR", "amount": "50.00", "converted": "50.00"},
+                                                   {"currency": "KZT", "amount": "1500.00", "converted": str(kzt_in_eur)}],
+          str(main.get("parts")))
+    check("категории в основной валюте объединяют обе валюты, «≈» только где был пересчёт",
+          [(c["name"], c["amount"], c["approx"]) for c in main.get("by_category", [])] ==
+          [("Еда", str(Decimal("40.00") + kzt_in_eur), True), ("Прочее", "10.00", False)], str(main.get("by_category")))
+    rows_kzt = client.get("/money/transactions", headers=hA, params={"from": "2026-08-01", "to": "2026-08-31", "currency": "KZT"}).json()
+    check("операция в тенге показывает пересчёт в основную валюту",
+          rows_kzt and rows_kzt[0].get("converted") == {"amount": str(kzt_in_eur), "currency": "EUR"}, str(rows_kzt[:1]))
+    rows_eur = client.get("/money/transactions", headers=hA, params={"from": "2026-08-01", "to": "2026-08-31", "currency": "EUR"}).json()
+    check("операция в основной валюте без пересчёта", rows_eur and "converted" not in rows_eur[0])
+    t = client.get("/money/trend", headers=hA, params={"months": 12}).json()
+    check("динамика в основной валюте", (t.get("main") or {}).get("currency") == "EUR" and len(t["main"]["points"]) == 12)
     check("разница расходов с прошлым месяцем считается на сервере (+30.00)",
           eur.get("previous", {}).get("expense_change") == "30.00")
     check("суммы по дням для заголовков списка",

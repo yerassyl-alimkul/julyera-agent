@@ -18,6 +18,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Optional
 from zoneinfo import ZoneInfo
 
+import rates_service
 import users_service
 from categories_service import PALETTE
 from database import supabase
@@ -434,7 +435,16 @@ def list_transactions(user_id: str, date_from=None, date_to=None, kind=None, cat
     # страницы через offset пересекаются (одна строка дважды, другая пропадает)
     rows = query.order("spent_on", desc=True).order("created_at", desc=True).order("id").range(
         offset, offset + limit - 1).execute().data
-    return [_tx_out(r) for r in rows]
+    out = [_tx_out(r) for r in rows]
+    main = default_currency(user_id)
+    foreign = {t["currency"] for t in out} - {main}
+    rates = rates_service.get_rates() if foreign else None
+    if foreign and rates_service.can_convert(rates, foreign, main):
+        for t in out:
+            if t["currency"] != main:  # «≈ 7,70 €» под суммой в списке; только для показа
+                t["converted"] = {"amount": fmt(rates_service.convert(Decimal(t["amount"]), t["currency"], main, rates)),
+                                  "currency": main}
+    return out
 
 
 def last_transactions(user_id: str, n: int = 5) -> list[dict]:
@@ -480,27 +490,86 @@ def summary(user_id: str, month: Optional[str] = None) -> dict:
         if cur not in current:
             continue
         t, p = current[cur], previous.get(cur, {"income": Decimal(0), "expense": Decimal(0)})
-        def breakdown(parts, total):
-            out = []
-            for cat_id, amount in sorted(parts.items(), key=lambda kv: kv[1], reverse=True):
-                cat = cats.get(cat_id, {})
-                share = int((amount * 100 / total).quantize(Decimal(1))) if total else 0
-                out.append({"category_id": cat_id, "name": cat.get("name", "?"), "color": cat.get("color"),
-                            "amount": fmt(amount), "share": share})
-            return out
-
-        by_category = breakdown(t["by_cat"], t["expense"])
+        by_category = _breakdown(cats, t["by_cat"], t["expense"])
         currencies.append({
             "currency": cur, "income": fmt(t["income"]), "expense": fmt(t["expense"]),
             "balance": fmt(t["income"] - t["expense"]), "by_category": by_category,
-            "income_by_category": breakdown(t["by_cat_income"], t["income"]),
+            "income_by_category": _breakdown(cats, t["by_cat_income"], t["income"]),
             "days": [{"day": d, "income": fmt(v["income"]), "expense": fmt(v["expense"])}
                      for d, v in sorted(t["by_day"].items(), reverse=True)],
             "previous": {"income": fmt(p["income"]), "expense": fmt(p["expense"]),
                          "expense_change": fmt(t["expense"] - p["expense"]),
                          "income_change": fmt(t["income"] - p["income"])},
         })
-    return {"month": start.strftime("%Y-%m"), "currencies": currencies}
+    main_cur = default_currency(user_id)
+    rates = rates_service.get_rates() if (set(current) | set(previous)) - {main_cur} else None
+    return {"month": start.strftime("%Y-%m"), "currencies": currencies,
+            "main": _main_block(cats, current, previous, main_cur, rates),
+            "rate": rates_service.rate_info(rates, main_cur)}
+
+
+def _breakdown(cats: dict, parts: dict, total: Decimal) -> list[dict]:
+    out = []
+    for cat_id, amount in sorted(parts.items(), key=lambda kv: kv[1], reverse=True):
+        cat = cats.get(cat_id, {})
+        share = int((amount * 100 / total).quantize(Decimal(1))) if total else 0
+        out.append({"category_id": cat_id, "name": cat.get("name", "?"), "color": cat.get("color"),
+                    "amount": fmt(amount), "share": share})
+    return out
+
+
+def _main_block(cats: dict, current: dict, previous: dict, main: str, rates: Optional[dict]) -> Optional[dict]:
+    """Итоги месяца в основной валюте пользователя: каждая валюта пересчитана по сегодняшнему курсу.
+    parts — исходные суммы по валютам с пересчётом (для строк «в тенге: 4 000 ₸ ≈ 7,70 €»).
+    None — если нужен курс, а его нет (тогда клиент показывает итоги по валютам раздельно)."""
+    if not rates_service.can_convert(rates, set(current) | set(previous), main):
+        return None
+
+    def conv(amount, cur):
+        return rates_service.convert(amount, cur, main, rates)
+
+    approx_cats = set()  # категории и дни, в итог которых вошёл пересчёт (там клиент ставит «≈»)
+
+    def merged(totals: dict, key: str) -> dict:
+        out = {}
+        for cur, t in totals.items():
+            for cat_id, amount in t.get(key, {}).items():
+                out[cat_id] = out.get(cat_id, Decimal(0)) + conv(amount, cur)
+                if cur != main:
+                    approx_cats.add((key, cat_id))
+        return out
+
+    def marked(items: list, key: str) -> list:
+        return [{**c, "approx": (key, c["category_id"]) in approx_cats} for c in items]
+
+    def total(totals: dict, kind: str) -> Decimal:
+        return sum((conv(t[kind], cur) for cur, t in totals.items()), Decimal(0))
+
+    days = {}
+    for cur, t in current.items():
+        for d, v in t["by_day"].items():
+            day = days.setdefault(d, {"income": Decimal(0), "expense": Decimal(0), "approx_income": False, "approx_expense": False})
+            day["income"] += conv(v["income"], cur)
+            day["expense"] += conv(v["expense"], cur)
+            if cur != main:
+                day["approx_income"] = day["approx_income"] or bool(v["income"])
+                day["approx_expense"] = day["approx_expense"] or bool(v["expense"])
+    income, expense = total(current, "income"), total(current, "expense")
+    prev_income, prev_expense = total(previous, "income"), total(previous, "expense")
+    parts = {kind: [{"currency": cur, "amount": fmt(current[cur][kind]), "converted": fmt(conv(current[cur][kind], cur))}
+                    for cur in CURRENCIES if cur in current and current[cur][kind]]
+             for kind in ("income", "expense")}
+    return {
+        "currency": main, "income": fmt(income), "expense": fmt(expense), "balance": fmt(income - expense),
+        "by_category": marked(_breakdown(cats, merged(current, "by_cat"), expense), "by_cat"),
+        "income_by_category": marked(_breakdown(cats, merged(current, "by_cat_income"), income), "by_cat_income"),
+        "days": [{"day": d, "income": fmt(v["income"]), "expense": fmt(v["expense"]),
+                  "approx_income": v["approx_income"], "approx_expense": v["approx_expense"]}
+                 for d, v in sorted(days.items(), reverse=True)],
+        "parts": parts,
+        "previous": {"income": fmt(prev_income), "expense": fmt(prev_expense),
+                     "expense_change": fmt(expense - prev_expense), "income_change": fmt(income - prev_income)},
+    }
 
 
 def trend(user_id: str, months: int = 6) -> dict:
@@ -524,7 +593,18 @@ def trend(user_id: str, months: int = 6) -> dict:
         points = [{"month": k, "income": fmt(data[cur].get(k, {}).get("income", 0)),
                    "expense": fmt(data[cur].get(k, {}).get("expense", 0))} for k in keys]
         currencies.append({"currency": cur, "points": points})
-    return {"months": keys, "currencies": currencies}
+    main_cur = default_currency(user_id)
+    rates = rates_service.get_rates() if set(data) - {main_cur} else None
+    main = None
+    if rates_service.can_convert(rates, set(data), main_cur):
+        main = {"currency": main_cur, "points": [{
+            "month": k,
+            "income": fmt(sum((rates_service.convert(data[c].get(k, {}).get("income", Decimal(0)), c, main_cur, rates)
+                               for c in data), Decimal(0))),
+            "expense": fmt(sum((rates_service.convert(data[c].get(k, {}).get("expense", Decimal(0)), c, main_cur, rates)
+                                for c in data), Decimal(0))),
+        } for k in keys]}
+    return {"months": keys, "currencies": currencies, "main": main}
 
 
 # ---------------------------------------------------------------- повторяющиеся платежи

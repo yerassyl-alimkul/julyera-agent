@@ -66,6 +66,9 @@ def setup_local():
     database = types.ModuleType("database")
     database.supabase = db
     sys.modules["database"] = database
+    import rates_service  # без сети: постоянный курс для проверок (1 € = 500,35 ₸)
+    from decimal import Decimal
+    rates_service.get_rates = lambda: {"date": "2026-10-08", "kzt_per": {"KZT": Decimal(1), "EUR": Decimal("500.35")}}
     return db
 
 
