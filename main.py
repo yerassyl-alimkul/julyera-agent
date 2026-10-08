@@ -123,9 +123,9 @@ async def lifespan(app: FastAPI):
             except Exception:
                 logger.exception("Не удалось установить список команд бота")
             try:
-                import release_notes  # после деплоя — один раз сообщить владельцу, что изменилось
+                import release_notes  # после деплоя — один раз сообщить всем пользователям, что изменилось
                 from telegram_handlers import main_keyboard
-                await release_notes.announce(telegram_app.bot, supabase, users_service.list_admins(), main_keyboard())
+                await release_notes.announce(telegram_app.bot, supabase, users_service.list_users(), main_keyboard())
             except Exception:
                 logger.exception("Заметка о релизе не отправлена")
     yield

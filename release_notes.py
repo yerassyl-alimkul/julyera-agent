@@ -1,5 +1,6 @@
 """
-Заметка о релизе: после деплоя бот один раз присылает владельцу (is_admin), что изменилось.
+Заметка о релизе: после деплоя бот один раз присылает всем пользователям, что изменилось (решение владельца
+8 октября 2026). Текст пиши так, чтобы он был понятен любому пользователю, без технических подробностей.
 
 Перед каждым релизом обнови RELEASE_ID (новое уникальное значение) и RELEASE_TEXT (по-русски, простыми
 словами). При запуске сервиса main.py вызывает announce(): строка в release_log вставляется ДО отправки,
@@ -18,8 +19,8 @@ RELEASE_TEXT = """🚀 Обновление JulYera
 • Панель можно свернуть значком справа от поля ввода; задачи и траты пишутся текстом как раньше."""
 
 
-async def announce(bot, supabase, admins: list[dict], reply_markup=None) -> bool:
-    """Отправить заметку владельцам, если этот релиз ещё не объявлялся. True — отправлено."""
+async def announce(bot, supabase, users: list[dict], reply_markup=None) -> bool:
+    """Отправить заметку пользователям, если этот релиз ещё не объявлялся. True — отправлено."""
     try:
         supabase.table("release_log").insert({"id": RELEASE_ID}).execute()
     except Exception as exc:
@@ -27,8 +28,8 @@ async def announce(bot, supabase, admins: list[dict], reply_markup=None) -> bool
             logger.warning("Заметка о релизе не отправлена: %s", type(exc).__name__)
         return False  # уже объявлен (или таблицы ещё нет)
     sent = False
-    for admin in admins:
-        chat_id = admin.get("telegram_user_id")
+    for user in users:
+        chat_id = user.get("telegram_user_id")
         if not chat_id:
             continue
         try:
