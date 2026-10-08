@@ -32,17 +32,18 @@ def _next_deadline(current: Optional[datetime], pattern: Optional[str]) -> Optio
     return None
 
 
-def _set_event_id(task: dict, user_id: str, event_id: Optional[str]) -> None:
-    supabase.table(TABLE).update({"google_event_id": event_id}).eq("id", task["id"]).eq("user_id", user_id).execute()
-    task["google_event_id"] = event_id
+def _set_event_id(task: dict, user_id: str, event_id: Optional[str], extra: Optional[dict] = None) -> None:
+    data = {"google_event_id": event_id, **(extra or {})}
+    supabase.table(TABLE).update(data).eq("id", task["id"]).eq("user_id", user_id).execute()
+    task.update(data)
 
 
 def _sync_google_upsert(task: dict, user_id: str) -> dict:
-    """Создаёт/обновляет событие в Google Calendar пользователя и, если id изменился,
-    сохраняет его в самой задаче. Возвращает актуальную версию задачи."""
-    event_id = gcal.sync_task_upsert(task, user_id)
-    if event_id != task.get("google_event_id"):
-        _set_event_id(task, user_id, event_id)
+    """Создаёт/обновляет событие в Google Calendar пользователя и сохраняет в задаче его id и время правки
+    (gcal_updated: по нему calendar_sync понимает, что событие с тех пор меняли в Google). Возвращает задачу."""
+    event_id, updated = gcal.sync_task_upsert_ex(task, user_id)
+    if event_id != task.get("google_event_id") or updated:
+        _set_event_id(task, user_id, event_id, {"gcal_updated": updated} if updated else None)
     return task
 
 
@@ -50,7 +51,7 @@ def _sync_google_clear(task: dict, user_id: str) -> dict:
     """Удаляет событие из Google Calendar пользователя (если было) и чистит ссылку на него."""
     gcal.sync_task_delete(task.get("google_event_id"), user_id)
     if task.get("google_event_id"):
-        _set_event_id(task, user_id, None)
+        _set_event_id(task, user_id, None, {"gcal_imported": False} if task.get("gcal_imported") else None)
     return task
 
 
@@ -177,7 +178,9 @@ def update_task(task_id: str, payload: TaskUpdate, user_id: str) -> Optional[dic
     # Синхронизация с Google Calendar: закрыли задачу — убираем событие из
     # календаря; иначе, если есть дедлайн, создаём/обновляем событие;
     # если дедлайн убрали — тоже убираем событие.
-    if became_done:
+    if became_done and updated.get("gcal_imported"):
+        pass  # событие создано в Google самим человеком (встреча, пара): остаётся в календаре, ссылка тоже
+    elif became_done:
         updated = _sync_google_clear(updated, user_id)
     elif updated.get("deadline"):
         updated = _sync_google_upsert(updated, user_id)

@@ -52,6 +52,12 @@ def main():
     clock = {"local": day.replace(hour=7, minute=0)}
     digest_service.utc_now = lambda: clock["local"].replace(tzinfo=ROME).astimezone(timezone.utc)
 
+    class ClockDatetime(datetime):  # updated_at закрытой задачи — тоже по подставным часам, а не по настоящим
+        @classmethod
+        def utcnow(cls):
+            return digest_service.utc_now().replace(tzinfo=None)
+    task_service.datetime = ClockDatetime
+
     def at(hh, mm=0, plus_days=0):
         clock["local"] = (day + timedelta(days=plus_days)).replace(hour=hh, minute=mm)
 

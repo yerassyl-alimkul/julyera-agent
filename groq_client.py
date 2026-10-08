@@ -216,3 +216,33 @@ def transcribe_audio(audio_bytes: bytes, filename: str = "voice.ogg") -> str:
         response_format="json",
     )
     return transcription.text
+
+
+EVENTS_PROMPT = """Ты раскладываешь события из календаря по категориям задач пользователя.
+Категории: {categories}.
+На входе JSON-массив названий событий. Для каждого выбери одну категорию строго из списка по смыслу названия
+(учёба, лекции, экзамены — учебная категория; работа, созвоны, встречи по работе — рабочая; врач, спорт, дом,
+семья, дни рождения — личная). Если не уверен — первая категория списка.
+Верни ТОЛЬКО JSON {{"categories": ["…", "…"]}} — столько же элементов и в том же порядке, что и на входе."""
+
+
+def classify_event_titles(titles: list[str], categories: list[str]) -> list[Optional[str]]:
+    """Категории для событий Google Calendar при импорте. Модель получает только названия (без времени, мест
+    и гостей). Ответ сверяет calendar_sync; ошибка или неверная длина — список None (тогда запасная категория)."""
+    if not titles:
+        return []
+    names = ", ".join(json.dumps(n, ensure_ascii=False) for n in categories)
+    response = _client.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "system", "content": EVENTS_PROMPT.format(categories=names)},
+                  {"role": "user", "content": json.dumps([t[:100] for t in titles], ensure_ascii=False)}],
+        temperature=0,
+        response_format={"type": "json_object"},
+    )
+    try:
+        values = json.loads(response.choices[0].message.content or "{}").get("categories")
+    except (json.JSONDecodeError, AttributeError):
+        return [None] * len(titles)
+    if not isinstance(values, list) or len(values) != len(titles):
+        return [None] * len(titles)
+    return [v if isinstance(v, str) else None for v in values]

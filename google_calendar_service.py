@@ -3,8 +3,9 @@
 с событиями календаря (создание/обновление/удаление события при
 создании/изменении/закрытии/удалении задачи).
 
-Двусторонний импорт изменений ИЗ Google Calendar обратно в задачи —
-отдельный следующий шаг, здесь его пока нет.
+Обратное направление (события из календаря → задачи, правки и удаления в Google) — calendar_sync.py.
+События, созданные в Google (tasks.gcal_imported), здесь не перезаписываются целиком: меняются только
+название, описание и время (patch), длительность, место и гости остаются как были.
 
 У каждого пользователя свой календарь: токены хранятся в google_credentials по user_id,
 и события задачи пишутся только в календарь её владельца.
@@ -14,7 +15,7 @@ import hmac
 import logging
 import os
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from google.auth.exceptions import RefreshError
@@ -47,6 +48,8 @@ CREDENTIALS_TABLE = "google_credentials"
 
 CATEGORY_EMOJI = {"Study": "📚", "Work": "💼", "Personal": "🧍", "UniMe": "🎓"}
 PRIORITY_EMOJI = {"High": "🔴", "Mid": "🟡", "Low": "🟢"}
+# Метка «событие создал JulYera» — calendar_sync такие события не превращает в новые задачи.
+JULYERA_MARK = {"private": {"julyera": "1"}}
 
 
 def _client_config() -> dict:
@@ -250,37 +253,75 @@ def _event_body(task: dict, tz: str = "Europe/Rome") -> dict:
         "description": task.get("note") or "",
         "start": {"dateTime": start_dt.isoformat(), "timeZone": tz},
         "end": {"dateTime": end_dt.isoformat(), "timeZone": tz},
+        "extendedProperties": JULYERA_MARK,
     }
 
 
-def sync_task_upsert(task: dict, user_id: str) -> Optional[str]:
+def _naive(value: str) -> datetime:
+    dt = datetime.fromisoformat(value)
+    return dt.replace(tzinfo=None) if dt.tzinfo is not None else dt
+
+
+def _imported_patch(task: dict, event: dict, tz: str) -> dict:
+    """Правка события, пришедшего из Google: название, описание и время. Длительность берём у самого события.
+    Задача «на весь день» (gcal_all_day) с временем 23:59 остаётся событием на весь день."""
+    start = _naive(task["deadline"])
+    old_start, old_end = event.get("start") or {}, event.get("end") or {}
+    body = {"summary": task["task"], "description": task.get("note") or ""}
+    if task.get("gcal_all_day") and start.strftime("%H:%M") == "23:59":
+        days = 1
+        if old_start.get("date") and old_end.get("date"):
+            days = max(1, (date.fromisoformat(old_end["date"]) - date.fromisoformat(old_start["date"])).days)
+        body["start"] = {"date": start.date().isoformat(), "dateTime": None, "timeZone": None}
+        body["end"] = {"date": (start.date() + timedelta(days=days)).isoformat(), "dateTime": None, "timeZone": None}
+        return body
+    duration = timedelta(minutes=30)
+    if old_start.get("dateTime") and old_end.get("dateTime"):
+        duration = max(timedelta(0), datetime.fromisoformat(old_end["dateTime"]) - datetime.fromisoformat(old_start["dateTime"]))
+    body["start"] = {"dateTime": start.isoformat(), "timeZone": tz, "date": None}
+    body["end"] = {"dateTime": (start + duration).isoformat(), "timeZone": tz, "date": None}
+    return body
+
+
+def sync_task_upsert_ex(task: dict, user_id: str) -> tuple[Optional[str], Optional[str]]:
     """
     Создаёт или обновляет событие в Google Calendar пользователя user_id для его задачи.
-    Возвращает актуальный google_event_id, либо прежний/None, если
-    синхронизация невозможна (Google не подключён, нет дедлайна и т.п.) —
-    это не считается ошибкой, задача всё равно продолжает жить в нашей базе.
+    Возвращает (google_event_id, updated события) — updated запоминается в задаче (gcal_updated), чтобы
+    calendar_sync отличал наши правки от правок в Google. Если синхронизация невозможна (Google не подключён,
+    нет дедлайна и т.п.) — (прежний id или None, None): это не ошибка, задача живёт в нашей базе.
     """
     if not task.get("deadline"):
-        return task.get("google_event_id")
+        return task.get("google_event_id"), None
 
     service = _get_service(user_id)
     if not service:
-        return task.get("google_event_id")
+        return task.get("google_event_id"), None
 
     event_id = task.get("google_event_id")
 
     try:
-        body = _event_body(task, users_service.timezone_of(user_id))
+        tz = users_service.timezone_of(user_id)
+        if event_id and task.get("gcal_imported"):
+            event = service.events().get(calendarId="primary", eventId=event_id).execute()
+            saved = service.events().patch(calendarId="primary", eventId=event_id, sendUpdates="none",
+                                           body=_imported_patch(task, event, tz)).execute()
+            return event_id, (saved or {}).get("updated")
+        body = _event_body(task, tz)
         if event_id:
-            service.events().update(calendarId="primary", eventId=event_id, body=body).execute()
-            return event_id
+            saved = service.events().update(calendarId="primary", eventId=event_id, body=body).execute()
+            return event_id, (saved or {}).get("updated")
         created = service.events().insert(calendarId="primary", body=body).execute()
-        return created["id"]
+        return created["id"], created.get("updated")
     except Exception as exc:
         # Не только HttpError: сеть, тайм-аут, отозванный refresh_token (RefreshError).
         # Задача уже сохранена в базе, поэтому ошибка календаря не должна ронять запрос.
         _note_sync_failure(user_id, exc, "upsert")
-        return event_id
+        return event_id, None
+
+
+def sync_task_upsert(task: dict, user_id: str) -> Optional[str]:
+    """То же, что sync_task_upsert_ex, но только id события."""
+    return sync_task_upsert_ex(task, user_id)[0]
 
 
 def sync_task_delete(event_id: Optional[str], user_id: str) -> None:
@@ -290,7 +331,8 @@ def sync_task_delete(event_id: Optional[str], user_id: str) -> None:
     if not service:
         return
     try:
-        service.events().delete(calendarId="primary", eventId=event_id).execute()
+        # sendUpdates="none": если у события были гости, Google не рассылает им писем об отмене
+        service.events().delete(calendarId="primary", eventId=event_id, sendUpdates="none").execute()
     except Exception as exc:
         _note_sync_failure(user_id, exc, "delete")
 

@@ -37,7 +37,7 @@ from uuid import UUID
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -45,6 +45,7 @@ from fastapi.staticfiles import StaticFiles
 load_dotenv()
 
 import task_service
+import calendar_sync
 import categories_service
 import comments_service
 import digest_service
@@ -531,12 +532,17 @@ async def run_reminders(request: Request):
     sent = 0
     messages = 0
     recurring_messages = []
+    calendar_messages = []
+    try:  # события из Google Calendar → задачи, до сводок: утренняя сводка уже видит перенесённое
+        calendar_messages = calendar_sync.run_all()
+    except Exception as exc:
+        logger.warning("Синхронизация календаря не прошла: %s", type(exc).__name__)
     try:
         recurring_messages = money_service.run_recurring()
     except Exception as exc:
         logger.warning("Повторяющиеся платежи не обработаны: %s", type(exc).__name__)
     async with httpx.AsyncClient(timeout=15) as client:
-        for user_id, text in recurring_messages:
+        for user_id, text in recurring_messages + calendar_messages:
             for chat_id in users_service.get_chat_ids(user_id):
                 try:
                     await _send_telegram_message(client, chat_id, text)
@@ -608,7 +614,8 @@ h1{{font-size:22px;margin:0 0 8px}}p{{color:#5D5F69;font-size:16px;margin:0}}</s
 
 
 @app.get("/google/callback")
-def google_auth_callback(code: Optional[str] = None, error: Optional[str] = None, state: Optional[str] = None):
+def google_auth_callback(background: BackgroundTasks, code: Optional[str] = None, error: Optional[str] = None,
+                         state: Optional[str] = None):
     """Google перенаправляет сюда после согласия. Кого подключаем — берём только из подписанного state."""
     if error:
         return HTMLResponse(GOOGLE_DONE_PAGE.format(
@@ -620,6 +627,7 @@ def google_auth_callback(code: Optional[str] = None, error: Optional[str] = None
     if not code:
         raise HTTPException(status_code=400, detail="Отсутствует параметр code")
     gcal.exchange_code(code, user_id)
+    background.add_task(calendar_sync.sync_after_connect, user_id)  # события календаря → задачи сразу
     return HTMLResponse(GOOGLE_DONE_PAGE.format(
         title="Готово ✅", text="Google Calendar подключён. Вернитесь в Telegram."))
 
