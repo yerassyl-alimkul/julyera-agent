@@ -79,9 +79,23 @@ class Task(TaskBase):
     google_event_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    comments_count: int = 0  # комментариев к задаче (значок 💬 в списке)
+    files_count: int = 0     # из них с фото или PDF (значок 📎)
 
     class Config:
         from_attributes = True
+
+
+class CommentFile(BaseModel):
+    """Файл комментария в JSON: фото или PDF в base64 (до 10 МБ; проверяет comments_service)."""
+    name: Optional[str] = None
+    type: str
+    data: str
+
+
+class CommentCreate(BaseModel):
+    text: Optional[str] = None
+    file: Optional[CommentFile] = None
 
 
 class CategoryCreate(BaseModel):

@@ -12,6 +12,7 @@ task_service — без HTTP-круга внутри процесса.
 В логи не пишем тексты сообщений, суммы и заметки.
 """
 import re
+import secrets
 import logging
 import os
 import time
@@ -19,12 +20,13 @@ from datetime import date, datetime
 
 from types import SimpleNamespace
 
-from telegram import (BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup,
-                      Update, WebAppInfo)
+from telegram import (BotCommand, ForceReply, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton,
+                      ReplyKeyboardMarkup, Update, WebAppInfo)
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 from groq_client import transcribe_audio
 import categories_service
+import comments_service
 import digest_service
 import money_service
 import task_service
@@ -315,7 +317,7 @@ async def _record_tasks(update: Update, user: dict, text: str) -> None:
         return
 
     lines = ["Добавил:"] + [_format_task_line(t) for t in tasks]
-    await update.message.reply_text("\n".join(lines))
+    await update.message.reply_text("\n".join(lines), reply_markup=_comment_buttons(tasks))
 
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -324,6 +326,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text(NO_ACCESS_TEXT)
         return
     raw_text = update.message.text
+    reply_ids = _task_ids_from(getattr(update.message, "reply_to_message", None))
+    if reply_ids:  # ответ на напоминание или «Добавил: …» — это комментарий к задаче, а не новая задача
+        await _comment_or_ask(update, user, reply_ids, text=raw_text)
+        return
     action = MENU_ACTIONS.get((raw_text or "").strip())
     if action:  # нажата кнопка панели — это команда, а не задача
         await globals()[action](update, context)
@@ -395,7 +401,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     lines = [f"🎙 Расслышал: «{recognized_text}»", "Добавил:"] + [_format_task_line(t) for t in tasks]
-    await update.message.reply_text("\n".join(lines))
+    await update.message.reply_text("\n".join(lines), reply_markup=_comment_buttons(tasks))
 
 
 # ---------------------------------------------------------------- деньги
@@ -815,6 +821,163 @@ async def digest_move_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     await _append_and_trim(query, f"➡️ Перенесено на завтра: {moved}" if moved else "➡️ Переносить уже нечего", "dmove:")
 
 
+# ---------------------------------------------------------------- комментарии к задачам
+
+# Задача из сообщения бота, на которое ответил человек: кнопки done:/snooze:/cmt: с id задачи
+# и сообщения-приглашения «Ответьте на это сообщение…» (ForceReply, id помним в памяти процесса).
+_TASK_ID_RE = re.compile(r"^(?:done|snooze|cmt):([0-9a-fA-F-]{36})$")
+_prompt_targets: dict[tuple[int, int], str] = {}
+_pending_comments: dict[str, dict] = {}   # «К какой задаче?»: токен → что прикрепить и среди чего выбирать
+PENDING_TTL = 15 * 60
+
+
+def _comment_buttons(tasks: list[dict]):
+    rows = [[InlineKeyboardButton(f"💬 {_short(t['task'])}" if len(tasks) > 1 else "💬 Комментарий",
+                                  callback_data=f"cmt:{t['id']}")] for t in tasks[:5]]
+    return InlineKeyboardMarkup(rows) if rows else None
+
+
+def _short(text: str, n: int = 28) -> str:
+    return text if len(text) <= n else text[:n - 1] + "…"
+
+
+def _task_ids_from(message) -> list[str]:
+    if message is None:
+        return []
+    chat = getattr(message, "chat", None)
+    key = (getattr(chat, "id", None), getattr(message, "message_id", None))
+    if key in _prompt_targets:
+        return [_prompt_targets[key]]
+    ids = []
+    markup = getattr(message, "reply_markup", None)
+    for row in (getattr(markup, "inline_keyboard", None) or []):
+        for button in row:
+            found = _TASK_ID_RE.match(getattr(button, "callback_data", "") or "")
+            if found and found.group(1) not in ids:
+                ids.append(found.group(1))
+    return ids
+
+
+def _candidate_tasks(user_id: str) -> list[dict]:
+    """Кому прикрепить, если неясно: ближайшие незакрытые задачи (сначала с дедлайном), до 8."""
+    tasks = [t for t in task_service.list_tasks(user_id) if t.get("status") != "Done"]
+    tasks.sort(key=lambda t: (t.get("deadline") is None, t.get("deadline") or ""))
+    return tasks[:8]
+
+
+async def _attach(reply, user: dict, task_id: str, text=None, file=None) -> None:
+    """Добавить комментарий и ответить. file — (байты, тип, имя)."""
+    data, ftype, fname = file if file else (None, None, None)
+    try:
+        comment = comments_service.add_comment(task_id, user["id"], text, data, ftype, fname)
+    except comments_service.CommentError as exc:
+        await reply(exc.message)
+        return
+    except Exception as exc:
+        logger.warning("Комментарий из бота не сохранён: %s", type(exc).__name__)
+        await reply("Не получилось сохранить комментарий, попробуйте ещё раз.")
+        return
+    if comment is None:
+        await reply("Задача не найдена — возможно, её уже удалили.")
+        return
+    task = task_service.get_task(task_id, user["id"]) or {"task": "?"}
+    what = "📎 Добавил " + ("PDF" if ftype == "application/pdf" else "фото") if file else "💬 Добавил комментарий"
+    await reply(f"{what} к задаче «{task['task']}»")
+
+
+async def _comment_or_ask(update: Update, user: dict, task_ids: list[str], text=None, file=None) -> None:
+    """Одна задача — прикрепить сразу; иначе спросить кнопками, к какой (выбор помним 15 минут)."""
+    reply = update.message.reply_text
+    if len(task_ids) == 1:
+        await _attach(reply, user, task_ids[0], text, file)
+        return
+    tasks = [t for t in (task_service.get_task(i, user["id"]) for i in task_ids) if t] if task_ids else _candidate_tasks(user["id"])
+    if not tasks:
+        await reply("Нет активных задач, к которым можно прикрепить. Сначала создайте задачу.")
+        return
+    now = time.time()
+    for token in [k for k, v in _pending_comments.items() if now - v["at"] > PENDING_TTL]:
+        _pending_comments.pop(token, None)
+    token = secrets.token_hex(4)
+    _pending_comments[token] = {"user_id": user["id"], "ids": [t["id"] for t in tasks], "text": text, "file": file, "at": now}
+    rows = [[InlineKeyboardButton(_short(t["task"], 40), callback_data=f"cm:{token}:{i}")] for i, t in enumerate(tasks)]
+    rows.append([InlineKeyboardButton("Отмена", callback_data=f"cm:{token}:x")])
+    await reply("К какой задаче прикрепить?", reply_markup=InlineKeyboardMarkup(rows))
+
+
+async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Фото или PDF боту → комментарий к задаче (подпись — текст комментария)."""
+    user = _known_user(update)
+    if not user:
+        await update.message.reply_text(NO_ACCESS_TEXT)
+        return
+    msg = update.message
+    if msg.photo:
+        tg_file_id, ftype, fname = msg.photo[-1].file_id, "image/jpeg", "фото.jpg"
+    else:
+        doc = msg.document
+        ftype = (doc.mime_type or "").lower()
+        if ftype not in comments_service.FILE_TYPES:
+            await msg.reply_text("Прикрепить можно фото или PDF.")
+            return
+        if (doc.file_size or 0) > comments_service.FILE_MAX:
+            await msg.reply_text("Файл больше 10 МБ.")
+            return
+        tg_file_id, fname = doc.file_id, doc.file_name
+    try:
+        tg_file = await context.bot.get_file(tg_file_id)
+        data = bytes(await tg_file.download_as_bytearray())
+    except Exception as exc:
+        logger.warning("Файл из Telegram не скачан: %s", type(exc).__name__)
+        await msg.reply_text("Не получилось скачать файл, попробуйте ещё раз.")
+        return
+    ids = _task_ids_from(getattr(msg, "reply_to_message", None))
+    await _comment_or_ask(update, user, ids, text=msg.caption, file=(data, ftype, fname))
+
+
+async def comment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """cmt:<id> — «💬 Комментарий»: пригласить ответить; cm:<token>:<n> — выбор задачи из списка."""
+    query = update.callback_query
+    user = users_service.get_by_telegram_id(query.from_user.id)
+    if not user:
+        await query.answer()
+        return
+    data = query.data or ""
+    if data.startswith("cmt:"):
+        task = task_service.get_task(data[4:], user["id"])
+        await query.answer()
+        if not task:
+            await query.message.reply_text("Задача не найдена.")
+            return
+        prompt = await query.message.reply_text(
+            f"💬 Ответьте на это сообщение текстом, фото или PDF — добавлю к задаче «{task['task']}».",
+            reply_markup=ForceReply(selective=True, input_field_placeholder="Комментарий к задаче"))
+        if prompt is not None:
+            _prompt_targets[(prompt.chat.id, prompt.message_id)] = task["id"]
+        return
+    _, token, choice = (data.split(":") + ["", ""])[:3]
+    pending = _pending_comments.get(token)
+    if not pending or pending["user_id"] != user["id"]:
+        await query.answer("Выбор устарел — пришлите ещё раз")
+        return
+    if choice == "x":
+        _pending_comments.pop(token, None)
+        await query.answer("Отменено")
+        await query.edit_message_text("Не прикрепляю.")
+        return
+    try:
+        task_id = pending["ids"][int(choice)]
+    except (ValueError, IndexError):
+        await query.answer()
+        return
+    _pending_comments.pop(token, None)
+    await query.answer()
+
+    async def reply(text):
+        await query.edit_message_text(text)
+    await _attach(reply, user, task_id, pending["text"], pending["file"])
+
+
 # ---------------------------------------------------------------- помощь
 
 MENU_ACTIONS = {BTN_TODAY: "today_command", BTN_TASKS: "list_tasks_handler", BTN_MONTH: "month_command",
@@ -867,6 +1030,8 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(access_decision, pattern=r"^(approve|deny):\d+$"))
     app.add_handler(CallbackQueryHandler(money_callback, pattern=r"^m:"))
     app.add_handler(CallbackQueryHandler(help_callback, pattern=r"^h:[a-z]+$"))
+    app.add_handler(CallbackQueryHandler(comment_callback, pattern=r"^(cmt:[0-9a-fA-F-]{36}|cm:[0-9a-f]{8}:(\d+|x))$"))
+    app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, handle_file))
     app.add_handler(CallbackQueryHandler(reminder_callback, pattern=r"^(done|snooze):[0-9a-fA-F-]{36}$"))
     app.add_handler(CallbackQueryHandler(digest_move_callback, pattern=r"^dmove:\d{4}-\d{2}-\d{2}$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))

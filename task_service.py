@@ -192,5 +192,7 @@ def delete_task(task_id: str, user_id: str) -> bool:
     if not task:
         return False
     gcal.sync_task_delete(task.get("google_event_id"), user_id)
+    import comments_service  # файлы комментариев — из хранилища; строки уйдут каскадом вместе с задачей
+    comments_service.delete_task_files(task_id, user_id)
     result = supabase.table(TABLE).delete().eq("id", task_id).eq("user_id", user_id).execute()
     return bool(result.data)

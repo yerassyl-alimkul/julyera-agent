@@ -46,6 +46,7 @@ load_dotenv()
 
 import task_service
 import categories_service
+import comments_service
 import digest_service
 import money_service
 import notes_service
@@ -60,6 +61,7 @@ from models import (
     CategoryCreate,
     CategoryOrder,
     CategoryUpdate,
+    CommentCreate,
     ApplePayIn,
     MeUpdate,
     MoneyCategoryCreate,
@@ -159,6 +161,11 @@ async def category_error_handler(request: Request, exc: CategoryError):
     return JSONResponse(status_code=exc.status, content={"detail": {"code": exc.code, "message": exc.message}})
 
 
+@app.exception_handler(comments_service.CommentError)
+async def comment_error_handler(request: Request, exc: comments_service.CommentError):
+    return JSONResponse(status_code=exc.status, content={"detail": {"code": exc.code, "message": exc.message}})
+
+
 @app.exception_handler(MoneyError)
 async def money_error_handler(request: Request, exc: MoneyError):
     # Тот же формат, что у категорий: {"detail": {"code", "message"}}; message — понятный текст по-русски
@@ -225,13 +232,18 @@ def list_tasks(
     deadline_before: Optional[datetime] = Query(None),
     user: dict = Depends(current_user),
 ):
-    return task_service.list_tasks(
+    tasks = task_service.list_tasks(
         user["id"],
         category=category or None,
         status=status.value if status else None,
         priority=priority.value if priority else None,
         deadline_before=deadline_before,
     )
+    counts = comments_service.counts(user["id"])
+    for t in tasks:
+        c = counts.get(t["id"], {})
+        t["comments_count"], t["files_count"] = c.get("comments", 0), c.get("files", 0)
+    return tasks
 
 
 @app.get("/tasks/{task_id}", response_model=Task)
@@ -255,6 +267,34 @@ def delete_task(task_id: UUID, user: dict = Depends(current_user)):
     deleted = task_service.delete_task(str(task_id), user["id"])
     if not deleted:
         raise HTTPException(status_code=404, detail="Задача не найдена")
+    return None
+
+
+@app.get("/tasks/{task_id}/comments")
+def list_task_comments(task_id: UUID, user: dict = Depends(current_user)):
+    comments = comments_service.list_comments(str(task_id), user["id"])
+    if comments is None:
+        raise HTTPException(status_code=404, detail="Задача не найдена")
+    return comments
+
+
+@app.post("/tasks/{task_id}/comments", status_code=201)
+def add_task_comment(task_id: UUID, payload: CommentCreate, user: dict = Depends(current_user)):
+    """Комментарий: текст и/или файл (фото или PDF в base64, до 10 МБ)."""
+    data = ftype = fname = None
+    if payload.file:
+        data, ftype = comments_service.decode_file(payload.file.data, payload.file.type)
+        fname = payload.file.name
+    comment = comments_service.add_comment(str(task_id), user["id"], payload.text, data, ftype, fname)
+    if comment is None:
+        raise HTTPException(status_code=404, detail="Задача не найдена")
+    return comment
+
+
+@app.delete("/comments/{comment_id}", status_code=204)
+def delete_task_comment(comment_id: UUID, user: dict = Depends(current_user)):
+    if not comments_service.delete_comment(str(comment_id), user["id"]):
+        raise HTTPException(status_code=404, detail="Комментарий не найден")
     return None
 
 

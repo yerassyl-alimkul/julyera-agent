@@ -1347,6 +1347,33 @@ applyTheme();
   .row-more .step-circle svg { width: 10px; height: 10px; }
   .row-more .step-text { font-size: 15px; }
   .row-more .step-row.done .step-text { color: var(--ink); }
+  /* Комментарии к задаче */
+  .comment-list { display: flex; flex-direction: column; gap: var(--gap-s); }
+  .comment-item { display: flex; gap: var(--gap-s); align-items: flex-start; padding: 10px 6px 10px 14px;
+    border: 1px solid var(--line); border-radius: var(--radius-compact); background: var(--surface); }
+  .comment-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .comment-text { font-size: 15px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .comment-text a { color: var(--accent-text); text-decoration: underline; }
+  .comment-meta { font-size: 12px; color: var(--ink-muted); }
+  .comment-thumb { display: block; max-width: 100%; max-height: 220px; border-radius: var(--radius-btn); cursor: zoom-in;
+    border: 1px solid var(--line); background: var(--hairline); }
+  .comment-file { align-self: flex-start; display: inline-flex; align-items: center; gap: var(--gap-s); min-height: var(--touch);
+    padding: 0 14px; border: 1px solid var(--line); border-radius: var(--radius-btn); background: var(--bg); color: var(--ink);
+    font-size: 14px; cursor: pointer; }
+  .comment-compose { display: flex; gap: var(--gap-s); align-items: flex-end; }
+  .comment-compose textarea { flex: 1; min-width: 0; height: var(--touch); min-height: var(--touch); max-height: 140px;
+    padding: 9px 14px; line-height: 22px; resize: none; }
+  .comment-compose .tb-btn { flex: 0 0 auto; }
+  .comment-compose .send { background: var(--accent); border-color: var(--accent); color: #FFFFFF; }
+  .attach-preview { display: flex; align-items: center; gap: var(--gap-s); font-size: 14px; color: var(--ink-muted); }
+  .attach-preview img { width: 56px; height: 56px; object-fit: cover; border-radius: var(--radius-btn); }
+  .new-comment { padding-top: var(--gap-section); }
+  .photo-viewer { position: fixed; inset: 0; z-index: 90; display: flex; flex-direction: column; background: rgba(0, 0, 0, 0.92); }
+  .photo-viewer[hidden] { display: none; }
+  .photo-viewer-bar { display: flex; justify-content: space-between; align-items: center;
+    padding: calc(12px + var(--app-inset-top)) var(--gutter) 12px; }
+  .photo-viewer .tb-btn { background: rgba(255, 255, 255, 0.12); border-color: transparent; color: #FFFFFF; }
+  .photo-viewer img { flex: 1; min-height: 0; width: 100%; object-fit: contain; touch-action: pinch-zoom; }
   .tag-pills { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 2px; }
   .tag-pill { padding: 3px 10px; border-radius: var(--radius-pill); background: var(--tag-bg); font-size: 12px; font-weight: 600; }
   .row-more .step-input {
@@ -1750,7 +1777,7 @@ applyTheme();
       <button class="pill-btn newtask-day" id="newTaskDay" type="button" hidden></button>
       <label class="newtask-label" for="composerInput">Опиши задачу своими словами</label>
       <textarea class="newtask-input" id="composerInput"></textarea>
-      <p class="newtask-hint">Дату и время можно писать словами («завтра в 18:00»), теги через решётку («#экзамен»). Категорию и приоритет приложение определит само.<span id="micBtnHint" hidden> Голосом удобнее через бота: просто отправьте ему голосовое сообщение.</span></p>
+      <p class="newtask-hint">Дату и время можно писать словами («завтра в 18:00»). Категорию и приоритет приложение определит само.<span id="micBtnHint" hidden> Голосом удобнее через бота: просто отправьте ему голосовое сообщение.</span></p>
     </div>
     <div class="edit-form newtask-manual" id="newTaskManual" hidden>
       <section class="form-section">
@@ -1775,11 +1802,16 @@ applyTheme();
           <input class="field field-time" id="newTime" type="time" aria-label="Время дедлайна">
         </div>
       </section>
-      <section class="form-section">
-        <label class="form-label" for="newTags">Теги (через запятую)</label>
-        <input class="field" id="newTags" type="text" autocomplete="off">
-      </section>
     </div>
+    <section class="form-section new-comment">
+      <label class="form-label" for="newComment">Комментарий</label>
+      <div class="comment-compose">
+        <button class="tb-btn" id="newAttach" type="button" aria-label="Прикрепить фото или PDF"><svg viewBox="0 0 24 24"><path d="M20 11.5l-8 8a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L9.7 17.2a1.7 1.7 0 0 1-2.4-2.4L15 7"/></svg></button>
+        <textarea class="field" id="newComment" placeholder="Ссылка, заметка…"></textarea>
+      </div>
+      <div class="attach-preview" id="newAttachPreview" hidden></div>
+      <input type="file" id="newFile" accept="image/*,application/pdf" hidden>
+    </section>
   </div>
   <div class="sheet-footer">
     <button class="btn-mic" id="micBtn" aria-label="Наговорить задачу голосом">
@@ -1920,6 +1952,14 @@ applyTheme();
   </div>
 </div>
 
+<!-- Фото из комментария на весь экран -->
+<div class="photo-viewer" id="photoViewer" role="dialog" aria-modal="true" aria-label="Фото" hidden>
+  <div class="photo-viewer-bar">
+    <button class="tb-btn" id="photoViewerClose" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <img id="photoViewerImg" alt="Фото из комментария">
+</div>
+
 <!-- Основная валюта кошелька -->
 <div class="sheet" id="currencySheet" role="dialog" aria-modal="true" aria-labelledby="currencyTitle" hidden>
   <div class="sheet-inner">
@@ -1992,10 +2032,6 @@ applyTheme();
           <input class="field field-time" id="editTime" type="time" aria-label="Время дедлайна">
         </div>
       </section>
-      <section class="form-section">
-        <label class="form-label" for="editTags">Теги (через запятую)</label>
-        <input class="field" id="editTags" type="text" autocomplete="off">
-      </section>
       <section class="form-section" style="gap: 6px;">
         <div class="form-section-head">
           <h3 class="form-label">Шаги</h3>
@@ -2003,6 +2039,20 @@ applyTheme();
         </div>
         <div class="step-list" id="editSteps"></div>
         <input class="step-input" id="editStepInput" type="text" placeholder="+ добавить шаг" aria-label="Новый шаг" autocomplete="off">
+      </section>
+      <section class="form-section" id="editCommentsSection">
+        <div class="form-section-head">
+          <h3 class="form-label">Комментарии</h3>
+          <span class="form-aside" id="editCommentsCount"></span>
+        </div>
+        <div class="comment-list" id="editComments"></div>
+        <div class="comment-compose">
+          <button class="tb-btn" id="editAttach" type="button" aria-label="Прикрепить фото или PDF"><svg viewBox="0 0 24 24"><path d="M20 11.5l-8 8a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L9.7 17.2a1.7 1.7 0 0 1-2.4-2.4L15 7"/></svg></button>
+          <textarea class="field" id="editComment" placeholder="Комментарий или ссылка…" aria-label="Новый комментарий"></textarea>
+          <button class="tb-btn send" id="editCommentSend" type="button" aria-label="Отправить комментарий"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+        </div>
+        <div class="attach-preview" id="editAttachPreview" hidden></div>
+        <input type="file" id="editFile" accept="image/*,application/pdf" hidden>
       </section>
       <button class="btn-danger" id="editDelete" type="button">
         <svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/></svg>
@@ -2390,7 +2440,6 @@ async function saveEdit(id, fields) {
     category: fields.category.value,
     priority: fields.priority.value,
     deadline: fields.deadline.value ? fields.deadline.value + ':00' : null,
-    tags: fields.tags.value.split(',').map(t => t.trim().replace(/^#+/, '')).filter(Boolean),
   };
   try {
     const res = await api(`/tasks/${id}`, {
@@ -2626,8 +2675,7 @@ function stepInputEl(input, taskId) {
 
 function taskRowEl(task, mode) {
   const steps = allSubtasks.filter(s => s.task_id === task.id);
-  const tags = task.tags || [];
-  const hasMore = steps.length > 0 || tags.length > 0;
+  const hasMore = steps.length > 0;
   const expanded = hasMore && expandedTasks.has(task.id);
 
   const row = document.createElement('div');
@@ -2670,7 +2718,8 @@ function taskRowEl(task, mode) {
   }
   const rest = [task.category];
   if (steps.length) rest.push(stepsText(steps.filter(s => s.is_done).length, steps.length));
-  if (!expanded) tags.forEach(tag => rest.push('#' + tag)); // в раскрытой карточке теги показаны плашками
+  if (task.comments_count) rest.push(`💬 ${task.comments_count}`);
+  if (task.files_count) rest.push(`📎 ${task.files_count}`);
   const restEl = document.createElement('span');
   restEl.textContent = rest.join(' · ');
   meta.append(time, restEl);
@@ -2707,17 +2756,6 @@ function taskRowEl(task, mode) {
     head.querySelector('span').textContent = steps.length ? `${steps.filter(s => s.is_done).length} из ${steps.length}` : '';
     more.appendChild(head);
     steps.forEach(step => more.appendChild(stepRowEl(step)));
-    if (tags.length) {
-      const pills = document.createElement('div');
-      pills.className = 'tag-pills';
-      tags.forEach(tag => {
-        const pill = document.createElement('span');
-        pill.className = 'tag-pill';
-        pill.textContent = '#' + tag;
-        pills.appendChild(pill);
-      });
-      more.appendChild(pills);
-    }
     const input = document.createElement('input');
     input.className = 'step-input';
     input.type = 'text';
@@ -3712,6 +3750,7 @@ async function submitComposer() {
       return;
     }
     const created = await res.json();
+    await postNewTaskComment(created);
     input.value = '';
     closeNewTask();
     toast(`Добавлено задач: ${created.length}`);
@@ -3747,7 +3786,6 @@ async function submitManual() {
     category: newChoice.category,
     priority: newChoice.priority,
     deadline: date ? `${date}T${time}:00` : null,
-    tags: document.getElementById('newTags').value.split(',').map(t => t.trim().replace(/^#+/, '')).filter(Boolean),
     source: 'web',
   };
   btn.disabled = true;
@@ -3766,7 +3804,8 @@ async function submitManual() {
       return;
     }
     const created = await res.json();
-    ['newText', 'newDate', 'newTime', 'newTags', 'composerInput'].forEach(id => { document.getElementById(id).value = ''; });
+    await postNewTaskComment([created]);
+    ['newText', 'newDate', 'newTime', 'composerInput'].forEach(id => { document.getElementById(id).value = ''; });
     newChoice.priority = 'Mid';
     closeNewTask();
     toast('Задача добавлена');
@@ -5697,10 +5736,6 @@ function renderSearch() {
     when.textContent = dt ? `${dt.getDate()} ${MONTH_GENITIVE[dt.getMonth()]}, ${timeOf(task.deadline)}` : 'Без срока';
     meta.append(when, task.category);
     if (task.status === 'Done') meta.append(' · В архиве');
-    (task.tags || []).forEach(tag => {
-      meta.append(' · ');
-      meta.appendChild(highlightedEl('span', '#' + tag, normalizeSearch(tag).includes(query) ? query : ''));
-    });
     body.append(title, meta);
     row.append(body, priorityBarsEl(task.priority));
     row.onclick = () => openSearchResult(task);
@@ -5843,7 +5878,9 @@ function openEdit(id) {
   document.getElementById('editText').value = task.task;
   document.getElementById('editDate').value = task.deadline ? task.deadline.slice(0, 10) : '';
   document.getElementById('editTime').value = task.deadline ? task.deadline.slice(11, 16) : '';
-  document.getElementById('editTags').value = (task.tags || []).join(', ');
+  resetAttach('edit');
+  document.getElementById('editComment').value = '';
+  loadEditComments(id);
   document.getElementById('editStepInput').value = '';
   renderEditChips();
   renderEditSteps();
@@ -5867,6 +5904,222 @@ function closeEdit() {
   flushDeferredRender();
 }
 
+// ---------- Комментарии к задачам ----------
+// Ссылки в тексте кликабельны; фото сжимаются на телефоне до 1600 px (JPEG), PDF уходит как есть; файл до 10 МБ.
+// Ссылки на файлы живут час (их выдаёт сервер), поэтому список перечитывается при каждом открытии задачи.
+const attachState = { new: null, edit: null };  // { name, type, data(base64), preview }
+const COMMENT_FILE_MAX = 10 * 1024 * 1024;
+
+function openExternal(url) {
+  if (inTelegram && tg && typeof tg.openLink === 'function') { try { tg.openLink(url); return; } catch (e) { /* ниже */ } }
+  window.open(url, '_blank', 'noopener');
+}
+
+function linkifiedEl(text) {
+  const box = document.createElement('div');
+  box.className = 'comment-text';
+  const re = /(https?:\/\/[^\s<>"]+|www\.[^\s<>"]+)/gi;
+  let last = 0;
+  for (const m of text.matchAll(re)) {
+    box.append(text.slice(last, m.index));
+    const url = m[0].replace(/[.,;:!?)»]+$/, '');
+    const a = document.createElement('a');
+    a.href = url.startsWith('http') ? url : 'https://' + url;
+    a.textContent = url;
+    a.rel = 'noopener';
+    a.onclick = (e) => { e.preventDefault(); openExternal(a.href); };
+    box.append(a);
+    last = m.index + url.length;
+  }
+  box.append(text.slice(last));
+  return box;
+}
+
+function fileToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(',')[1]);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
+async function prepareFile(file) {
+  if (file.type === 'application/pdf') {
+    if (file.size > COMMENT_FILE_MAX) throw new Error('Файл больше 10 МБ');
+    return { name: file.name, type: file.type, data: await fileToBase64(file), preview: null };
+  }
+  if (!file.type.startsWith('image/')) throw new Error('Прикрепить можно фото или PDF');
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error('Не удалось открыть фото'));
+      i.src = url;
+    });
+    const scale = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.naturalWidth * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+    if (!blob || blob.size > COMMENT_FILE_MAX) throw new Error('Фото слишком большое');
+    const name = (file.name || 'фото').replace(/\.[^.]+$/, '') + '.jpg';
+    return { name, type: 'image/jpeg', data: await fileToBase64(blob), preview: canvas.toDataURL('image/jpeg', 0.6) };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function resetAttach(where) {
+  attachState[where] = null;
+  const box = document.getElementById(`${where}AttachPreview`);
+  box.hidden = true;
+  box.innerHTML = '';
+  document.getElementById(`${where}File`).value = '';
+}
+
+function renderAttach(where) {
+  const a = attachState[where];
+  const box = document.getElementById(`${where}AttachPreview`);
+  box.innerHTML = '';
+  box.hidden = !a;
+  if (!a) return;
+  if (a.preview) { const img = document.createElement('img'); img.src = a.preview; img.alt = ''; box.appendChild(img); }
+  const name = document.createElement('span');
+  name.textContent = (a.type === 'application/pdf' ? '📄 ' : '') + a.name;
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'link-btn';
+  remove.textContent = 'Убрать';
+  remove.onclick = () => resetAttach(where);
+  box.append(name, remove);
+}
+
+['new', 'edit'].forEach(where => {
+  document.getElementById(`${where}Attach`).onclick = () => document.getElementById(`${where}File`).click();
+  document.getElementById(`${where}File`).addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    try {
+      attachState[where] = await prepareFile(file);
+      renderAttach(where);
+    } catch (err) {
+      toast(err.message || 'Не удалось прикрепить файл');
+      resetAttach(where);
+    }
+  });
+});
+
+async function postComment(taskId, text, file) {
+  const body = { text: text || null, file: file ? { name: file.name, type: file.type, data: file.data } : null };
+  return apiJson(`/tasks/${taskId}/comments`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(body) });
+}
+
+// Комментарий из «Новой задачи» — ко всем только что созданным задачам (обычно она одна).
+async function postNewTaskComment(createdTasks) {
+  const text = document.getElementById('newComment').value.trim();
+  const file = attachState.new;
+  if (!text && !file) return;
+  let failed = 0;
+  for (const t of createdTasks) {
+    try { await postComment(t.id, text, file); } catch (e) { failed++; }
+  }
+  if (failed) toast('Задача сохранена, но комментарий не добавился');
+  document.getElementById('newComment').value = '';
+  resetAttach('new');
+}
+
+function commentEl(c) {
+  const item = document.createElement('div');
+  item.className = 'comment-item';
+  const body = document.createElement('div');
+  body.className = 'comment-body';
+  if (c.text) body.appendChild(linkifiedEl(c.text));
+  if (c.file && c.file.url && c.file.type && c.file.type.startsWith('image/')) {
+    const img = document.createElement('img');
+    img.className = 'comment-thumb';
+    img.src = c.file.url;
+    img.alt = c.file.name || 'Фото';
+    img.loading = 'lazy';
+    img.tabIndex = 0;
+    img.onclick = () => openPhoto(c.file.url);
+    img.onkeydown = (e) => { if (e.key === 'Enter') openPhoto(c.file.url); };
+    body.appendChild(img);
+  } else if (c.file) {
+    const f = document.createElement('button');
+    f.type = 'button';
+    f.className = 'comment-file';
+    f.textContent = `📄 ${c.file.name || 'Файл'}`;
+    f.onclick = () => { if (c.file.url) openExternal(c.file.url); else toast('Ссылка на файл устарела, откройте задачу заново'); };
+    body.appendChild(f);
+  }
+  const meta = document.createElement('div');
+  meta.className = 'comment-meta';
+  const when = c.created_at ? new Date(c.created_at) : null;  // настоящий момент времени (timestamptz), не дедлайн
+  meta.textContent = when ? `${when.getDate()} ${MONTH_GENITIVE[when.getMonth()]}, ${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}` : '';
+  body.appendChild(meta);
+  const del = iconButton('M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12', 'Удалить комментарий', async () => {
+    try { await apiJson(`/comments/${c.id}`, { method: 'DELETE' }); toast('Комментарий удалён'); }
+    catch (e) { toast(e.message || 'Не удалось удалить'); }
+    if (editingId) loadEditComments(editingId);
+    loadTasks();
+  }, 'danger');
+  del.dataset.focusKey = 'comment-del-' + c.id;
+  item.append(body, del);
+  return item;
+}
+
+async function loadEditComments(taskId) {
+  const list = document.getElementById('editComments');
+  let comments = [];
+  try { comments = await apiJson(`/tasks/${taskId}/comments`); } catch (e) { comments = []; }
+  if (editingId !== taskId) return;
+  list.innerHTML = '';
+  comments.forEach(c => list.appendChild(commentEl(c)));
+  document.getElementById('editCommentsCount').textContent = comments.length ? String(comments.length) : '';
+}
+
+async function sendEditComment() {
+  const input = document.getElementById('editComment');
+  const text = input.value.trim();
+  const file = attachState.edit;
+  if (!text && !file) { input.focus(); return; }
+  const btn = document.getElementById('editCommentSend');
+  btn.disabled = true;
+  try {
+    await postComment(editingId, text, file);
+    input.value = '';
+    resetAttach('edit');
+    await loadEditComments(editingId);
+    loadTasks();
+  } catch (e) {
+    toast(e.message || 'Не удалось добавить комментарий');
+  } finally {
+    btn.disabled = false;
+  }
+}
+document.getElementById('editCommentSend').onclick = sendEditComment;
+document.getElementById('editComment').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) sendEditComment();
+});
+
+const photoViewer = document.getElementById('photoViewer');
+let photoReturnFocus = null;
+function openPhoto(url) {
+  photoReturnFocus = document.activeElement;
+  document.getElementById('photoViewerImg').src = url;
+  photoViewer.hidden = false;
+  document.getElementById('photoViewerClose').focus();
+}
+function closePhoto() {
+  photoViewer.hidden = true;
+  document.getElementById('photoViewerImg').removeAttribute('src');
+  if (photoReturnFocus && document.body.contains(photoReturnFocus)) photoReturnFocus.focus();
+}
+document.getElementById('photoViewerClose').onclick = closePhoto;
+
 async function submitEdit() {
   const btn = document.getElementById('editSave');
   const date = document.getElementById('editDate').value;
@@ -5876,7 +6129,6 @@ async function submitEdit() {
     category: { value: editChoice.category },
     priority: { value: editChoice.priority },
     deadline: { value: date ? `${date}T${time}` : '' }, // saveEdit добавит секунды; пусто → null
-    tags: document.getElementById('editTags'),
   };
   btn.disabled = true;
   const ok = await saveEdit(editingId, fields);
@@ -5911,7 +6163,8 @@ document.getElementById('editStepInput').onkeydown = (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
-  if (!editSheet.hidden) closeEdit();
+  if (!photoViewer.hidden) closePhoto();
+  else if (!editSheet.hidden) closeEdit();
   else if (!moneySheet.hidden) closeMoneyForm();
   else if (!currencySheet.hidden) closeCurrency();
   else if (!analyticsSheet.hidden) closeAnalytics();

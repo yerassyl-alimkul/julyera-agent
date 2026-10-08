@@ -28,6 +28,8 @@ DEFAULTS = {
     "money_categories": lambda: {"id": str(uuid.uuid4()), "sort_order": 0, "monthly_limit": None, "limit_currency": None,
                                  "created_at": _now()},
     "money_limit_alerts": lambda: {"sent_at": _now()},
+    "task_comments": lambda: {"id": str(uuid.uuid4()), "text": None, "file_path": None, "file_name": None,
+                              "file_type": None, "file_size": None, "created_at": _now()},
     "money_report_log": lambda: {"sent_at": _now()},
     "money_transactions": lambda: {"id": str(uuid.uuid4()), "note": None, "source": "app", "recurring_id": None,
                                    "created_at": _now()},
@@ -248,22 +250,56 @@ class Query:
                     if x.get("recurring_id") in ids:
                         x["recurring_id"] = None
             self.db.tables[self.table] = [r for r in rows if not self._match(r)]
-            if self.table == "tasks":  # on delete cascade для подзадач
+            if self.table == "tasks":  # on delete cascade для подзадач и комментариев
                 ids = {r["id"] for r in gone}
                 self.db.tables["subtasks"] = [s for s in self.db.tables.get("subtasks", []) if s["task_id"] not in ids]
+                self.db.tables["task_comments"] = [c for c in self.db.tables.get("task_comments", []) if c["task_id"] not in ids]
             if self.table == "users":  # categories.user_id и money_*.user_id ... on delete cascade
                 ids = {r["id"] for r in gone}
                 for t in ("categories", "money_transactions", "money_recurring", "money_merchant_rules",
-                          "money_limit_alerts", "money_report_log", "money_categories", "digest_log"):
+                          "money_limit_alerts", "money_report_log", "money_categories", "digest_log", "task_comments"):
                     self.db.tables[t] = [c for c in self.db.tables.get(t, []) if c["user_id"] not in ids]
             return SimpleNamespace(data=[copy.deepcopy(r) for r in gone])
 
         raise FakeError(f"неизвестная операция {self.op}")
 
 
+class FakeBucket:
+    """Supabase Storage в памяти: upload / remove / create_signed_urls."""
+
+    def __init__(self, files):
+        self.files = files
+
+    def upload(self, path, data, file_options=None):
+        if path in self.files:
+            raise FakeError("The resource already exists")
+        self.files[path] = (bytes(data), (file_options or {}).get("content-type"))
+        return SimpleNamespace(path=path)
+
+    def remove(self, paths):
+        for path in paths:
+            self.files.pop(path, None)
+        return [{"name": p} for p in paths]
+
+    def create_signed_urls(self, paths, expires_in):
+        # вместо ссылки на облако — сам файл в data:-ссылке, чтобы тестовый сервер показывал фото
+        import base64
+        return [{"path": p, "signedURL": f"data:{self.files[p][1]};base64,{base64.b64encode(self.files[p][0]).decode()}"}
+                for p in paths if p in self.files]
+
+
+class FakeStorage:
+    def __init__(self):
+        self.buckets: dict[str, dict] = {}
+
+    def from_(self, bucket):
+        return FakeBucket(self.buckets.setdefault(bucket, {}))
+
+
 class FakeSupabase:
     def __init__(self):
         self.tables: dict[str, list[dict]] = {}
+        self.storage = FakeStorage()
 
     def table(self, name):
         return Query(self, name)

@@ -323,6 +323,110 @@ def tg_update(tg_id, text=None, callback_data=None, first_name="Тест"):
                            callback_query=query, replies=replies, answers=answers, edits=edits)
 
 
+TINY_PNG = ("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
+
+
+def comments_checks(client, A, B, db=None):
+    """Комментарии к задачам: свои видны, чужие — 404; только фото и PDF; файлы уходят вместе с комментарием.
+    db — база в памяти (локально): тогда проверяем и само хранилище файлов."""
+    import base64
+
+    section("Комментарии к задачам")
+    hA, hB = key_headers(A), key_headers(B)
+    task = client.post("/tasks", headers=hA, json={"task": "Задача с комментариями", "category": "Work"}).json()
+    tid = task["id"]
+    r = client.post(f"/tasks/{tid}/comments", headers=hA, json={"text": "Ссылка: https://example.com/form"})
+    c1 = r.json()
+    check("комментарий с текстом добавляется", r.status_code == 201 and c1.get("text", "").startswith("Ссылка"), r.text[:100])
+    r = client.post(f"/tasks/{tid}/comments", headers=hA,
+                    json={"text": "скан", "file": {"name": "скан.png", "type": "image/png", "data": TINY_PNG}})
+    c2 = r.json()
+    check("фото добавляется, у него есть ссылка на час", r.status_code == 201 and (c2.get("file") or {}).get("url"), r.text[:150])
+    listed = client.get(f"/tasks/{tid}/comments", headers=hA).json()
+    check("список комментариев своей задачи, старые сверху", [c["id"] for c in listed] == [c1["id"], c2["id"]])
+    row = next((t for t in client.get("/tasks", headers=hA).json() if t["id"] == tid), {})
+    check("в списке задач счётчики 💬 и 📎", (row.get("comments_count"), row.get("files_count")) == (2, 1), str(row)[:120])
+    check("комментарии чужой задачи → 404", client.get(f"/tasks/{tid}/comments", headers=hB).status_code == 404)
+    check("комментарий к чужой задаче → 404",
+          client.post(f"/tasks/{tid}/comments", headers=hB, json={"text": "взлом"}).status_code == 404)
+    check("удалить чужой комментарий → 404", client.delete(f"/comments/{c1['id']}", headers=hB).status_code == 404)
+    check("пустой комментарий → 422", client.post(f"/tasks/{tid}/comments", headers=hA, json={"text": "  "}).status_code == 422)
+    check("файл не фото и не PDF → 422", client.post(f"/tasks/{tid}/comments", headers=hA, json={
+        "file": {"name": "a.txt", "type": "text/plain", "data": base64.b64encode(b"hi").decode()}}).status_code == 422)
+    check("испорченный файл → 422", client.post(f"/tasks/{tid}/comments", headers=hA, json={
+        "file": {"name": "a.png", "type": "image/png", "data": "не base64!"}}).status_code == 422)
+    path = None
+    if db is not None:
+        check("большой файл (больше 10 МБ) → 422", client.post(f"/tasks/{tid}/comments", headers=hA, json={
+            "file": {"name": "big.pdf", "type": "application/pdf",
+                     "data": base64.b64encode(b"0" * (10 * 1024 * 1024 + 1)).decode()}}).status_code == 422)
+        files = db.storage.buckets.get("task-files", {})
+        path = next((p for p in files if c2["id"] in p), None)
+        check("файл лежит в хранилище под папкой пользователя и задачи",
+              path is not None and path.startswith(f"{A['id']}/{tid}/"))
+    check("удаление комментария с фото", client.delete(f"/comments/{c2['id']}", headers=hA).status_code == 204)
+    if db is not None:
+        check("…и файл удалён из хранилища", path not in db.storage.buckets.get("task-files", {}))
+        client.post(f"/tasks/{tid}/comments", headers=hA,
+                    json={"file": {"name": "ещё.png", "type": "image/png", "data": TINY_PNG}})
+        client.delete(f"/tasks/{tid}", headers=hA)
+        check("удаление задачи удаляет её комментарии и файлы",
+              not [c for c in db.tables.get("task_comments", []) if c["task_id"] == tid]
+              and not [p for p in db.storage.buckets.get("task-files", {}) if f"/{tid}/" in p])
+    else:
+        client.delete(f"/tasks/{tid}", headers=hA)
+
+
+def comment_bot_checks(db, A):
+    import telegram_handlers as h
+
+    section("Комментарии через бота")
+    run = asyncio.run
+    ctx = SimpleNamespace(bot=FakeBot())
+    import task_service
+    import users_service
+    t1 = task_service.create_task(__import__("models").TaskCreate(task="Подать документы", category="Work"), A["id"])
+    t2 = task_service.create_task(__import__("models").TaskCreate(task="Купить билеты", category="Work"), A["id"])
+    users_service.link_chat(A["telegram_user_id"], A["id"])
+    comments = lambda tid: [c for c in db.tables.get("task_comments", []) if c["task_id"] == tid]
+
+    u = tg_update(A["telegram_user_id"], text="Копию паспорта не забыть")
+    u.message.reply_to_message = SimpleNamespace(chat=SimpleNamespace(id=1), message_id=10, reply_markup=SimpleNamespace(
+        inline_keyboard=[[SimpleNamespace(callback_data=f"done:{t1['id']}"), SimpleNamespace(callback_data=f"snooze:{t1['id']}")]]))
+    tasks_before = len(db.tables["tasks"])
+    run(h.handle_text(u, ctx))
+    check("ответ текстом на напоминание — комментарий к этой задаче, а не новая задача",
+          len(db.tables["tasks"]) == tasks_before and [c["text"] for c in comments(t1["id"])] == ["Копию паспорта не забыть"]
+          and "Добавил комментарий" in u.replies[-1].text)
+
+    async def fake_get_file(file_id):
+        async def download():
+            return bytearray(b"\xff\xd8\xff fake jpeg")
+        return SimpleNamespace(download_as_bytearray=download)
+    ctx.bot.get_file = fake_get_file
+    u = tg_update(A["telegram_user_id"])
+    u.message.photo = [SimpleNamespace(file_id="small"), SimpleNamespace(file_id="big")]
+    u.message.caption = "билеты"
+    u.message.document = None
+    run(h.handle_file(u, ctx))
+    picker = u.replies[-1]
+    check("фото без ответа — бот спрашивает «К какой задаче?»", picker.text == "К какой задаче прикрепить?" and picker.markup)
+    data = next(b.callback_data for row in picker.markup.inline_keyboard for b in row if "Купить" in b.text)
+    other = tg_update(2002, callback_data=data)
+    run(h.comment_callback(other, ctx))
+    check("чужой выбор задачи отклоняется", other.answers == ["Выбор устарел — пришлите ещё раз"] and not comments(t2["id"]))
+    mine = tg_update(A["telegram_user_id"], callback_data=data)
+    run(h.comment_callback(mine, ctx))
+    got = comments(t2["id"])
+    check("выбор задачи прикрепляет фото с подписью", len(got) == 1 and got[0]["file_type"] == "image/jpeg"
+          and got[0]["text"] == "билеты" and "Добавил фото" in mine.edits[-1])
+    u = tg_update(A["telegram_user_id"])
+    u.message.photo = None
+    u.message.document = SimpleNamespace(mime_type="application/zip", file_size=10, file_id="z", file_name="a.zip")
+    run(h.handle_file(u, ctx))
+    check("архив не принимается", u.replies[-1].text == "Прикрепить можно фото или PDF.")
+
+
 def telegram_checks(db, client, owner, A):
     import telegram_handlers as h
     import users_service
@@ -582,10 +686,12 @@ def run_local():
 
     print("Локальная проверка (база в памяти, без сети)")
     http_checks(client, token, A, B, owner, 999001, count_users_with_tg)
+    comments_checks(client, A, B, db)
     section("Существующие данные")
     owner_tasks = client.get("/tasks", headers=key_headers(owner)).json()
     check("задачи Yera на месте и видны только ему", [t["task"] for t in owner_tasks] == ["Старая задача Yera"])
     wife = telegram_checks(db, client, owner, A)
+    comment_bot_checks(db, A)
     reminder_checks(client, A, B, wife)
     google_checks(db, client, owner, A, B)
     static_checks()
@@ -621,6 +727,7 @@ def run_remote(base_url):
         with httpx.Client(base_url=base_url, timeout=90) as client:
             client.get("/health")  # разбудить сервер на Render
             http_checks(client, token, A, B, owner, base_tg + 3, count_users_with_tg)
+            comments_checks(client, A, B)
         section("Существующие данные")
         n = len(supabase.table("tasks").select("id").eq("user_id", owner["id"]).execute().data) if owner else 0
         check(f"у владельца есть задачи ({n})", n > 0)
