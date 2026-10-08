@@ -19,6 +19,9 @@ from models import Status, TaskCreate, TaskUpdate
 
 TABLE = "tasks"
 NULLABLE_FIELDS = {"deadline", "note", "source", "recurrence_pattern"}
+# Повторения одного события Google Calendar связаны: эти поля, изменённые у одного, меняются у всех незакрытых.
+# Время, статус и удаление — только у самого повторения (как «только это событие» в Google).
+SERIES_FIELDS = ("task", "category", "priority", "note")
 
 
 def _next_deadline(current: Optional[datetime], pattern: Optional[str]) -> Optional[datetime]:
@@ -152,6 +155,13 @@ def update_task(task_id: str, payload: TaskUpdate, user_id: str) -> Optional[dic
         raise RuntimeError("Не удалось обновить задачу")
     updated = result.data[0]
 
+    series = gcal.series_of(current.get("google_event_id")) if current.get("gcal_imported") else None
+    if series:
+        shared = {k: update_data[k] for k in SERIES_FIELDS if k in update_data and update_data[k] != current.get(k)}
+        if shared:
+            _update_series(user_id, series, task_id, shared)
+            gcal.patch_series(user_id, current.get("gcal_calendar_id"), series, shared)
+
     # Повторяющиеся задачи: закрыли — создаём следующую у того же пользователя
     became_done = update_data.get("status") == Status.done.value
     if became_done and current.get("is_recurring"):
@@ -189,6 +199,20 @@ def update_task(task_id: str, payload: TaskUpdate, user_id: str) -> Optional[dic
         updated = _sync_google_clear(updated, user_id)
 
     return updated
+
+
+def series_tasks(user_id: str, series_id: str) -> list[dict]:
+    """Задачи-повторения одной серии Google Calendar у пользователя."""
+    rows = supabase.table(TABLE).select("*").eq("user_id", user_id).eq("gcal_imported", True).execute().data
+    return [r for r in rows if gcal.series_of(r.get("google_event_id")) == series_id]
+
+
+def _update_series(user_id: str, series_id: str, task_id: str, shared: dict) -> None:
+    """Остальным незакрытым повторениям серии — те же название, категория, приоритет, заметка."""
+    data = {**shared, "updated_at": datetime.utcnow().isoformat()}
+    for row in series_tasks(user_id, series_id):
+        if row["id"] != task_id and row.get("status") != Status.done.value:
+            supabase.table(TABLE).update(data).eq("id", row["id"]).eq("user_id", user_id).execute()
 
 
 def delete_task(task_id: str, user_id: str) -> bool:

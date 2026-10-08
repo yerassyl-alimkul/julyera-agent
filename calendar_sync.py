@@ -184,18 +184,21 @@ def _apply_event(task: dict, event: dict, user_id: str, tz: str) -> bool:
 
 
 def _categories(user_id: str, titles: list[str]) -> list[str]:
+    """Категория по названию. Одинаковые названия модель видит один раз — у них одна категория."""
     names = categories_service.names(user_id) or [categories_service.fallback_name(user_id)]
-    guesses: list[Optional[str]] = [None] * len(titles)
-    if len(names) > 1:
+    unique = list(dict.fromkeys(titles))
+    guesses: list[Optional[str]] = [None] * len(unique)
+    if len(names) > 1 and unique:
         try:
             import groq_client
             guesses = []
-            for i in range(0, len(titles), 40):
-                guesses += groq_client.classify_event_titles(titles[i:i + 40], names)
+            for i in range(0, len(unique), 40):
+                guesses += groq_client.classify_event_titles(unique[i:i + 40], names)
         except Exception as exc:
             logger.warning("Категории событий не подобраны: %s", type(exc).__name__)
-            guesses = [None] * len(titles)
-    return [categories_service.resolve_name(user_id, g or "") or names[0] for g in guesses]
+            guesses = [None] * len(unique)
+    by_title = {t: categories_service.resolve_name(user_id, g or "") or names[0] for t, g in zip(unique, guesses)}
+    return [by_title[t] for t in titles]
 
 
 def sync_user(user_id: str, now_utc: Optional[datetime] = None) -> Optional[dict]:
@@ -244,10 +247,20 @@ def sync_user(user_id: str, now_utc: Optional[datetime] = None) -> Optional[dict
             fresh.append((ev, deadline, all_day))
 
     if fresh:
+        # Новое повторение серии, у которой уже есть задачи, берёт их категорию и приоритет (их мог поменять человек)
+        series_of_linked = {}
+        for t in sorted(linked.values(), key=lambda t: t.get("updated_at") or "", reverse=True):
+            series_of_linked.setdefault(gcal.series_of(t.get("google_event_id")), t)
+        series_of_linked.pop(None, None)
         titles = [_title(ev, False) for ev, _, _ in fresh]
-        for (ev, deadline, all_day), title, category in zip(fresh, titles, _categories(user_id, titles)):
+        need = [t for (ev, _, _), t in zip(fresh, titles) if gcal.series_of(ev["id"]) not in series_of_linked]
+        guessed = dict(zip(need, _categories(user_id, need)))
+        for (ev, deadline, all_day), title in zip(fresh, titles):
+            sibling = series_of_linked.get(gcal.series_of(ev["id"]))
+            category = sibling["category"] if sibling else guessed[title]
             row = {"user_id": user_id, "task": title, "category": category, "source": SOURCE,
-                   "deadline": deadline.isoformat(), "priority": "Mid", "status": "To Do",
+                   "deadline": deadline.isoformat(), "priority": sibling["priority"] if sibling else "Mid",
+                   "status": "To Do",
                    "note": _plain(ev.get("description")), "is_recurring": False, "tags": [],
                    "google_event_id": ev["id"], "gcal_imported": True, "gcal_all_day": all_day,
                    "gcal_updated": ev.get("updated")}

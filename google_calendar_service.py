@@ -14,6 +14,7 @@ import hashlib
 import hmac
 import logging
 import os
+import re
 import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
@@ -262,6 +263,41 @@ def _event_body(task: dict, tz: str = "Europe/Rome") -> dict:
         "end": {"dateTime": end_dt.isoformat(), "timeZone": tz},
         "extendedProperties": JULYERA_MARK,
     }
+
+
+# id повторения серии у Google: <id серии>_<дата начала>, например abc_20261012T090000Z или abc_20261012 (весь день)
+_INSTANCE_ID = re.compile(r"^(.+)_(\d{8}(?:T\d{6}Z?)?)$")
+
+
+def series_of(event_id: Optional[str]) -> Optional[str]:
+    """id серии для повторения повторяющегося события, иначе None."""
+    found = _INSTANCE_ID.match(event_id or "")
+    return found.group(1) if found else None
+
+
+def patch_series(user_id: str, calendar_id: Optional[str], series_id: str, fields: dict) -> None:
+    """Название и/или заметка, изменённые у одного повторения, — всей серии в Google («все события»).
+    Повторения, которые в Google правили отдельно, Google не трогает. Ошибки только логируются."""
+    body = {}
+    if "task" in fields:
+        body["summary"] = fields["task"]
+    if "note" in fields:
+        body["description"] = fields["note"] or ""
+    if not body:
+        return
+    service = _get_service(user_id)
+    if not service:
+        return
+    cal = calendar_id or "primary"
+    try:
+        service.events().patch(calendarId=cal, eventId=series_id, sendUpdates="none", body=body).execute()
+    except HttpError as exc:
+        if getattr(getattr(exc, "resp", None), "status", None) in (403, 404, 410):
+            logger.info("Серию в календаре не изменить (только чтение или удалена)")
+            return
+        _note_sync_failure(user_id, exc, "series")
+    except Exception as exc:
+        _note_sync_failure(user_id, exc, "series")
 
 
 def _naive(value: str) -> datetime:

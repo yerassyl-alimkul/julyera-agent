@@ -394,6 +394,38 @@ def main():
     check("смена валюты по-прежнему работает",
           client.patch("/me", headers=hB, json={"default_currency": "KZT"}).json()["default_currency"] == "KZT")
 
+    # --------------------------------------------------------------- повторения одной серии связаны
+    section("Повторения одной серии")
+    inst = [by_event(A, f"rec_{d(1 + 7 * k):%Y%m%d}") for k in (0, 2, 3, 4)]
+    done_one = next(t for t in tasks_of(A) if t["id"] == birthday["id"])
+    check("одинаковые названия — одна категория у всех повторений", len({t["category"] for t in inst}) == 1)
+    calA.calls.clear()
+    r = client.patch(f"/tasks/{inst[0]['id']}", headers=hA, json={"category": "Личное", "priority": "High",
+                                                                  "task": inst[0]["task"], "deadline": inst[0]["deadline"]})
+    fresh = [next(t for t in tasks_of(A) if t["id"] == x["id"]) for x in inst]
+    check("категория и приоритет одного повторения → у всех повторений серии",
+          r.status_code == 200 and all(t["category"] == "Личное" and t["priority"] == "High" for t in fresh))
+    check("закрытое повторение не трогаем", next(t for t in tasks_of(A) if t["id"] == done_one["id"])["category"] != "Личное")
+    check("неизменённые поля не уходят в серию в Google (название то же)", not any(c[0] == "patch" and c[1] == "rec" for c in calA.calls))
+    client.patch(f"/tasks/{inst[1]['id']}", headers=hA, json={"task": "Лекция по гражданскому праву"})
+    fresh = [next(t for t in tasks_of(A) if t["id"] == x["id"]) for x in inst]
+    check("новое название — у всех повторений и у серии в Google",
+          all(t["task"] == "Лекция по гражданскому праву" for t in fresh)
+          and calA.events["rec"]["summary"] == "Лекция по гражданскому праву")
+    client.patch(f"/tasks/{inst[2]['id']}", headers=hA, json={"deadline": f"{d(16)}T12:00:00"})
+    fresh = [next(t for t in tasks_of(A) if t["id"] == x["id"]) for x in inst]
+    check("время меняется только у одного повторения",
+          naive(fresh[2]["deadline"]).hour == 12 and all(naive(t["deadline"]).hour == 9 for t in (fresh[0], fresh[1], fresh[3])))
+    other = by_event(A, "far") or by_event(A, "allday")
+    if other:
+        before_cat = other["category"]
+        client.patch(f"/tasks/{inst[0]['id']}", headers=hA, json={"category": "Учёба"})
+        check("разовые события это не задевает", next(t for t in tasks_of(A) if t["id"] == other["id"])["category"] == before_cat)
+    calendar_sync.run_all(now_utc=calendar_sync.datetime.now(timezone.utc) + timedelta(days=14))
+    newer = by_event(A, f"rec_{d(1 + 7 * 6):%Y%m%d}")
+    check("новое повторение берёт категорию и приоритет серии",
+          newer is not None and newer["category"] == "Учёба" and newer["priority"] == "High", str(newer and newer["category"]))
+
     # --------------------------------------------------------------- выбор календарей
     section("Выбор календарей")
     accA.list_forbidden = True
