@@ -47,7 +47,9 @@
 - `groq_client.py`: промпт `SYSTEM_PROMPT`, разбор текста, распознавание голоса.
 - `telegram_handlers.py`: обработчики бота (`/start`, `/list`, текст, голос), общие для polling и webhook.
 - `bot.py`: локальный запуск бота в режиме polling.
-- `models.py`: Pydantic-модели. `database.py`: клиент Supabase.
+- `models.py`: Pydantic-модели. `database.py`: клиент Supabase. Он переключён на HTTP/1.1 (`_force_http1`): HTTP/2 у
+  postgrest и storage3 под параллельными запросами рвал соединение (`RemoteProtocolError: ConnectionTerminated`,
+  ~2% случайных 500 на проде, 9 октября 2026). При обновлении supabase-py проверь, что заплатка ещё применяется.
 - `schema.sql`: журнал миграций (не скрипт для повторного запуска). Новые миграции дополнительно отдельными
   файлами `migrations/NNN_name.sql`; изменения схемы только добавляющие, SQL выполняет владелец.
 - `web/index.html`: весь фронтенд в одном файле (светлый мобильный дизайн, см. ниже «Фронтенд»).
