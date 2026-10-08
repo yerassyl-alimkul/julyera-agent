@@ -63,6 +63,7 @@ applyTheme();
     --dashed: #D9D9D3;
     --accent: #557546;
     --danger: #B3261E;
+    --warn: #A86200;
     --cat-work: #E2D47E;
     --cat-unime: #DCE5FB;
     --cat-study: #85AACB;
@@ -131,6 +132,7 @@ applyTheme();
     --hairline: #24262B;
     --dashed: #3A3D44;
     --danger: #F28B82;
+    --warn: #E8B44C;
     --bar-off: rgba(236, 237, 240, 0.22);
     --dock-text: #A6A8B1;
     --scrim: rgba(0, 0, 0, 0.6);
@@ -1003,6 +1005,27 @@ applyTheme();
   .money-parts span { color: var(--ink-muted); }
   .money-rate { margin: var(--gap-l) 0 0; font-size: 13px; color: var(--ink-muted); }
   .money-row-amount small { display: block; font-size: 12px; font-weight: 500; color: var(--ink-muted); text-align: right; }
+  .cat-limit { display: flex; align-items: center; gap: var(--gap-s); padding: 0 4px 2px 52px; font-size: 14px; color: var(--ink-muted); }
+  .cat-limit input { width: 110px; height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius-btn);
+    background: var(--bg); color: var(--ink); font-size: 15px; text-align: right; }
+  .cat-limit input:focus { border-color: var(--ink); outline: none; }
+  .money-bar-top b.warn { color: var(--warn); }
+  .money-bar-top b.over { color: var(--danger); }
+  .money-bar.limited .money-bar-fill.warn { background: var(--warn); }
+  .money-bar.limited .money-bar-fill.over { background: var(--danger); }
+  .money-limits { margin: var(--gap-s) 0 0; font-size: 13px; color: var(--ink-muted); }
+  .an-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap-l); }
+  .an-grid b { display: block; font-family: var(--font-display); font-size: clamp(15px, 4.6vw, 19px); font-weight: 600;
+    color: var(--accent-text); white-space: nowrap; }
+  .an-grid b.neg { color: var(--danger); }
+  .an-grid span { font-size: 13px; color: var(--ink-muted); }
+  .an-list { display: flex; flex-direction: column; }
+  .an-list div { display: flex; justify-content: space-between; gap: var(--gap-s); padding: 8px 0; border-top: 1px solid var(--hairline); font-size: 14px; }
+  .an-list div:first-child { border-top: 0; }
+  .an-list .up { color: var(--danger); }
+  .an-list .down { color: var(--accent-text); }
+  .an-list small { color: var(--ink-muted); font-size: 12px; }
+  #anCustom { margin-top: var(--gap-l); }
   .cur-options { display: flex; flex-direction: column; gap: var(--gap-m); padding-top: var(--gap-header); }
   .cur-option { display: flex; align-items: center; justify-content: space-between; min-height: var(--touch-l);
     padding: 0 18px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface);
@@ -1633,6 +1656,7 @@ applyTheme();
         <button class="pill-btn" id="moneyCurrent" hidden>Текущий</button>
         <button class="pill-btn" id="moneyCategoriesBtn">Категории</button>
         <button class="pill-btn" id="moneyCurrencyBtn">Валюта</button>
+        <button class="pill-btn" id="moneyAnalyticsBtn">Аналитика</button>
       </div>
 
       <div id="moneyKindView">
@@ -1867,6 +1891,29 @@ applyTheme();
   </div>
   <div class="sheet-footer">
     <button class="btn-primary" id="moneySave">Сохранить</button>
+  </div>
+</div>
+
+<!-- Аналитика за период -->
+<div class="sheet" id="analyticsSheet" role="dialog" aria-modal="true" aria-labelledby="analyticsTitle" hidden>
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <button class="tb-btn" id="analyticsClose" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <h2 class="t-modal-title" id="analyticsTitle">Аналитика</h2>
+      <span></span>
+    </div>
+    <div class="segmented" id="anPeriod" role="group" aria-label="Период" style="margin-top: var(--gap-header);">
+      <button type="button" data-period="month" aria-pressed="true">Месяц</button>
+      <button type="button" data-period="3m" aria-pressed="false" aria-label="3 месяца">3 мес.</button>
+      <button type="button" data-period="year" aria-pressed="false">Год</button>
+      <button type="button" data-period="custom" aria-pressed="false">Свой</button>
+    </div>
+    <div class="field-row" id="anCustom" hidden>
+      <input class="field field-date" id="anFrom" type="date" aria-label="С">
+      <input class="field field-date" id="anTo" type="date" aria-label="По">
+    </div>
+    <p class="money-rate" id="anRange"></p>
+    <div id="anBody"></div>
   </div>
 </div>
 
@@ -4070,6 +4117,7 @@ function renderCategoriesScreen() {
     }, 'danger');
     row.append(swatch, name, up, down, del);
     card.appendChild(row);
+    if (catScope === 'expense') card.appendChild(limitRowEl(cat));
 
     if (catOpenPalette === cat.id) {
       card.appendChild(paletteEl(cat.color, `Цвет категории ${cat.name}`, async (color) => {
@@ -4132,6 +4180,31 @@ function renderCategoriesScreen() {
     const again = list.querySelector(`[data-focus-key="${focusKey}"]`);
     if (again) again.focus({ preventScroll: true });
   }
+}
+
+// «Лимит в месяц» у категории расходов: пусто — без лимита. Валюта — основная (в которой лимит задан).
+function limitRowEl(cat) {
+  const wrap = document.createElement('label');
+  wrap.className = 'cat-limit';
+  const cur = cat.limit_currency || (moneyMe && moneyMe.default_currency) || 'EUR';
+  const symbol = moneyFmt('0', cur).replace(/[\d\s,.]/g, '');
+  wrap.innerHTML = '<span>Лимит в месяц</span><input type="text" inputmode="decimal" autocomplete="off" placeholder="нет"><span></span>';
+  const input = wrap.querySelector('input');
+  input.dataset.focusKey = 'cat-limit-' + cat.id;
+  input.setAttribute('aria-label', `Лимит в месяц для ${cat.name}, ${cur}`);
+  const current = cat.monthly_limit ? cat.monthly_limit.replace('.', ',').replace(/,00$/, '') : '';
+  input.value = current;
+  wrap.lastElementChild.textContent = symbol;
+  const save = async () => {
+    const value = input.value.trim();
+    if (value === current) return;
+    const r = await categoryRequest(`/money/categories/${cat.id}`, { method: 'PATCH', body: JSON.stringify({ monthly_limit: value || null }) },
+      value ? 'Лимит сохранён' : 'Лимит снят');
+    if (!r.ok) { toast(r.message); input.value = current; }
+  };
+  input.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } if (e.key === 'Escape') { e.stopPropagation(); input.value = current; input.blur(); } };
+  input.onblur = save;
+  return wrap;
 }
 
 async function addCategory() {
@@ -4437,6 +4510,15 @@ function renderKindViewMain(summary) {
   card.querySelector('.money-total').textContent = (approx ? '≈ ' : '') + moneyFmt(m[kind], m.currency);
   card.querySelector('.money-compare').textContent = Number(change) === 0 ? 'Как в прошлом месяце'
     : `На ${moneyFmt(change.replace('-', ''), m.currency)} ${change.startsWith('-') ? 'меньше' : 'больше'}, чем в прошлом месяце`;
+  const lim = m.limits || {};
+  const limTotal = (lim.ok || 0) + (lim.warn || 0) + (lim.over || 0);
+  if (!income && limTotal) {
+    const p = document.createElement('p');
+    p.className = 'money-limits';
+    p.textContent = 'Лимиты: ' + [lim.ok ? `${lim.ok} в норме` : '', lim.warn ? `${lim.warn} почти` : '', lim.over ? `${lim.over} превышено` : '']
+      .filter(Boolean).join(' · ');
+    card.querySelector('.money-compare').after(p);
+  }
   const partsEl = card.querySelector('.money-parts');
   if (approx || parts.length > 1) {
     parts.forEach(p => {
@@ -4471,8 +4553,23 @@ function renderKindViewMain(summary) {
     btn.style.setProperty('--chip-color', c.color || 'var(--accent)');
     btn.innerHTML = '<span class="money-bar-top"><span class="n"></span><b></b></span><span class="money-bar-track"><span class="money-bar-fill"></span></span>';
     btn.querySelector('.n').textContent = c.name;
-    btn.querySelector('b').textContent = `${c.approx ? '≈ ' : ''}${moneyFmt(c.amount, m.currency)} · ${c.share}%`;
-    btn.querySelector('.money-bar-fill').style.width = `${Math.max(2, Math.round(c.share / top * 100))}%`;
+    const b = btn.querySelector('b');
+    const fill = btn.querySelector('.money-bar-fill');
+    if (!income && c.limit) {
+      // с лимитом: полоса — доля лимита; жёлтая от 80%, красная от 100%
+      const L = c.limit;
+      btn.classList.add('limited');
+      b.textContent = L.state === 'over' && L.left.startsWith('-')
+        ? `${moneyFmt(L.spent, L.currency)} из ${moneyFmt(L.amount, L.currency)} · +${moneyFmt(L.left.slice(1), L.currency)}`
+        : `${moneyFmt(L.spent, L.currency)} из ${moneyFmt(L.amount, L.currency)} · ${L.pct}%`;
+      b.className = L.state === 'ok' ? '' : L.state;
+      fill.classList.add(L.state);
+      fill.style.width = `${Math.max(2, Math.min(100, L.pct))}%`;
+      btn.setAttribute('aria-label', `${c.name}: ${b.textContent}. Показать операции категории`);
+    } else {
+      b.textContent = `${c.approx ? '≈ ' : ''}${moneyFmt(c.amount, m.currency)} · ${c.share}%`;
+      fill.style.width = `${Math.max(2, Math.round(c.share / top * 100))}%`;
+    }
     btn.onclick = () => { moneyFilterCat = moneyFilterCat === c.category_id ? null : c.category_id; loadMoney(); };
     wrap.appendChild(btn);
   });
@@ -4819,6 +4916,184 @@ document.getElementById('moneyNext').onclick = () => {
 document.getElementById('moneyCurrent').onclick = () => { moneyMonth = null; moneyFilterCat = null; loadMoney(); };
 document.getElementById('moneyFilterClear').onclick = () => { moneyFilterCat = null; loadMoney(); };
 document.getElementById('moneyCategoriesBtn').onclick = () => openCategories(moneyTab === 'income' ? 'income' : 'expense');
+
+// ---------- Аналитика за период ----------
+const analyticsSheet = document.getElementById('analyticsSheet');
+let anPeriod = 'month';
+
+function anBounds() {
+  const key = moneyMonth || currentMonthKey();
+  const end = monthBounds(key).to;
+  if (anPeriod === 'month') return monthBounds(key);
+  if (anPeriod === '3m') return { from: `${shiftMonth(key, -2)}-01`, to: end };
+  if (anPeriod === 'year') return { from: `${shiftMonth(key, -11)}-01`, to: end };
+  return { from: document.getElementById('anFrom').value, to: document.getElementById('anTo').value };
+}
+
+function anSection(title) {
+  const sec = document.createElement('section');
+  sec.className = 'money-block';
+  const h = document.createElement('h2');
+  h.className = 'money-h2';
+  h.textContent = title;
+  const card = document.createElement('div');
+  card.className = 'money-card';
+  sec.append(h, card);
+  return [sec, card];
+}
+
+function pieWrapEl(parts) {
+  const total = parts.reduce((n, c) => n + Number(c.amount), 0);  // только для геометрии
+  const R = 15.9155, C = 2 * Math.PI * R;
+  let offset = 0;
+  const arcs = parts.map(c => {
+    const len = total ? Number(c.amount) / total * C : 0;
+    const arc = `<circle cx="21" cy="21" r="${R}" fill="none" stroke="${c.color || 'var(--accent)'}" stroke-width="7" ` +
+      `stroke-dasharray="${len.toFixed(3)} ${(C - len).toFixed(3)}" stroke-dashoffset="${(-offset).toFixed(3)}" transform="rotate(-90 21 21)"/>`;
+    offset += len;
+    return arc;
+  }).join('');
+  const wrap = document.createElement('div');
+  wrap.className = 'pie-wrap';
+  wrap.innerHTML = `<svg viewBox="0 0 42 42" role="img"><title></title>${arcs}</svg><div class="pie-legend"></div>`;
+  wrap.querySelector('title').textContent = 'По категориям: ' + parts.map(c => `${c.name} ${c.share}%`).join(', ');
+  parts.forEach(c => {
+    const item = document.createElement('span');
+    item.innerHTML = '<i class="cat-dot"></i><span class="n"></span><b></b>';
+    item.querySelector('.cat-dot').style.setProperty('--chip-color', c.color || 'var(--accent)');
+    item.querySelector('.n').textContent = c.name;
+    item.querySelector('b').textContent = `${c.share}%`;
+    wrap.querySelector('.pie-legend').appendChild(item);
+  });
+  return wrap;
+}
+
+async function loadAnalytics() {
+  document.querySelectorAll('#anPeriod [data-period]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.period === anPeriod)));
+  document.getElementById('anCustom').hidden = anPeriod !== 'custom';
+  const { from, to } = anBounds();
+  const range = document.getElementById('anRange');
+  const body = document.getElementById('anBody');
+  if (!from || !to) { range.textContent = 'Выберите даты «с» и «по»'; body.innerHTML = ''; return; }
+  range.textContent = `${dayLabel(from)} ${from.slice(0, 4)} — ${dayLabel(to)} ${to.slice(0, 4)}`;
+  let a;
+  try {
+    a = await apiJson(`/money/analytics?from=${from}&to=${to}`);
+  } catch (e) {
+    body.innerHTML = '';
+    const err = document.createElement('div');
+    err.className = 'empty-dashed';
+    err.textContent = e.message || 'Не удалось загрузить аналитику';
+    body.appendChild(err);
+    return;
+  }
+  const ap = a.approx ? '≈ ' : '';
+  const apx = flag => (flag ? '≈ ' : '');
+  body.innerHTML = '';
+  const top = document.createElement('div');
+  top.className = 'money-card';
+  const neg = a.balance.startsWith('-');
+  top.innerHTML = `<div class="an-grid">
+    <div><span>Потрачено</span><b class="e"></b></div><div><span>Доходы</span><b class="i"></b></div>
+    <div><span>В среднем в день</span><b class="d"></b></div><div><span>Баланс</span><b class="bl"></b></div></div>
+    <p class="money-compare"></p>`;
+  top.querySelector('.e').textContent = apx(a.expense_approx) + moneyFmt(a.expense, a.currency);
+  top.querySelector('.i').textContent = apx(a.income_approx) + moneyFmt(a.income, a.currency);
+  top.querySelector('.d').textContent = apx(a.expense_approx) + moneyFmt(a.avg_per_day, a.currency);
+  const bl = top.querySelector('.bl');
+  bl.textContent = ap + moneyFmt(a.balance.replace('-', ''), a.currency, neg ? '−' : '+');
+  bl.classList.toggle('neg', neg);
+  const ch = a.expense_change_pct;
+  top.querySelector('.money-compare').textContent = ch === null ? 'В предыдущий такой же период трат не было'
+    : `Расходы на ${Math.abs(ch)}% ${ch >= 0 ? 'больше' : 'меньше'}, чем за ${dayLabel(a.previous.from)} — ${dayLabel(a.previous.to)}`;
+  body.appendChild(top);
+  if (!a.by_category.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-dashed';
+    empty.style.marginTop = 'var(--gap-section)';
+    empty.textContent = 'За этот период трат нет';
+    body.appendChild(empty);
+    return;
+  }
+  const [pieSec, pieCard] = anSection('По категориям');
+  pieCard.replaceWith(pieWrapEl(a.by_category));
+  body.appendChild(pieSec);
+
+  const [cmpSec, cmpCard] = anSection('По сравнению с прошлым периодом');
+  const cmp = document.createElement('div');
+  cmp.className = 'an-list';
+  a.by_category.forEach(c => {
+    const row = document.createElement('div');
+    const name = document.createElement('span');
+    name.textContent = `${c.name} · ${apx(c.approx)}${moneyFmt(c.amount, a.currency)}`;
+    const v = document.createElement('b');
+    if (c.change_pct === null) { v.textContent = 'новое'; v.className = ''; }
+    else { v.textContent = `${c.change_pct > 0 ? '+' : ''}${c.change_pct}%`; v.className = c.change_pct > 0 ? 'up' : 'down'; }
+    row.append(name, v);
+    cmp.appendChild(row);
+  });
+  cmpCard.appendChild(cmp);
+  body.appendChild(cmpSec);
+
+  const [placeSec, placeCard] = anSection('Где больше всего');
+  const places = document.createElement('div');
+  places.className = 'an-list';
+  a.top_places.forEach(p => {
+    const row = document.createElement('div');
+    const name = document.createElement('span');
+    name.textContent = p.name;
+    const small = document.createElement('small');
+    small.textContent = ` · ${p.count} раз`;
+    name.appendChild(small);
+    const v = document.createElement('b');
+    v.textContent = apx(p.approx) + moneyFmt(p.amount, a.currency);
+    row.append(name, v);
+    places.appendChild(row);
+  });
+  placeCard.appendChild(places);
+  body.appendChild(placeSec);
+
+  const [bigSec, bigCard] = anSection('Самые крупные траты');
+  const big = document.createElement('div');
+  big.className = 'an-list';
+  a.largest.forEach(x => {
+    const row = document.createElement('div');
+    const name = document.createElement('span');
+    name.textContent = x.name;
+    const small = document.createElement('small');
+    small.textContent = ` · ${dayLabel(x.spent_on)}`;
+    name.appendChild(small);
+    const v = document.createElement('b');
+    v.textContent = apx(x.approx) + moneyFmt(x.amount, a.currency);
+    row.append(name, v);
+    big.appendChild(row);
+  });
+  bigCard.appendChild(big);
+  body.appendChild(bigSec);
+}
+
+function openAnalytics() {
+  anPeriod = 'month';
+  const { from, to } = monthBounds(moneyMonth || currentMonthKey());
+  document.getElementById('anFrom').value = from;
+  document.getElementById('anTo').value = to;
+  analyticsSheet.hidden = false;
+  analyticsSheet.scrollTop = 0;
+  document.body.classList.add('no-scroll');
+  setBackgroundInert(true);
+  document.getElementById('analyticsClose').focus();
+  loadAnalytics();
+}
+function closeAnalytics() {
+  analyticsSheet.hidden = true;
+  document.body.classList.remove('no-scroll');
+  setBackgroundInert(false);
+  document.getElementById('moneyAnalyticsBtn').focus();
+}
+document.getElementById('moneyAnalyticsBtn').onclick = openAnalytics;
+document.getElementById('analyticsClose').onclick = closeAnalytics;
+document.querySelectorAll('#anPeriod [data-period]').forEach(b => { b.onclick = () => { anPeriod = b.dataset.period; loadAnalytics(); }; });
+['anFrom', 'anTo'].forEach(id => document.getElementById(id).addEventListener('change', () => { if (anPeriod === 'custom') loadAnalytics(); }));
 
 const currencySheet = document.getElementById('currencySheet');
 function renderCurrencyOptions() {
@@ -5636,6 +5911,7 @@ document.addEventListener('keydown', (e) => {
   if (!editSheet.hidden) closeEdit();
   else if (!moneySheet.hidden) closeMoneyForm();
   else if (!currencySheet.hidden) closeCurrency();
+  else if (!analyticsSheet.hidden) closeAnalytics();
   else if (!filtersSheet.hidden) closeFilters();
   else if (!categoriesSheet.hidden) closeCategories();
   else if (!newTaskSheet.hidden) closeNewTask();

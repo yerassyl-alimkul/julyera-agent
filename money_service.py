@@ -1154,10 +1154,12 @@ def analytics(user_id: str, date_from=None, date_to=None) -> dict:
         return rates_service.convert(Decimal(str(r["amount"])), r["currency"], main, rates)
 
     def sums(selected):
-        out = {"income": Decimal(0), "expense": Decimal(0), "by_cat": {}}
+        out = {"income": Decimal(0), "expense": Decimal(0), "by_cat": {}, "approx": set()}
         for r in selected:
             amount = conv(r)
             out[r["kind"]] += amount
+            if r["currency"] != main:  # где был пересчёт — там клиент ставит «≈»
+                out["approx"].update({r["kind"], ("cat", r["category_id"])})
             if r["kind"] == "expense":
                 out["by_cat"][r["category_id"]] = out["by_cat"].get(r["category_id"], Decimal(0)) + amount
         return out
@@ -1170,30 +1172,33 @@ def analytics(user_id: str, date_from=None, date_to=None) -> dict:
     by_category = []
     for item in _breakdown(cats, now["by_cat"], now["expense"]):
         prev = before["by_cat"].get(item["category_id"], Decimal(0))
-        by_category.append({**item, "change_pct": change(Decimal(item["amount"]), prev)})
+        by_category.append({**item, "change_pct": change(Decimal(item["amount"]), prev),
+                            "approx": ("cat", item["category_id"]) in now["approx"]})
     places = {}
     for r in cur_rows:
         if r["kind"] != "expense":
             continue
         key = merchant_key(r.get("note")) or f"cat:{r['category_id']}"
         label = (r.get("note") or cats.get(r["category_id"], {}).get("name", "?")).strip()
-        place = places.setdefault(key, {"name": label, "count": 0, "amount": Decimal(0)})
+        place = places.setdefault(key, {"name": label, "count": 0, "amount": Decimal(0), "approx": False})
         place["count"] += 1
         place["amount"] += conv(r)
+        place["approx"] = place["approx"] or r["currency"] != main
     top_places = sorted(places.values(), key=lambda p: p["amount"], reverse=True)[:5]
     largest = sorted((r for r in cur_rows if r["kind"] == "expense"), key=conv, reverse=True)[:5]
-    approx = any(r["currency"] != main for r in cur_rows)
     return {
-        "from": start.isoformat(), "to": end.isoformat(), "days": days, "currency": main, "approx": approx,
+        "from": start.isoformat(), "to": end.isoformat(), "days": days, "currency": main,
+        "approx": bool(now["approx"]), "expense_approx": "expense" in now["approx"], "income_approx": "income" in now["approx"],
         "expense": fmt(now["expense"]), "income": fmt(now["income"]), "balance": fmt(now["income"] - now["expense"]),
         "avg_per_day": fmt((now["expense"] / days).quantize(CENT)),
         "previous": {"from": prev_start.isoformat(), "to": prev_end.isoformat(),
                      "expense": fmt(before["expense"]), "income": fmt(before["income"])},
         "expense_change_pct": change(now["expense"], before["expense"]),
         "by_category": by_category,
-        "top_places": [{"name": p["name"], "count": p["count"], "amount": fmt(p["amount"])} for p in top_places],
+        "top_places": [{"name": p["name"], "count": p["count"], "amount": fmt(p["amount"]), "approx": p["approx"]}
+                       for p in top_places],
         "largest": [{"name": (r.get("note") or cats.get(r["category_id"], {}).get("name", "?")), "amount": fmt(conv(r)),
-                     "spent_on": str(r["spent_on"])[:10]} for r in largest],
+                     "spent_on": str(r["spent_on"])[:10], "approx": r["currency"] != main} for r in largest],
     }
 
 
@@ -1210,13 +1215,16 @@ def monthly_report_text(user_id: str, month_start: date) -> Optional[str]:
         return None
     if a["expense"] == "0.00" and a["income"] == "0.00":
         return None
-    cur, ap = a["currency"], "≈ " if a["approx"] else ""
+    cur = a["currency"]
+    ap = "≈ " if a["expense_approx"] else ""
+    ai = "≈ " if a["income_approx"] else ""
     name = MONTHS_NOM[month_start.month - 1]
     lines = [f"📊 Итоги: {name} {month_start.year}"]
     change = a["expense_change_pct"]
     lines.append(f"Потрачено {ap}{a['expense']} {cur}" +
                  (f" ({'+' if change > 0 else ''}{change}% к прошлому месяцу)" if change is not None else ""))
-    lines.append(f"Доходы {ap}{a['income']} {cur} · баланс {ap}{'+' if not a['balance'].startswith('-') else ''}{a['balance']} {cur}")
+    ab = "≈ " if a["approx"] else ""
+    lines.append(f"Доходы {ai}{a['income']} {cur} · баланс {ab}{'+' if not a['balance'].startswith('-') else ''}{a['balance']} {cur}")
     if a["by_category"]:
         lines.append("\nБольше всего:")
         lines += [f"  {c['name']}: {c['amount']} {cur} ({c['share']}%)" for c in a["by_category"][:3]]

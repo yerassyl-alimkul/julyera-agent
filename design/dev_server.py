@@ -71,6 +71,8 @@ for m in range(6):
         money_service.create_transaction(uid, {"kind": "income", "amount": "1800", "currency": "EUR",
                                                "category_id": cats[("income", "Зарплата")], "note": "Зарплата",
                                                "spent_on": first})
+for cat_name, limit in (("Транспорт", "30"), ("Подписки", "12"), ("Еда", "200")):
+    money_service.update_category(cats[("expense", cat_name)], uid, monthly_limit=limit)
 money_service.create_recurring(uid, {"kind": "expense", "amount": "650", "currency": "EUR",
                                      "category_id": cats[("expense", "Жильё")], "day_of_month": 1, "note": "Аренда"})
 
