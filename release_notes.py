@@ -10,16 +10,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-RELEASE_ID = "2026-10-09-applepay"
+RELEASE_ID = "2026-10-09-bot-buttons"
 RELEASE_TEXT = """🚀 Обновление JulYera
 
-• Траты из Apple Pay теперь записываются сами: после каждой оплаты телефоном или часами я пришлю «💳 Apple Pay: магазин · сумма · категория».
-• Категорию подбираю по названию магазина. Если ошибся — нажмите «Категория» и выберите правильную: для этого магазина я запомню её навсегда.
-• Одна и та же покупка дважды не записывается, возвраты пока не записываются.
-• Как подключить: напишите мне /applepay — пришлю пошаговую инструкцию для «Команд» на iPhone и ваш ключ."""
+• Внизу чата теперь кнопки: «📋 Сегодня», «📝 Все задачи», «💰 Месяц», «🧾 Последние траты» и «❓ Помощь» — команды больше не нужно помнить.
+• «❓ Помощь» (или /help) показывает все команды по группам, а кнопки под списком выполняют их сразу.
+• Панель можно свернуть значком справа от поля ввода; задачи и траты пишутся текстом как раньше."""
 
 
-async def announce(bot, supabase, admins: list[dict]) -> bool:
+async def announce(bot, supabase, admins: list[dict], reply_markup=None) -> bool:
     """Отправить заметку владельцам, если этот релиз ещё не объявлялся. True — отправлено."""
     try:
         supabase.table("release_log").insert({"id": RELEASE_ID}).execute()
@@ -33,7 +32,7 @@ async def announce(bot, supabase, admins: list[dict]) -> bool:
         if not chat_id:
             continue
         try:
-            await bot.send_message(chat_id=chat_id, text=RELEASE_TEXT)
+            await bot.send_message(chat_id=chat_id, text=RELEASE_TEXT, reply_markup=reply_markup)
             sent = True
         except Exception as exc:
             logger.warning("Заметка о релизе не доставлена: %s", type(exc).__name__)

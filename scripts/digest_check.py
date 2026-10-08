@@ -200,6 +200,40 @@ def main():
     answers, _ = press(A, "dmove:2026-10-08", message_text=ev.text)
     check("перенос из вчерашней сводки отклоняется", answers == ["Эта сводка уже устарела"])
 
+    section("Панель кнопок и помощь")
+    tasks_before = len(db.tables["tasks"])
+    u = ic.tg_update(A["telegram_user_id"], text=h.BTN_TODAY)
+    asyncio.run(h.handle_text(u, ctx))
+    check("кнопка «📋 Сегодня» показывает план и не создаёт задачу",
+          len(db.tables["tasks"]) == tasks_before and u.replies and ("План" in u.replies[-1].text or "На " in u.replies[-1].text))
+    u = ic.tg_update(A["telegram_user_id"], text=h.BTN_LAST)
+    asyncio.run(h.handle_text(u, ctx))
+    check("кнопка «🧾 Последние траты» показывает последние операции", len(db.tables["tasks"]) == tasks_before and u.replies)
+    u = ic.tg_update(A["telegram_user_id"], text="/help")
+    asyncio.run(h.help_command(u, ctx))
+    help_buttons = [b.callback_data for row in u.replies[0].markup.inline_keyboard for b in row if b.callback_data]
+    panel = [b.text for row in u.replies[1].markup.keyboard for b in row]
+    check("/help: команды по группам и кнопки под ними",
+          all(x in u.replies[0].text for x in ("/today", "/month", "/currency", "/applepay", "/digest")) and "h:month" in help_buttons)
+    check("/help показывает панель кнопок под полем ввода",
+          panel == [h.BTN_TODAY, h.BTN_TASKS, h.BTN_MONTH, h.BTN_LAST, h.BTN_HELP])
+    check("callback_data помощи не длиннее 64 байт", all(len(c.encode()) <= 64 for c in help_buttons))
+    replies = []
+
+    async def reply_text(t, **kw):
+        replies.append(t)
+    upd = ic.tg_update(A["telegram_user_id"], callback_data="h:month")
+    upd.callback_query.message = SimpleNamespace(text="", reply_text=reply_text, chat=SimpleNamespace(send_action=None))
+    asyncio.run(h.help_callback(upd, ctx))
+    check("кнопка под /help выполняет команду («Месяц»)", replies and ("Октябрь" in replies[-1] or "операций" in replies[-1]), str(replies[-1:]))
+    upd = ic.tg_update(A["telegram_user_id"], callback_data="h:currency")
+    upd.callback_query.message = SimpleNamespace(text="", reply_text=reply_text, chat=SimpleNamespace(send_action=None))
+    asyncio.run(h.help_callback(upd, ctx))
+    check("кнопка «Валюта» показывает текущую валюту", "Валюта по умолчанию" in replies[-1])
+    u = ic.tg_update(9_999_998, text="/help")
+    asyncio.run(h.help_command(u, ctx))
+    check("незнакомому /help — «Нет доступа»", "Нет доступа" in u.replies[-1].text)
+
     section("Устойчивость")
     at(13, 5, plus_days=1)
     real = digest_service.due_messages

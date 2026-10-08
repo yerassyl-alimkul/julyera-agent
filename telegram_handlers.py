@@ -17,7 +17,10 @@ import os
 import time
 from datetime import date, datetime
 
-from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
+from types import SimpleNamespace
+
+from telegram import (BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup,
+                      Update, WebAppInfo)
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 from groq_client import transcribe_audio
@@ -43,6 +46,7 @@ NO_ACCESS_TEXT = "Нет доступа. Напиши /start, чтобы поп�
 
 # Меню команд бота (ставится при запуске сервиса, main.py → set_my_commands).
 BOT_COMMANDS = [
+    BotCommand("help", "Все команды с кнопками"),
     BotCommand("today", "План на сегодня: просроченное, сегодня, ближайшие 24 часа"),
     BotCommand("list", "Активные задачи"),
     BotCommand("task", "Записать задачу, даже если в тексте есть сумма"),
@@ -89,6 +93,51 @@ def _format_task_line(task: dict) -> str:
     return f"{emoji_p} {task['task']} · {task.get('category', '')} — {deadline}"
 
 
+# Постоянная панель под полем ввода: частые действия одним нажатием. Текст кнопки — это просто сообщение,
+# handle_text узнаёт его раньше разбора задач и денег (MENU_ACTIONS), поэтому задачей оно не станет.
+BTN_TODAY, BTN_TASKS, BTN_MONTH, BTN_LAST, BTN_HELP = "📋 Сегодня", "📝 Все задачи", "💰 Месяц", "🧾 Последние траты", "❓ Помощь"
+
+
+def main_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        [[KeyboardButton(BTN_TODAY), KeyboardButton(BTN_TASKS)],
+         [KeyboardButton(BTN_MONTH), KeyboardButton(BTN_LAST)],
+         [KeyboardButton(BTN_HELP)]],
+        resize_keyboard=True, is_persistent=True, input_field_placeholder="Задача или трата…",
+    )
+
+
+HELP_TEXT = (
+    "❓ Что я умею\n\n"
+    "📝 Задачи — просто напишите или наговорите: «завтра в 18:00 сдать отчёт #работа»\n"
+    "/today — план на сегодня: просроченное, сегодня, ближайшие 24 часа\n"
+    "/list — все активные задачи\n"
+    "/task текст — записать задачей, даже если в тексте есть сумма\n"
+    "/categories — категории задач\n\n"
+    "💰 Деньги — просто напишите: «кофе 3,5 евро», «получил зарплату 1800 евро»\n"
+    "/spent текст, /income текст — точно расход или доход\n"
+    "/month — итоги месяца\n"
+    "/last — последние траты с кнопкой «Удалить»\n"
+    "/currency EUR или KZT — основная валюта\n"
+    "/applepay — как подключить траты из Apple Pay\n\n"
+    "⚙️ Настройки\n"
+    "/digest on или off — сводки утром в 08:00 и вечером в 20:00\n"
+    "/web — личная ссылка на приложение для браузера\n\n"
+    "Кнопки ниже выполняют команду сразу."
+)
+
+
+def help_markup() -> InlineKeyboardMarkup:
+    b = lambda text, cmd: InlineKeyboardButton(text, callback_data=f"h:{cmd}")
+    return InlineKeyboardMarkup([
+        [b("📋 Сегодня", "today"), b("📝 Все задачи", "list")],
+        [b("💰 Месяц", "month"), b("🧾 Последние", "last")],
+        [b("💱 Валюта", "currency"), b("🔔 Сводки", "digest")],
+        [b("🏷 Категории", "categories"), b("💳 Apple Pay", "applepay")],
+        [b("🔗 Ссылка /web", "web"), InlineKeyboardButton("Открыть приложение", web_app=WebAppInfo(url=APP_URL))],
+    ])
+
+
 def open_app_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[InlineKeyboardButton("Открыть приложение", web_app=WebAppInfo(url=APP_URL))]])
 
@@ -108,19 +157,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = _known_user(update)
     if user:
         await update.message.reply_text(
-            f"Привет, {user['name']}! Напиши мне задачу текстом или голосом — я разберу её и сохраню.\n\n"
+            f"Привет, {user['name']}! Напиши мне задачу текстом или голосом — я разберу её и сохраню.\n"
             "Траты и доходы тоже сюда: «кофе 3,5 евро», «получил зарплату 1800 евро».\n\n"
-            "Команды:\n"
-            "/today — план на сегодня, /list — все активные задачи\n"
-            "/digest off — выключить сводки (утром в 08:00 и вечером в 20:00)\n"
-            "/spent, /income — записать расход или доход\n"
-            "/task — записать задачу, даже если в тексте есть сумма\n"
-            "/month — итоги месяца, /last — последние операции, /currency — валюта по умолчанию\n"
-            "/categories — твои категории\n"
-            "/web — личная ссылка, чтобы открыть приложение в браузере\n"
-            "/start — это сообщение",
-            reply_markup=open_app_markup(),
+            "Частые действия — на кнопках внизу, все команды — «❓ Помощь».",
+            reply_markup=main_keyboard(),
         )
+        await update.message.reply_text("Приложение — кнопкой ниже или «Меню» слева от поля ввода.",
+                                        reply_markup=open_app_markup())
         return
 
     tg_user = update.effective_user
@@ -219,6 +262,11 @@ async def access_decision(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             text="Владелец открыл доступ. Пиши задачи сюда или открой приложение кнопкой ниже.",
             reply_markup=open_app_markup(),
         )
+        await context.bot.send_message(
+            chat_id=telegram_user_id,
+            text="Частые действия — на кнопках внизу, все команды — «❓ Помощь».",
+            reply_markup=main_keyboard(),
+        )
     except Exception:
         logger.exception("Не удалось отправить кнопку новому пользователю")
 
@@ -276,6 +324,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text(NO_ACCESS_TEXT)
         return
     raw_text = update.message.text
+    action = MENU_ACTIONS.get((raw_text or "").strip())
+    if action:  # нажата кнопка панели — это команда, а не задача
+        await globals()[action](update, context)
+        return
     await update.message.chat.send_action("typing")
     is_money, kind, text = money_service.money_mode(raw_text)
     if is_money:
@@ -733,9 +785,43 @@ async def digest_move_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     await _append_and_trim(query, f"➡️ Перенесено на завтра: {moved}" if moved else "➡️ Переносить уже нечего", "dmove:")
 
 
+# ---------------------------------------------------------------- помощь
+
+MENU_ACTIONS = {BTN_TODAY: "today_command", BTN_TASKS: "list_tasks_handler", BTN_MONTH: "month_command",
+                BTN_LAST: "last_command", BTN_HELP: "help_command"}
+HELP_ACTIONS = {"today": "today_command", "list": "list_tasks_handler", "month": "month_command",
+                "last": "last_command", "currency": "currency_command", "digest": "digest_command",
+                "categories": "categories_handler", "applepay": "applepay_command", "web": "web_link"}
+
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/help и «❓ Помощь»: все команды по группам и кнопки, которые выполняют команду сразу.
+    Заодно (заново) показывает панель кнопок под полем ввода."""
+    user = _known_user(update)
+    if not user:
+        await update.message.reply_text(NO_ACCESS_TEXT)
+        return
+    await update.message.reply_text(HELP_TEXT, reply_markup=help_markup())
+    await update.message.reply_text("Кнопки частых действий — внизу 👇", reply_markup=main_keyboard())
+
+
+async def help_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Кнопка под /help: выполнить команду как будто её написали (без аргументов)."""
+    query = update.callback_query
+    cmd = (query.data or "").partition(":")[2]
+    action = HELP_ACTIONS.get(cmd)
+    await query.answer()
+    if not action or not query.message:
+        return
+    message = SimpleNamespace(text=f"/{cmd}", reply_text=query.message.reply_text, chat=query.message.chat)
+    fake = SimpleNamespace(effective_user=update.effective_user, effective_chat=update.effective_chat, message=message)
+    await globals()[action](fake, context)
+
+
 def register_handlers(app: Application) -> None:
     """Одинаковый набор обработчиков для webhook (main.py) и локального polling (bot.py)."""
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("list", list_tasks_handler))
     app.add_handler(CommandHandler("web", web_link))
     app.add_handler(CommandHandler("categories", categories_handler))
@@ -750,6 +836,7 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("digest", digest_command))
     app.add_handler(CallbackQueryHandler(access_decision, pattern=r"^(approve|deny):\d+$"))
     app.add_handler(CallbackQueryHandler(money_callback, pattern=r"^m:"))
+    app.add_handler(CallbackQueryHandler(help_callback, pattern=r"^h:[a-z]+$"))
     app.add_handler(CallbackQueryHandler(reminder_callback, pattern=r"^(done|snooze):[0-9a-fA-F-]{36}$"))
     app.add_handler(CallbackQueryHandler(digest_move_callback, pattern=r"^dmove:\d{4}-\d{2}-\d{2}$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
