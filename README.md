@@ -1,80 +1,45 @@
-# Task Agent Backend — шаг 2
+# JulYera Agent
 
-FastAPI-сервер с CRUD-эндпоинтами для задач, подключённый к Supabase.
-LLM-парсинг (Groq) добавим на шаге 3 — пока задачи создаются в уже
-структурированном виде через `POST /tasks`.
+Личный ИИ-агент для задач на несколько человек: пишешь или наговариваешь задачу, Groq превращает текст
+в структурированную задачу, она сохраняется в Supabase и видна в Telegram-боте, веб-приложении (оно же Telegram
+Mini App) и Google Calendar. У каждого пользователя свои задачи, заметки, категории и календарь.
 
-## Что внутри
-- `main.py` — приложение и эндпоинты
-- `models.py` — Pydantic-схемы (категории, приоритеты, статусы)
-- `database.py` — подключение к Supabase
-- `schema.sql` — SQL для создания таблицы `tasks`
-- `requirements.txt` — зависимости
-- `.env.example` — шаблон переменных окружения
+Прод: https://julyera-agent.onrender.com (Render, автодеплой из `main`).
 
-## Установка и запуск
+Подробное описание устройства, договорённостей и способов проверки — в [CLAUDE.md](CLAUDE.md).
 
-1. Создай таблицу в Supabase:
-   Supabase Dashboard → SQL Editor → вставь содержимое `schema.sql` → Run.
+## Стек
 
-2. Скопируй `.env.example` в `.env` и заполни своими данными из
-   Supabase Dashboard → Project Settings → API:
+Python 3.12, FastAPI, Supabase (`supabase-py`), Groq, python-telegram-bot (webhook), Google Calendar API,
+фронтенд — один файл `web/index.html` без сборки. Напоминания запускает GitHub Actions.
+
+## Локальный запуск
+
+1. Скопируй `.env.example` в `.env` и заполни значения (сам `.env` в репозиторий не попадает):
    ```
    cp .env.example .env
    ```
-   `SUPABASE_URL` — Project URL
-   `SUPABASE_KEY` — используй `service_role` key для бэкенда (не anon key,
-   так как это серверная часть без пользовательской аутентификации)
-
-3. Установи зависимости (лучше в виртуальном окружении):
+2. Установи зависимости:
    ```
    python3 -m venv venv
    source venv/bin/activate
    pip install -r requirements.txt
    ```
-
-4. Запусти сервер:
+3. Запусти сервер:
    ```
    uvicorn main:app --reload
    ```
-   Сервер поднимется на http://127.0.0.1:8000
+   Без `WEBHOOK_BASE_URL` webhook бота не ставится. `bot.py` (polling) локально не запускай, пока работает прод:
+   он снимет webhook у прод-бота.
 
-5. Проверь, что всё работает:
-   - http://127.0.0.1:8000/docs — интерактивная документация (Swagger UI),
-     можно сразу потыкать все эндпоинты руками
-   - http://127.0.0.1:8000/health — должен вернуть `{"status": "ok"}`
+Интерфейс без настоящей базы: `python design/mock_server.py` → http://localhost:8001.
 
-## Быстрый тест через curl
+## База данных
 
-Создать задачу:
-```bash
-curl -X POST http://127.0.0.1:8000/tasks \
-  -H "Content-Type: application/json" \
-  -d '{
-    "task": "Повторить EU AI Act перед экзаменом",
-    "category": "UniMe",
-    "deadline": "2026-12-08",
-    "priority": "High"
-  }'
-```
+Миграции выполняются вручную в Supabase SQL Editor. Журнал — `schema.sql`; новые миграции (начиная
+с трекера расходов) дополнительно кладутся отдельными файлами в `migrations/NNN_name.sql`.
 
-Получить список задач:
-```bash
-curl http://127.0.0.1:8000/tasks
-```
+## Проверки
 
-Получить только незавершённые High-приоритетные:
-```bash
-curl "http://127.0.0.1:8000/tasks?status=To%20Do&priority=High"
-```
-
-Обновить статус (закрыть задачу):
-```bash
-curl -X PATCH http://127.0.0.1:8000/tasks/{id} \
-  -H "Content-Type: application/json" \
-  -d '{"status": "Done"}'
-```
-
-## Следующий шаг
-Шаг 3 — подключаем Groq API, чтобы `POST /tasks` мог принимать сырой
-неструктурированный текст и сам раскладывать его по полям.
+- `python scripts/isolation_check.py` — изоляция данных между пользователями (база в памяти).
+- `/health` — жив ли сервис и есть ли связь с базой (`"database": "ok"`).
