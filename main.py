@@ -211,6 +211,29 @@ def create_task(payload: TaskCreate, user: dict = Depends(current_user)):
     return task_service.create_task(payload, user["id"])
 
 
+@app.post("/tasks/preview")
+def preview_tasks(payload: ParseRequest, user: dict = Depends(current_user)):
+    """Задачи из текста без сохранения (кнопка «Задачи из заметки»): клиент показывает их с галочками
+    и создаёт отмеченные обычным POST /tasks."""
+    try:
+        return task_service.preview_tasks_from_text(payload.text, user["id"])
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail=f"Ошибка разбора LLM: {exc}")
+
+
+@app.post("/tasks/{task_id}/breakdown", status_code=201)
+def breakdown_task(task_id: UUID, user: dict = Depends(current_user)):
+    """«Разбей на шаги»: новые подзадачи от ИИ (уже сохранены). Чужая задача — 404."""
+    try:
+        added = task_service.breakdown(str(task_id), user["id"])
+    except Exception as exc:
+        logger.warning("Шаги не предложены: %s", type(exc).__name__)
+        raise HTTPException(status_code=502, detail="ИИ не ответил, попробуйте ещё раз")
+    if added is None:
+        raise HTTPException(status_code=404, detail="Задача не найдена")
+    return {"added": added}
+
+
 @app.post("/tasks/parse", response_model=list[Task], status_code=201)
 def parse_and_create_tasks(payload: ParseRequest, user: dict = Depends(current_user)):
     try:

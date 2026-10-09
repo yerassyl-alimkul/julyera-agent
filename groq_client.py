@@ -43,9 +43,12 @@ SYSTEM_PROMPT = """Ты — ассистент, который превраща�
 - Поле priority определяй по близости дедлайна относительно сегодняшней даты ({today}):
   меньше 3 дней — "High", меньше 14 дней — "Mid", иначе — "Low".
   Если дедлайна нет вообще — ставь "Mid".
-- is_recurring: true, только если из текста явно следует повторяемость
-  (например "каждую неделю", "ежедневно"). Тогда recurrence_pattern — одно из
-  "daily", "weekly", "monthly". Иначе is_recurring: false, recurrence_pattern: null.
+- is_recurring: true, только если из текста явно следует повторяемость. Тогда recurrence_pattern:
+  "daily" (каждый день), "weekdays" (по будням), "weekly" (раз в неделю, в тот же день),
+  "days" (в конкретные дни недели, например "по понедельникам и средам" — тогда recurrence_days:
+  номера дней, 0 = понедельник … 6 = воскресенье), "monthly" (каждый месяц того же числа),
+  "yearly" (каждый год). Дедлайн — ближайший такой день. Иначе is_recurring: false,
+  recurrence_pattern: null, recurrence_days: null.
 - Поле tags — список строк, только явные хэштеги из текста (например "#экзамен"
   превращается в "экзамен", без символа #). Если хэштегов в тексте нет — пустой
   список []. Не придумывай теги сам, только то, что явно написано через #.
@@ -60,7 +63,8 @@ SYSTEM_PROMPT = """Ты — ассистент, который превраща�
   "priority": "High | Mid | Low",
   "note": "строка или пусто",
   "is_recurring": true | false,
-  "recurrence_pattern": "daily | weekly | monthly | null",
+  "recurrence_pattern": "daily | weekdays | weekly | days | monthly | yearly | null",
+  "recurrence_days": [0, 2] или null,
   "tags": ["строка", ...]
 }}"""
 
@@ -201,6 +205,29 @@ def classify_merchant(merchant: str, categories: list[str]) -> Optional[str]:
     except (json.JSONDecodeError, AttributeError):
         return None
     return value if isinstance(value, str) else None
+
+
+STEPS_PROMPT = """Ты помогаешь разбить задачу на конкретные шаги.
+Верни 3–7 коротких шагов (до 80 символов каждый), каждый начинается с глагола, по порядку выполнения,
+на языке задачи. Не повторяй уже существующие шаги. Не добавляй дат и пояснений.
+Верни ТОЛЬКО JSON {"steps": ["…", "…"]}."""
+
+
+def suggest_steps(task: str, note: Optional[str], existing: list[str]) -> list[str]:
+    """Шаги для «Разбей на шаги». Модель видит название, заметку и уже добавленные шаги."""
+    payload = {"task": task[:300], "note": (note or "")[:1000], "existing_steps": [e[:120] for e in existing][:30]}
+    response = _client.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "system", "content": STEPS_PROMPT},
+                  {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
+        temperature=0.3,
+        response_format={"type": "json_object"},
+    )
+    try:
+        steps = json.loads(response.choices[0].message.content or "{}").get("steps")
+    except (json.JSONDecodeError, AttributeError):
+        return []
+    return [s for s in steps if isinstance(s, str) and s.strip()][:7] if isinstance(steps, list) else []
 
 
 def transcribe_audio(audio_bytes: bytes, filename: str = "voice.ogg") -> str:

@@ -428,3 +428,23 @@ alter table pre_reminder_log enable row level security;
 alter table digest_log drop constraint if exists digest_log_kind_check;
 alter table digest_log add constraint digest_log_kind_check
   check (kind in ('morning', 'evening', 'remind_1', 'remind_2', 'charges', 'backup'));
+
+-- ---------------------------------------------------------------- 010 (migrations/010_precise_repeats.sql)
+
+-- Дни недели для «по дням недели» (0 = пн … 6 = вс) или число месяца для «каждый месяц» / «каждый год».
+alter table tasks add column if not exists recurrence_days smallint[];
+
+-- Старое ограничение разрешало только daily / weekly / monthly — заменяем на расширенное.
+do $$
+declare c text;
+begin
+  for c in select conname from pg_constraint
+           where conrelid = 'tasks'::regclass and contype = 'c'
+             and pg_get_constraintdef(oid) ilike '%recurrence_pattern%'
+  loop
+    execute format('alter table tasks drop constraint %I', c);
+  end loop;
+end $$;
+alter table tasks add constraint tasks_recurrence_pattern_check check (
+  recurrence_pattern is null
+  or recurrence_pattern in ('daily', 'weekdays', 'weekly', 'days', 'monthly', 'yearly'));

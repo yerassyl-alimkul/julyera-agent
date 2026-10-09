@@ -25,6 +25,7 @@ from telegram import (BotCommand, ForceReply, InlineKeyboardButton, InlineKeyboa
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 from groq_client import transcribe_audio
+from models import TaskCreate
 import categories_service
 import comments_service
 import digest_service
@@ -58,6 +59,7 @@ BOT_COMMANDS = [
     BotCommand("last", "Последние операции"),
     BotCommand("currency", "Валюта по умолчанию: /currency EUR или KZT"),
     BotCommand("digest", "Утренняя и вечерняя сводка: /digest on или off"),
+    BotCommand("split", "Найти задачи в тексте и выбрать, какие добавить"),
     BotCommand("remind", "Напоминать до задачи: /remind 15, 30, 60 или off"),
     BotCommand("backup", "Прислать резервную копию моих данных"),
     BotCommand("applepay", "Как подключить траты из Apple Pay"),
@@ -117,6 +119,7 @@ HELP_TEXT = (
     "/today — план на сегодня: просроченное, сегодня, ближайшие 24 часа\n"
     "/list — все активные задачи\n"
     "/task текст — записать задачей, даже если в тексте есть сумма\n"
+    "/split текст — найти задачи в тексте (заметке, письме) и выбрать, какие добавить\n"
     "/categories — категории задач\n\n"
     "💰 Деньги — просто напишите: «кофе 3,5 евро», «получил зарплату 1800 евро»\n"
     "/spent текст, /income текст — точно расход или доход\n"
@@ -761,6 +764,98 @@ async def digest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                                     else "Сводки выключены. Напоминания о дедлайнах остаются.")
 
 
+_pending_splits: dict[str, dict] = {}   # /split: токен → найденные задачи и отметки (15 минут в памяти)
+SPLIT_TTL = 15 * 60
+SPLIT_MAX = 10
+
+
+def _split_markup(token: str, pending: dict) -> InlineKeyboardMarkup:
+    rows = []
+    for i, t in enumerate(pending["tasks"]):
+        mark = "☑️" if i in pending["picked"] else "⬜️"
+        rows.append([InlineKeyboardButton(f"{mark} {_short(t['task'], 40)}", callback_data=f"sp:{token}:{i}")])
+    n = len(pending["picked"])
+    rows.append([InlineKeyboardButton(f"Добавить ({n})" if n else "Ничего не выбрано", callback_data=f"sp:{token}:ok"),
+                 InlineKeyboardButton("Отмена", callback_data=f"sp:{token}:x")])
+    return InlineKeyboardMarkup(rows)
+
+
+def _split_line(t: dict) -> str:
+    when = ""
+    if t.get("deadline"):
+        d = datetime.fromisoformat(t["deadline"]).replace(tzinfo=None)
+        when = f" — {d.strftime('%d.%m')}" + ("" if d.strftime("%H:%M") == "23:59" else d.strftime(" %H:%M"))
+    return f"• {t['task']}{when} · {t['category']}"
+
+
+async def split_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/split текст — задачи из текста с галочками; добавляются только отмеченные."""
+    user = _known_user(update)
+    if not user:
+        await update.message.reply_text(NO_ACCESS_TEXT)
+        return
+    text = _command_text(update.message.text)
+    if not text:
+        await update.message.reply_text("Пришлите текст после команды: /split созвон — прислать презентацию до пятницы, "
+                                        "забронировать зал в среду. Я найду задачи, а вы выберете, какие добавить.")
+        return
+    try:
+        found = task_service.preview_tasks_from_text(text, user["id"])[:SPLIT_MAX]
+    except Exception as exc:
+        logger.warning("/split: разбор не удался: %s", type(exc).__name__)
+        await update.message.reply_text("Не получилось разобрать текст, попробуйте ещё раз.")
+        return
+    if not found:
+        await update.message.reply_text("Задач в этом тексте не нашёл.")
+        return
+    now = time.time()
+    for key in [k for k, v in _pending_splits.items() if now - v["at"] > SPLIT_TTL]:
+        _pending_splits.pop(key, None)
+    token = secrets.token_hex(4)
+    _pending_splits[token] = {"user_id": user["id"], "tasks": found, "picked": set(range(len(found))), "at": now}
+    lines = [f"Нашёл задач: {len(found)}. Снимите галочки с лишних и нажмите «Добавить»:"] + [_split_line(t) for t in found]
+    await update.message.reply_text("\n".join(lines), reply_markup=_split_markup(token, _pending_splits[token]))
+
+
+async def split_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    user = users_service.get_by_telegram_id(query.from_user.id)
+    _, token, choice = (query.data.split(":") + ["", ""])[:3]
+    pending = _pending_splits.get(token)
+    if not user or not pending or pending["user_id"] != user["id"]:
+        await query.answer("Выбор устарел — пришлите /split ещё раз")
+        return
+    if choice == "x":
+        _pending_splits.pop(token, None)
+        await query.answer("Отменено")
+        await query.edit_message_text("Ничего не добавил.")
+        return
+    if choice == "ok":
+        if not pending["picked"]:
+            await query.answer("Отметьте хотя бы одну задачу")
+            return
+        _pending_splits.pop(token, None)
+        await query.answer()
+        created = []
+        for i in sorted(pending["picked"]):
+            try:
+                created.append(task_service.create_task(TaskCreate(**pending["tasks"][i]), user["id"]))
+            except Exception as exc:
+                logger.warning("/split: задача не создана: %s", type(exc).__name__)
+        lines = ["Добавил:"] + [_format_task_line(t) for t in created]
+        await query.edit_message_text("\n".join(lines) if created else "Не получилось добавить задачи.")
+        return
+    try:
+        i = int(choice)
+        pending["tasks"][i]
+    except (ValueError, IndexError):
+        await query.answer()
+        return
+    pending["picked"].symmetric_difference_update({i})
+    await query.answer()
+    await query.edit_message_reply_markup(reply_markup=_split_markup(token, pending))
+
+
 async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/remind 15|30|60|off — за сколько минут до задачи со временем присылать напоминание."""
     user = _known_user(update)
@@ -1080,6 +1175,8 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("applepay", applepay_command))
     app.add_handler(CommandHandler("digest", digest_command))
     app.add_handler(CommandHandler("remind", remind_command))
+    app.add_handler(CommandHandler("split", split_command))
+    app.add_handler(CallbackQueryHandler(split_callback, pattern=r"^sp:[0-9a-f]{8}:(\d+|ok|x)$"))
     app.add_handler(CommandHandler("backup", backup_command))
     app.add_handler(CallbackQueryHandler(access_decision, pattern=r"^(approve|deny):\d+$"))
     app.add_handler(CallbackQueryHandler(money_callback, pattern=r"^m:"))

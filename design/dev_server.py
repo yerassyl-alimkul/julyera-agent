@@ -35,6 +35,7 @@ import users_service  # noqa: E402
 
 task_service.parse_text_to_tasks = ic.fake_parse
 groq_client.parse_money_text = mc.fake_money_parse
+groq_client.suggest_steps = lambda task, note, existing: ["Собрать материалы", "Сделать черновик", "Проверить и отправить"]
 
 owner = users_service.create_user("Yera", 1001)
 row = next(u for u in db.tables["users"] if u["id"] == owner["id"])

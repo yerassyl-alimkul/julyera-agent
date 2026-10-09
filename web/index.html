@@ -461,7 +461,10 @@ applyTheme();
     padding-top: var(--gap-section);
   }
   .cal-head .t-h1-month { margin: 0; letter-spacing: -0.01em; }
-  .cal-nav { display: flex; gap: var(--gap-s); }
+  .cal-nav { display: flex; align-items: center; gap: var(--gap-s); }
+  /* «Сегодня»: видна, только когда открыт не текущий месяц или выбран не сегодняшний день */
+  .cal-today { min-height: var(--touch); padding: 0 14px; border: 1px solid var(--line); border-radius: var(--radius-pill);
+    background: var(--surface); color: var(--ink); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
   .cal-weekdays, .cal-grid {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -578,7 +581,19 @@ applyTheme();
   .btn-plain.danger { margin-left: auto; padding-right: 4px; color: var(--danger); font-weight: 600; }
   .tb-btn.recording { border-color: var(--danger); color: var(--danger); background: rgba(179, 38, 30, .08); }
 
-  .note-card { padding: 16px 18px; cursor: pointer; }
+  .note-card { padding: 16px 18px; }
+  .note-view { display: flex; flex-direction: column; gap: var(--gap-s); cursor: pointer; }
+  .note-card .btn-soft { margin-top: var(--gap-m); }
+  .note-preview { display: flex; flex-direction: column; gap: var(--gap-s); margin-top: var(--gap-m); padding-top: var(--gap-m);
+    border-top: 1px solid var(--line); }
+  .note-preview-head { font-size: 14px; font-weight: 600; color: var(--ink-muted); }
+  .note-pick { display: flex; align-items: center; gap: var(--gap-m); min-height: var(--touch); padding: 4px 0; border: 0;
+    background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+  .note-pick-text { display: flex; flex-direction: column; min-width: 0; font-size: 16px; overflow-wrap: anywhere; }
+  .note-pick-text small { font-size: 13px; color: var(--ink-muted); }
+  .note-pick .step-circle { flex: 0 0 auto; }
+  .note-pick[aria-checked="true"] .step-circle { background: var(--ink); border-color: var(--ink); }
+  .note-pick[aria-checked="true"] .step-circle svg { stroke: var(--on-ink); }
   .note-content { font-size: 16px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
   .note-meta { font-size: 12px; color: var(--ink-muted); }
   .note-card.editing { gap: var(--gap-m); padding: 14px; border-color: var(--ink); cursor: default; }
@@ -1144,6 +1159,15 @@ applyTheme();
   .repeat-head { display: flex; align-items: center; justify-content: space-between; gap: var(--gap-s); font-size: 16px; font-weight: 600; }
   .repeat-box .chip-group { padding-right: 10px; }
   .form-hint { margin: 0; padding: 0 10px 10px 0; font-size: 13px; line-height: 1.4; color: var(--ink-muted); }
+  /* «Повторять»: дни недели — семь равных кнопок в ряд */
+  .weekday-chips { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--gap-s); }
+  .weekday-chips .choice-chip { justify-content: center; padding: 0; min-width: 0; }
+  .repeat-hint { padding: 0; }
+  .btn-soft { display: inline-flex; align-items: center; justify-content: center; gap: var(--gap-s); align-self: flex-start;
+    min-height: var(--touch); padding: 0 16px; border: 1px solid var(--line); border-radius: var(--radius-pill);
+    background: var(--surface); color: var(--ink); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
+  .btn-soft svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+  .btn-soft:disabled { opacity: 0.6; cursor: default; }
 
   /* Edit: форма */
   .edit-form { display: flex; flex-direction: column; gap: var(--gap-section); padding-top: var(--gap-header); }
@@ -1681,6 +1705,7 @@ applyTheme();
       <div class="cal-head">
         <h1 class="t-h1-month" id="calMonthLabel"></h1>
         <div class="cal-nav">
+          <button class="cal-today" id="calToday" type="button" hidden>Сегодня</button>
           <button class="tb-btn" id="calPrev" aria-label="Предыдущий месяц">
             <svg viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></svg>
           </button>
@@ -1832,6 +1857,12 @@ applyTheme();
           <input class="field field-date" id="newDate" type="date" aria-label="Дата дедлайна">
           <input class="field field-time" id="newTime" type="time" aria-label="Время дедлайна">
         </div>
+      </section>
+      <section class="form-section" id="newRepeatSection">
+        <h3 class="form-label" id="newRepeatLabel">Повторять</h3>
+        <div class="chip-group" id="newRepeat" role="group" aria-labelledby="newRepeatLabel"></div>
+        <div class="weekday-chips" id="newRepeatDays" role="group" aria-label="Дни недели" hidden></div>
+        <p class="form-hint repeat-hint" id="newRepeatHint" hidden></p>
       </section>
     </div>
     <section class="form-section new-comment">
@@ -2077,6 +2108,12 @@ applyTheme();
           <input class="field field-time" id="editTime" type="time" aria-label="Время дедлайна">
         </div>
       </section>
+      <section class="form-section" id="editRepeatSection">
+        <h3 class="form-label" id="editRepeatLabel">Повторять</h3>
+        <div class="chip-group" id="editRepeat" role="group" aria-labelledby="editRepeatLabel"></div>
+        <div class="weekday-chips" id="editRepeatDays" role="group" aria-label="Дни недели" hidden></div>
+        <p class="form-hint repeat-hint" id="editRepeatHint" hidden></p>
+      </section>
       <section class="form-section" style="gap: 6px;">
         <div class="form-section-head">
           <h3 class="form-label">Шаги</h3>
@@ -2084,6 +2121,7 @@ applyTheme();
         </div>
         <div class="step-list" id="editSteps"></div>
         <input class="step-input" id="editStepInput" type="text" placeholder="+ добавить шаг" aria-label="Новый шаг" autocomplete="off">
+        <button class="btn-soft" id="editBreakdown" type="button"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg><span>Разбей на шаги</span></button>
       </section>
       <section class="form-section" id="editCommentsSection">
         <div class="form-section-head">
@@ -2462,6 +2500,39 @@ async function addSubtask(taskId, content) {
   }
 }
 
+// «Разбей на шаги»: ИИ сразу добавляет 3–7 шагов (POST /tasks/{id}/breakdown), лишние убираются крестиком.
+const BREAKDOWN_ICON = '<svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>';
+function breakdownBtnEl(taskId, key) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn-soft';
+  btn.dataset.focusKey = key;
+  btn.innerHTML = BREAKDOWN_ICON + '<span>Разбей на шаги</span>';
+  btn.onclick = () => breakdownTask(taskId, btn);
+  return btn;
+}
+const breakdownBusy = new Set();
+async function breakdownTask(taskId, btn) {
+  if (breakdownBusy.has(taskId)) return;
+  breakdownBusy.add(taskId);
+  const label = btn && btn.querySelector('span');
+  if (btn) btn.disabled = true;
+  if (label) label.textContent = 'Думаю…';
+  try {
+    const res = await apiJson(`/tasks/${taskId}/breakdown`, { method: 'POST' });
+    allSubtasks.push(...res.added);
+    if (res.added.length) expandedTasks.add(taskId);
+    toast(res.added.length ? `Добавил шагов: ${res.added.length}` : 'Новых шагов не придумал');
+  } catch (e) {
+    toast(e.message || 'ИИ не ответил, попробуйте ещё раз');
+  } finally {
+    breakdownBusy.delete(taskId);
+    if (btn) btn.disabled = false;
+    if (label) label.textContent = 'Разбей на шаги';
+    renderCurrentPage();
+  }
+}
+
 async function deleteSubtask(id) {
   allSubtasks = allSubtasks.filter(s => s.id !== id);
   renderCurrentPage();
@@ -2485,6 +2556,7 @@ async function saveEdit(id, fields) {
     category: fields.category.value,
     priority: fields.priority.value,
     deadline: fields.deadline.value ? fields.deadline.value + ':00' : null,
+    ...(fields.extra || {}),
   };
   try {
     const res = await api(`/tasks/${id}`, {
@@ -2797,6 +2869,8 @@ function taskRowEl(task, mode) {
   if (steps.length) rest.push(stepsText(steps.filter(s => s.is_done).length, steps.length));
   if (task.comments_count) rest.push(`💬 ${task.comments_count}`);
   if (task.files_count) rest.push(`📎 ${task.files_count}`);
+  const repeat = repeatLabel(task);
+  if (repeat) rest.push('↻ ' + repeat);
   const restEl = document.createElement('span');
   restEl.textContent = rest.join(' · ');
   meta.append(time, restEl);
@@ -2842,6 +2916,7 @@ function taskRowEl(task, mode) {
     input.setAttribute('aria-label', 'Новый шаг: ' + task.task);
     input.dataset.focusKey = 'step-input-' + task.id;
     more.appendChild(stepInputEl(input, task.id));
+    if (task.status !== 'Done') more.appendChild(breakdownBtnEl(task.id, 'breakdown-' + task.id));
     row.appendChild(more);
   }
 
@@ -3242,6 +3317,9 @@ function calSelectDefault() {
 function renderCalendar() {
   if (!calSelectedDate) calSelectDefault();
   document.getElementById('calMonthLabel').textContent = `${MONTH_NAMES_RU[calMonth]} ${calYear}`;
+  const now = new Date();
+  document.getElementById('calToday').hidden =
+    calYear === now.getFullYear() && calMonth === now.getMonth() && calSelectedDate === localDateKey(now);
 
   // Как и на главной, считаются только не выполненные задачи с дедлайном.
   const byDate = {};
@@ -3405,9 +3483,12 @@ function noteCardEl(note) {
     return el;
   }
 
-  el.setAttribute('role', 'button');
-  el.tabIndex = 0;
-  el.dataset.focusKey = 'note-' + note.id;
+  // Нажимаемая часть — текст и дата (открывает правку); кнопка «Задачи из заметки» — рядом, не внутри неё.
+  const view = document.createElement('div');
+  view.className = 'note-view';
+  view.setAttribute('role', 'button');
+  view.tabIndex = 0;
+  view.dataset.focusKey = 'note-' + note.id;
   const sr = document.createElement('span');
   sr.className = 'sr-only';
   sr.textContent = 'Изменить заметку: ';
@@ -3417,18 +3498,114 @@ function noteCardEl(note) {
   const meta = document.createElement('div');
   meta.className = 'note-meta';
   meta.textContent = fmtNoteDate(note.updated_at || note.created_at);
-  el.append(sr, content, meta);
+  view.append(sr, content, meta);
   const startEdit = () => {
     editingNoteId = note.id;
+    notePreview = null;
     renderNotes();
     const area = document.querySelector('#notesList .note-edit-textarea');
     if (area) { area.focus(); area.setSelectionRange(area.value.length, area.value.length); }
   };
-  el.onclick = startEdit;
-  el.onkeydown = (e) => {
+  view.onclick = startEdit;
+  view.onkeydown = (e) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEdit(); }
   };
+  el.appendChild(view);
+  if (notePreview && notePreview.noteId === note.id) el.appendChild(notePreviewEl(note));
+  else {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-soft';
+    btn.dataset.focusKey = 'note-split-' + note.id;
+    btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg><span>Задачи из заметки</span>';
+    btn.onclick = () => previewNoteTasks(note, btn);
+    el.appendChild(btn);
+  }
   return el;
+}
+
+// «Задачи из заметки»: POST /tasks/preview (без сохранения) → список с галочками → отмеченные создаются POST /tasks.
+let notePreview = null; // { noteId, items, picked: Set, busy }
+async function previewNoteTasks(note, btn) {
+  btn.disabled = true;
+  btn.querySelector('span').textContent = 'Ищу задачи…';
+  try {
+    const items = await apiJson('/tasks/preview', { method: 'POST', headers: JSON_HEADERS,
+      body: JSON.stringify({ text: note.content }) });
+    if (!items.length) { toast('Задач в заметке не нашёл'); renderNotes(); return; }
+    notePreview = { noteId: note.id, items, picked: new Set(items.map((_, i) => i)), busy: false };
+  } catch (e) {
+    toast(e.status === 422 ? 'Задач в заметке не нашёл' : (e.message || 'Не получилось, попробуйте ещё раз'));
+  }
+  renderNotes();
+  const first = document.querySelector('[data-focus-key="note-pick-0"]');
+  if (first) first.focus({ preventScroll: true });
+}
+
+function previewWhen(item) {
+  if (!item.deadline) return 'без даты';
+  const d = parseNaiveDeadline(item.deadline);
+  const t = timeOf(item.deadline);
+  return `${WEEKDAY_GEN[mondayIndex(d)]}, ${d.getDate()} ${MONTH_GENITIVE[d.getMonth()]}${t === '23:59' ? '' : ' ' + t}`;
+}
+
+function notePreviewEl(note) {
+  const box = document.createElement('div');
+  box.className = 'note-preview';
+  const head = document.createElement('div');
+  head.className = 'note-preview-head';
+  head.textContent = `Нашёл задач: ${notePreview.items.length}`;
+  box.appendChild(head);
+  notePreview.items.forEach((item, i) => {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'note-pick';
+    row.setAttribute('role', 'checkbox');
+    row.setAttribute('aria-checked', String(notePreview.picked.has(i)));
+    row.dataset.focusKey = 'note-pick-' + i;
+    row.innerHTML = '<span class="step-circle"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="note-pick-text"><span></span><small></small></span>';
+    row.querySelector('.note-pick-text span').textContent = item.task;
+    row.querySelector('small').textContent = `${previewWhen(item)} · ${item.category}`;
+    row.onclick = () => {
+      if (notePreview.picked.has(i)) notePreview.picked.delete(i); else notePreview.picked.add(i);
+      renderNotes();
+    };
+    box.appendChild(row);
+  });
+  const actions = document.createElement('div');
+  actions.className = 'note-row start';
+  const add = document.createElement('button');
+  add.className = 'btn-small';
+  add.dataset.focusKey = 'note-pick-add';
+  const n = notePreview.picked.size;
+  add.textContent = notePreview.busy ? 'Добавляю…' : (n ? `Добавить ${n}` : 'Ничего не выбрано');
+  add.disabled = notePreview.busy || !n;
+  add.onclick = addPickedNoteTasks;
+  const cancel = document.createElement('button');
+  cancel.className = 'btn-plain';
+  cancel.textContent = 'Отмена';
+  cancel.onclick = () => { notePreview = null; renderNotes(); };
+  actions.append(add, cancel);
+  box.appendChild(actions);
+  return box;
+}
+
+async function addPickedNoteTasks() {
+  if (!notePreview || notePreview.busy) return;
+  notePreview.busy = true;
+  renderNotes();
+  const picked = [...notePreview.picked].sort().map(i => notePreview.items[i]);
+  let created = 0;
+  for (const item of picked) {
+    try {
+      await apiJson('/tasks', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ ...item, source: 'note' }) });
+      created++;
+    } catch (e) { /* остальные всё равно добавляем */ }
+  }
+  notePreview = null;
+  renderNotes();
+  toast(created === picked.length ? `Добавил задач: ${created}` : `Добавил ${created} из ${picked.length}, остальные не получились`);
+  loadTasks();
 }
 
 function cancelNoteEdit(id) {
@@ -3534,6 +3711,14 @@ document.getElementById('noteInput').addEventListener('keydown', (e) => {
 });
 
 document.getElementById('calPrev').onclick = () => shiftCalendarMonth(-1);
+document.getElementById('calToday').onclick = () => {
+  const now = new Date();
+  calYear = now.getFullYear();
+  calMonth = now.getMonth();
+  calSelectedDate = localDateKey(now);
+  renderCalendar();
+  document.getElementById('calPrev').focus();
+};
 document.getElementById('calNext').onclick = () => shiftCalendarMonth(1);
 
 // ---------- Загрузка и ошибки сети (раздел 8) ----------
@@ -4009,7 +4194,9 @@ async function submitManual() {
     priority: newChoice.priority,
     deadline: date ? `${date}T${time}:00` : null,
     source: 'web',
+    ...repeatPayload('new'),
   };
+  if (repeatState.new.pattern === 'days' && !repeatState.new.days.length) { toast('Выберите хотя бы один день недели'); return; }
   btn.disabled = true;
   btn.textContent = 'Сохраняю…';
   try {
@@ -4028,6 +4215,8 @@ async function submitManual() {
     const created = await res.json();
     await postNewTaskComment([created]);
     ['newText', 'newDate', 'newTime', 'composerInput'].forEach(id => { document.getElementById(id).value = ''; });
+    repeatState.new = { pattern: null, days: [] };
+    renderRepeat('new');
     newChoice.priority = 'Mid';
     closeNewTask();
     toast('Задача добавлена');
@@ -5825,7 +6014,7 @@ function setNewTaskMode(mode, focus) {
   document.getElementById('newTaskAi').hidden = manual;
   document.getElementById('newTaskManual').hidden = !manual;
   newTaskSheet.classList.toggle('manual', manual);
-  if (manual) renderNewChips();
+  if (manual) { renderNewChips(); renderRepeat('new'); }
   if (focus) document.getElementById(manual ? 'newText' : 'composerInput').focus();
 }
 
@@ -6037,6 +6226,111 @@ function choiceChipEl(label, pressed, extraClass, onPick) {
   return [btn, text];
 }
 
+// ---------- «Повторять» (recurrence_pattern + recurrence_days, как task_service.next_occurrence) ----------
+const REPEAT_OPTIONS = [[null, 'Нет'], ['daily', 'Каждый день'], ['weekdays', 'По будням'], ['days', 'По дням недели'],
+  ['monthly', 'Каждый месяц'], ['yearly', 'Каждый год']];
+const REPEAT_WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+const WEEKDAY_GEN = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
+const repeatState = { new: { pattern: null, days: [] }, edit: { pattern: null, days: [] } };
+
+const mondayIndex = (d) => (d.getDay() + 6) % 7;  // 0 = пн … 6 = вс, как на сервере
+
+function repeatFromTask(task) {
+  let pattern = task && task.is_recurring ? task.recurrence_pattern : null;
+  let days = (task && task.recurrence_days) || [];
+  if (pattern === 'weekly') {  // старый «раз в неделю» = по одному дню недели
+    const d = task.deadline ? parseNaiveDeadline(task.deadline) : new Date();
+    pattern = 'days';
+    days = [mondayIndex(d)];
+  }
+  return { pattern: pattern || null, days: pattern === 'days' ? [...days] : [] };
+}
+
+function repeatLabel(task) {
+  const r = repeatFromTask(task);
+  if (!r.pattern) return '';
+  if (r.pattern === 'days') return r.days.length === 7 ? 'каждый день' : r.days.map(i => WEEKDAY_GEN[i]).join(', ');
+  return { daily: 'каждый день', weekdays: 'по будням', monthly: 'каждый месяц', yearly: 'каждый год' }[r.pattern] || '';
+}
+
+function lastDayOfMonth(y, m) { return new Date(y, m + 1, 0).getDate(); }
+function taskRepeatStep(d, pattern, days, anchor) {
+  const n = new Date(d);
+  if (pattern === 'daily') { n.setDate(n.getDate() + 1); return n; }
+  if (pattern === 'weekdays' || pattern === 'days') {
+    const allowed = pattern === 'weekdays' ? [0, 1, 2, 3, 4] : (days.length ? days : [mondayIndex(d)]);
+    do { n.setDate(n.getDate() + 1); } while (!allowed.includes(mondayIndex(n)));
+    return n;
+  }
+  if (pattern === 'monthly') {
+    const y = d.getMonth() === 11 ? d.getFullYear() + 1 : d.getFullYear(), m = (d.getMonth() + 1) % 12;
+    return new Date(y, m, Math.min(anchor, lastDayOfMonth(y, m)), d.getHours(), d.getMinutes());
+  }
+  if (pattern === 'yearly') {
+    const y = d.getFullYear() + 1;
+    return new Date(y, d.getMonth(), Math.min(anchor, lastDayOfMonth(y, d.getMonth())), d.getHours(), d.getMinutes());
+  }
+  return null;
+}
+// Следующий срок после того, как задачу закроют: как task_service.next_occurrence (всегда позже сегодняшнего дня).
+function nextTaskRepeat(dateStr, timeStr, pattern, days) {
+  if (!pattern || !dateStr) return null;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const [hh, mm] = (timeStr || '23:59').split(':').map(Number);
+  const base = new Date(y, m - 1, d, hh, mm);
+  const today = new Date(); today.setHours(23, 59, 59, 999);
+  let next = taskRepeatStep(base, pattern, days, d);
+  for (let i = 0; i < 800 && next && next <= today; i++) next = taskRepeatStep(next, pattern, days, d);
+  return next;
+}
+
+function renderRepeat(prefix) {
+  const st = repeatState[prefix];
+  const box = document.getElementById(prefix + 'Repeat');
+  box.innerHTML = '';
+  REPEAT_OPTIONS.forEach(([value, label]) => {
+    const [btn, text] = choiceChipEl(label, st.pattern === value, 'repeat', () => {
+      st.pattern = value;
+      if (value === 'days' && !st.days.length) {
+        const dv = document.getElementById(prefix + 'Date').value;
+        st.days = [mondayIndex(dv ? new Date(dv + 'T12:00') : new Date())];
+      }
+      renderRepeat(prefix);
+    });
+    btn.dataset.focusKey = `${prefix}-repeat-${value}`;
+    btn.appendChild(text);
+    box.appendChild(btn);
+  });
+  const daysBox = document.getElementById(prefix + 'RepeatDays');
+  daysBox.hidden = st.pattern !== 'days';
+  daysBox.innerHTML = '';
+  REPEAT_WEEKDAYS.forEach((label, i) => {
+    const [btn, text] = choiceChipEl(label, st.days.includes(i), 'repeat-day', () => {
+      st.days = st.days.includes(i) ? st.days.filter(x => x !== i) : [...st.days, i].sort();
+      renderRepeat(prefix);
+    });
+    btn.setAttribute('aria-label', ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'][i]);
+    btn.dataset.focusKey = `${prefix}-repeat-day-${i}`;
+    btn.appendChild(text);
+    daysBox.appendChild(btn);
+  });
+  const hint = document.getElementById(prefix + 'RepeatHint');
+  const dateStr = document.getElementById(prefix + 'Date').value;
+  hint.hidden = !st.pattern;
+  if (!st.pattern) return;
+  if (st.pattern === 'days' && !st.days.length) { hint.textContent = 'Выберите хотя бы один день'; return; }
+  if (!dateStr) { hint.textContent = 'Поставьте дату — от неё считаются повторы'; return; }
+  const next = nextTaskRepeat(dateStr, document.getElementById(prefix + 'Time').value, st.pattern, st.days);
+  hint.textContent = next ? `Когда закроете, следующая — ${WEEKDAY_GEN[mondayIndex(next)]}, ${next.getDate()} ${MONTH_GENITIVE[next.getMonth()]}` : '';
+}
+
+function repeatPayload(prefix) {
+  const st = repeatState[prefix];
+  return { recurrence_pattern: st.pattern, recurrence_days: st.pattern === 'days' ? st.days : null };
+}
+['new', 'edit'].forEach(prefix => ['Date', 'Time'].forEach(f =>
+  document.getElementById(prefix + f).addEventListener('change', () => renderRepeat(prefix))));
+
 function renderEditChips() {
   renderCategoryPriorityChips('editCategory', 'editPriority', editChoice, renderEditChips);
 }
@@ -6104,6 +6398,9 @@ function openEdit(id) {
   document.getElementById('editComment').value = '';
   loadEditComments(id);
   document.getElementById('editStepInput').value = '';
+  repeatState.edit = repeatFromTask(task);
+  document.getElementById('editRepeatSection').hidden = !!task.gcal_imported;
+  renderRepeat('edit');
   renderEditChips();
   renderEditSteps();
   editSheet.hidden = false;
@@ -6352,6 +6649,11 @@ async function submitEdit() {
     priority: { value: editChoice.priority },
     deadline: { value: date ? `${date}T${time}` : '' }, // saveEdit добавит секунды; пусто → null
   };
+  const task = findTask(editingId);
+  if (task && !task.gcal_imported) {
+    if (repeatState.edit.pattern === 'days' && !repeatState.edit.days.length) { toast('Выберите хотя бы один день недели'); return; }
+    fields.extra = repeatPayload('edit');
+  }
   btn.disabled = true;
   const ok = await saveEdit(editingId, fields);
   btn.disabled = false;
@@ -6373,6 +6675,7 @@ document.getElementById('editDelete').onclick = () => {
   closeEdit();
   deleteTask(id);
 };
+document.getElementById('editBreakdown').onclick = (e) => { if (editingId) breakdownTask(editingId, e.currentTarget); };
 document.getElementById('editStepInput').onkeydown = (e) => {
   if (e.key !== 'Enter' || e.isComposing) return;
   e.preventDefault();

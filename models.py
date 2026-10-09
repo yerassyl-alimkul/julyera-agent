@@ -23,8 +23,11 @@ class Status(str, Enum):
 
 class RecurrencePattern(str, Enum):
     daily = "daily"
-    weekly = "weekly"
-    monthly = "monthly"
+    weekdays = "weekdays"   # по будням (пн–пт)
+    weekly = "weekly"       # раз в неделю, в тот же день
+    days = "days"           # в выбранные дни недели: recurrence_days, 0 = пн … 6 = вс
+    monthly = "monthly"     # того же числа: recurrence_days = [число]; 31-е в коротком месяце — последний день
+    yearly = "yearly"
 
 
 class TaskBase(BaseModel):
@@ -39,6 +42,7 @@ class TaskBase(BaseModel):
     note: Optional[str] = None
     is_recurring: bool = False
     recurrence_pattern: Optional[RecurrencePattern] = None
+    recurrence_days: Optional[List[int]] = None
     tags: List[str] = Field(default_factory=list)
 
 
@@ -70,6 +74,7 @@ class TaskUpdate(BaseModel):
     note: Optional[str] = None
     is_recurring: Optional[bool] = None
     recurrence_pattern: Optional[RecurrencePattern] = None
+    recurrence_days: Optional[List[int]] = None
     tags: Optional[List[str]] = None
 
 

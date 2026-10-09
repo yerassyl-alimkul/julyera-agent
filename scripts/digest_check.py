@@ -56,6 +56,11 @@ def main():
         @classmethod
         def utcnow(cls):
             return digest_service.utc_now().replace(tzinfo=None)
+
+        @classmethod
+        def now(cls, tz=None):
+            now = digest_service.utc_now()
+            return now.astimezone(tz) if tz else now.astimezone(ROME).replace(tzinfo=None)
     task_service.datetime = ClockDatetime
 
     def at(hh, mm=0, plus_days=0):

@@ -18,21 +18,84 @@ from groq_client import parse_text_to_tasks
 from models import Status, TaskCreate, TaskUpdate
 
 TABLE = "tasks"
-NULLABLE_FIELDS = {"deadline", "note", "source", "recurrence_pattern"}
+NULLABLE_FIELDS = {"deadline", "note", "source", "recurrence_pattern", "recurrence_days"}
 # Повторения одного события Google Calendar связаны: эти поля, изменённые у одного, меняются у всех незакрытых.
 # Время, статус и удаление — только у самого повторения (как «только это событие» в Google).
 SERIES_FIELDS = ("task", "category", "priority", "note")
 
 
-def _next_deadline(current: Optional[datetime], pattern: Optional[str]) -> Optional[datetime]:
-    base = current or datetime.now()
+def _clamp_day(year: int, month: int, day: int) -> date:
+    """31-е в коротком месяце (и 29 февраля в обычном году) — последний день месяца."""
+    import calendar
+    return date(year, month, min(day, calendar.monthrange(year, month)[1]))
+
+
+def _step(d: datetime, pattern: str, days: Optional[list]) -> Optional[datetime]:
     if pattern == "daily":
-        return base + timedelta(days=1)
+        return d + timedelta(days=1)
     if pattern == "weekly":
-        return base + timedelta(weeks=1)
+        return d + timedelta(weeks=1)
+    if pattern in ("weekdays", "days"):
+        allowed = set(range(5)) if pattern == "weekdays" else set(days or [d.weekday()])
+        nxt = d + timedelta(days=1)
+        while nxt.weekday() not in allowed:
+            nxt += timedelta(days=1)
+        return nxt
     if pattern == "monthly":
-        return base + timedelta(days=30)
+        anchor = (days or [d.day])[0]
+        y, m = (d.year + 1, 1) if d.month == 12 else (d.year, d.month + 1)
+        return datetime.combine(_clamp_day(y, m, anchor), d.time())
+    if pattern == "yearly":
+        anchor = (days or [d.day])[0]
+        return datetime.combine(_clamp_day(d.year + 1, d.month, anchor), d.time())
     return None
+
+
+def next_occurrence(current: Optional[datetime], pattern: Optional[str], days: Optional[list] = None,
+                    today: Optional[date] = None) -> Optional[datetime]:
+    """Следующий срок повторяющейся задачи. Закрыли с опозданием — пропускаем прошедшие повторы:
+    следующий срок всегда позже сегодняшнего дня. Без дедлайна — от «сейчас»."""
+    if not pattern:
+        return None
+    base = current.replace(tzinfo=None) if current else datetime.now()
+    today = today or datetime.now().date()
+    nxt = _step(base, pattern, days)
+    for _ in range(800):
+        if nxt is None or nxt.date() > today:
+            break
+        nxt = _step(nxt, pattern, days)
+    return nxt
+
+
+def _normalize_recurrence(data: dict, deadline_value) -> None:
+    """is_recurring и recurrence_days из recurrence_pattern: дни недели 0–6 для «days», число месяца для
+    «monthly»/«yearly» (из дедлайна, если не передано). Неверные дни — 422."""
+    if "recurrence_pattern" not in data and "recurrence_days" not in data:
+        return
+    pattern = data.get("recurrence_pattern")
+    days = data.get("recurrence_days")
+    data["is_recurring"] = bool(pattern)
+    if pattern == "days":
+        days = sorted({int(x) for x in (days or []) if isinstance(x, int) and 0 <= x <= 6})
+        if not days:
+            raise CategoryError(422, "Выберите хотя бы один день недели", "bad_recurrence")
+        data["recurrence_days"] = days
+    elif pattern in ("monthly", "yearly"):
+        deadline = deadline_value if isinstance(deadline_value, datetime) else (
+            datetime.fromisoformat(deadline_value) if deadline_value else None)
+        day = (days or [None])[0] if days else (deadline.day if deadline else None)
+        data["recurrence_days"] = [day] if isinstance(day, int) and 1 <= day <= 31 else None
+    else:
+        data["recurrence_days"] = None
+
+
+def _next_deadline(current: Optional[datetime], pattern: Optional[str], days: Optional[list] = None,
+                   user_id: Optional[str] = None) -> Optional[datetime]:
+    today = None
+    if user_id:
+        from zoneinfo import ZoneInfo
+        today = datetime.now(ZoneInfo(users_service.timezone_of(user_id))).date()
+    return next_occurrence(current, pattern, days, today)
 
 
 def _set_event_id(task: dict, user_id: str, event_id: Optional[str], extra: Optional[dict] = None) -> None:
@@ -71,6 +134,7 @@ def create_task(payload: TaskCreate, user_id: str) -> dict:
     data = payload.model_dump(mode="json", exclude_none=False)
     data["user_id"] = user_id  # владельца ставит сервер, не клиент
     data["category"] = _known_category(user_id, data["category"])
+    _normalize_recurrence(data, data.get("deadline"))
     result = supabase.table(TABLE).insert(data).execute()
     if not result.data:
         raise RuntimeError("Не удалось создать задачу")
@@ -78,10 +142,9 @@ def create_task(payload: TaskCreate, user_id: str) -> dict:
     return _sync_google_upsert(task, user_id)
 
 
-def create_tasks_from_text(raw_text: str, user_id: str, source_hint: Optional[str] = None,
-                           default_date: Optional[str] = None) -> list[dict]:
-    """default_date ("YYYY-MM-DD") — день, открытый в приложении: задачи без даты в тексте встают на него
-    (время — из текста или 23:59). Своя дата в тексте главнее."""
+def _parsed_tasks(raw_text: str, user_id: str, source_hint: Optional[str] = None,
+                  default_date: Optional[str] = None) -> list[TaskCreate]:
+    """Текст → проверенные задачи (без сохранения). default_date — см. create_tasks_from_text."""
     try:
         default_date = date.fromisoformat(default_date).isoformat() if default_date else None
     except ValueError:
@@ -101,12 +164,47 @@ def create_tasks_from_text(raw_text: str, user_id: str, source_hint: Optional[st
         if default_date and not raw.get("deadline"):
             raw["deadline"] = f"{default_date}T23:59:00"  # модель не поставила дату — значит, на открытый день
         try:
-            validated = TaskCreate(**raw)
+            created.append(TaskCreate(**raw))
         except Exception:
             # Пропускаем некорректный элемент от LLM, не роняем остальные
             continue
-        created.append(create_task(validated, user_id))
     return created
+
+
+def create_tasks_from_text(raw_text: str, user_id: str, source_hint: Optional[str] = None,
+                           default_date: Optional[str] = None) -> list[dict]:
+    """default_date ("YYYY-MM-DD") — день, открытый в приложении: задачи без даты в тексте встают на него
+    (время — из текста или 23:59). Своя дата в тексте главнее."""
+    return [create_task(t, user_id) for t in _parsed_tasks(raw_text, user_id, source_hint, default_date)]
+
+
+def preview_tasks_from_text(raw_text: str, user_id: str) -> list[dict]:
+    """Задачи из текста (заметки, /split) БЕЗ сохранения — человек сам отмечает, какие добавить."""
+    return [t.model_dump(mode="json") for t in _parsed_tasks(raw_text, user_id)]
+
+
+def breakdown(task_id: str, user_id: str) -> Optional[list[dict]]:
+    """«Разбей на шаги»: ИИ предлагает 3–7 шагов по названию и заметке, сразу добавляем как подзадачи
+    (без повторов уже существующих). None — задачи нет или она чужая."""
+    task = get_task(task_id, user_id)
+    if not task:
+        return None
+    import groq_client
+    import subtasks_service
+    from models import SubtaskCreate
+    existing = supabase.table("subtasks").select("content").eq("task_id", task_id).execute().data
+    have = {(r.get("content") or "").strip().lower() for r in existing}
+    steps = groq_client.suggest_steps(task["task"], task.get("note"), [r["content"] for r in existing])
+    added = []
+    for step in steps:
+        key = step.strip().lower()
+        if not key or key in have:
+            continue
+        have.add(key)
+        row = subtasks_service.create_subtask(task_id, SubtaskCreate(content=step.strip()[:200]), user_id)
+        if row:
+            added.append(row)
+    return added
 
 
 def list_tasks(
@@ -148,6 +246,10 @@ def update_task(task_id: str, payload: TaskUpdate, user_id: str) -> Optional[dic
     }
     if "category" in update_data:
         update_data["category"] = _known_category(user_id, update_data["category"])
+    if "recurrence_pattern" in update_data or "recurrence_days" in update_data:
+        if "recurrence_pattern" not in update_data:
+            update_data["recurrence_pattern"] = current.get("recurrence_pattern")
+        _normalize_recurrence(update_data, update_data.get("deadline", current.get("deadline")))
     update_data["updated_at"] = datetime.utcnow().isoformat()
 
     result = supabase.table(TABLE).update(update_data).eq("id", task_id).eq("user_id", user_id).execute()
@@ -167,7 +269,7 @@ def update_task(task_id: str, payload: TaskUpdate, user_id: str) -> Optional[dic
     if became_done and current.get("is_recurring"):
         next_deadline = _next_deadline(
             current.get("deadline") and datetime.fromisoformat(current["deadline"]),
-            current.get("recurrence_pattern"),
+            current.get("recurrence_pattern"), current.get("recurrence_days"), user_id,
         )
         new_task = {
             "user_id": user_id,
@@ -180,6 +282,7 @@ def update_task(task_id: str, payload: TaskUpdate, user_id: str) -> Optional[dic
             "note": current.get("note"),
             "is_recurring": True,
             "recurrence_pattern": current.get("recurrence_pattern"),
+            "recurrence_days": current.get("recurrence_days"),
             "tags": current.get("tags") or [],
         }
         inserted = supabase.table(TABLE).insert(new_task).execute()
