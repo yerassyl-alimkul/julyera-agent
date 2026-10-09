@@ -36,6 +36,8 @@ DEFAULTS = {
     "money_recurring": lambda: {"id": str(uuid.uuid4()), "note": None, "active": True, "frequency": "monthly",
                                 "anchor_date": None, "created_at": _now()},
     "money_merchant_rules": lambda: {"updated_at": _now()},
+    "money_goals": lambda: {"id": str(uuid.uuid4()), "due_date": None, "achieved_at": None, "created_at": _now()},
+    "money_goal_moves": lambda: {"id": str(uuid.uuid4()), "created_at": _now()},
     "release_log": lambda: {"sent_at": _now()},
     "tasks": lambda: {"id": str(uuid.uuid4()), "source": None, "deadline": None, "priority": "Mid",
                       "status": "To Do", "note": None, "is_recurring": False, "recurrence_pattern": None,
@@ -58,7 +60,8 @@ NOT_NULL = {"tasks": ["user_id", "task", "category"], "notes": ["user_id", "cont
             "money_categories": ["user_id", "kind", "name", "color"],
             "money_transactions": ["user_id", "kind", "amount", "currency", "category_id", "spent_on"],
             "money_recurring": ["user_id", "kind", "amount", "currency", "category_id", "day_of_month", "next_run"]}
-NUMERIC = {"money_transactions": ["amount"], "money_recurring": ["amount"], "money_categories": ["monthly_limit"]}  # PostgREST отдаёт numeric числом
+NUMERIC = {"money_transactions": ["amount"], "money_recurring": ["amount"], "money_categories": ["monthly_limit"],
+           "money_goals": ["target"], "money_goal_moves": ["amount"]}  # PostgREST отдаёт numeric числом
 
 
 class FakeError(Exception):
@@ -96,6 +99,11 @@ class Query:
 
     def eq(self, column, value):
         self.filters.append(lambda row: row.get(column) == value)
+        return self
+
+    def is_(self, column, value):  # только is null, как в коде
+        assert value in ("null", None)
+        self.filters.append(lambda row: row.get(column) is None)
         return self
 
     def in_(self, column, values):
@@ -255,9 +263,14 @@ class Query:
                 ids = {r["id"] for r in gone}
                 self.db.tables["subtasks"] = [s for s in self.db.tables.get("subtasks", []) if s["task_id"] not in ids]
                 self.db.tables["task_comments"] = [c for c in self.db.tables.get("task_comments", []) if c["task_id"] not in ids]
+            if self.table == "money_goals":  # money_goal_moves.goal_id ... on delete cascade
+                ids = {r["id"] for r in gone}
+                self.db.tables["money_goal_moves"] = [m for m in self.db.tables.get("money_goal_moves", [])
+                                                      if m["goal_id"] not in ids]
             if self.table == "users":  # categories.user_id и money_*.user_id ... on delete cascade
                 ids = {r["id"] for r in gone}
-                for t in ("categories", "money_transactions", "money_recurring", "money_merchant_rules",
+                for t in ("categories", "money_transactions", "money_recurring", "money_merchant_rules", "money_goals",
+                          "money_goal_moves",
                           "money_limit_alerts", "money_report_log", "money_categories", "digest_log", "task_comments"):
                     self.db.tables[t] = [c for c in self.db.tables.get(t, []) if c["user_id"] not in ids]
             return SimpleNamespace(data=[copy.deepcopy(r) for r in gone])

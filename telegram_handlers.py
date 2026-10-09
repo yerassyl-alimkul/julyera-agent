@@ -60,6 +60,7 @@ BOT_COMMANDS = [
     BotCommand("currency", "Валюта по умолчанию: /currency EUR или KZT"),
     BotCommand("digest", "Утренняя и вечерняя сводка: /digest on или off"),
     BotCommand("split", "Найти задачи в тексте и выбрать, какие добавить"),
+    BotCommand("save", "Цели: /save 100 отпуск — отложить, /save — прогресс"),
     BotCommand("remind", "Напоминать до задачи: /remind 15, 30, 60 или off"),
     BotCommand("backup", "Прислать резервную копию моих данных"),
     BotCommand("applepay", "Как подключить траты из Apple Pay"),
@@ -126,6 +127,7 @@ HELP_TEXT = (
     "/month — итоги месяца\n"
     "/last — последние траты с кнопкой «Удалить»\n"
     "/currency EUR или KZT — основная валюта\n"
+    "/save — цели накопления; /save 100 отпуск — отложить, /save -50 отпуск — снять\n"
     "/applepay — как подключить траты из Apple Pay\n\n"
     "⚙️ Настройки\n"
     "/digest on или off — сводки утром в 08:00 и вечером в 20:00 (в воскресенье — итоги недели)\n"
@@ -143,6 +145,7 @@ def help_markup() -> InlineKeyboardMarkup:
         [b("💰 Месяц", "month"), b("🧾 Последние", "last")],
         [b("💱 Валюта", "currency"), b("🔔 Сводки", "digest")],
         [b("⏰ Напоминания", "remind"), b("🗄 Копия данных", "backup")],
+        [b("🎯 Цели", "save")],
         [b("🏷 Категории", "categories"), b("💳 Apple Pay", "applepay")],
         [b("🔗 Ссылка /web", "web"), InlineKeyboardButton("Открыть приложение", web_app=WebAppInfo(url=APP_URL))],
     ])
@@ -764,6 +767,99 @@ async def digest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                                     else "Сводки выключены. Напоминания о дедлайнах остаются.")
 
 
+_SAVE_RE = re.compile(r"^\s*(-?\s*\d[\d\s\u00a0]*(?:[.,]\d{1,2})?)\s*(.*)$", re.S)
+
+
+def _goal_line(g: dict) -> str:
+    bar = "▓" * (g["percent"] // 10) + "░" * (10 - g["percent"] // 10)
+    tail = " ✅" if g["achieved"] else (f" · до {g['due_date'][8:10]}.{g['due_date'][5:7]}" if g.get("due_date") else "")
+    return f"🎯 {g['name']}: {g['saved']} из {g['target']} {g['currency']}\n{bar} {g['percent']}%{tail}"
+
+
+async def _apply_goal_move(reply, user: dict, goal: dict, amount) -> None:
+    import goals_service
+    try:
+        updated = goals_service.add_move(goal["id"], user["id"], amount, notify=False)
+    except money_service.MoneyError as exc:
+        await reply(exc.message)
+        return
+    verb = "Отложил" if amount > 0 else "Снял"
+    text = f"{verb} {money_service.fmt(abs(amount))} {goal['currency']}.\n" + _goal_line(updated)
+    if updated.get("first_achieved"):
+        text += f"\n\n🎉 Цель «{goal['name']}» достигнута!"
+    await reply(text)
+
+
+async def save_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/save — цели с прогрессом; /save 100 отпуск — отложить; /save -50 отпуск — снять (в валюте цели)."""
+    user = _known_user(update)
+    if not user:
+        await update.message.reply_text(NO_ACCESS_TEXT)
+        return
+    import goals_service
+    goals = goals_service.list_goals(user["id"])["goals"]
+    if not goals:
+        await update.message.reply_text("Целей пока нет. Создайте цель в приложении: Кошелёк → Цели → «+».",
+                                        reply_markup=open_app_markup())
+        return
+    arg = _command_text(update.message.text)
+    found = _SAVE_RE.match(arg or "")
+    if not found:
+        await update.message.reply_text("🎯 Ваши цели:\n\n" + "\n\n".join(_goal_line(g) for g in goals) +
+                                        "\n\nОтложить: /save 100 отпуск. Снять: /save -50 отпуск.")
+        return
+    raw, rest = found.group(1).replace(" ", "").replace("\u00a0", ""), found.group(2).strip()
+    negative = raw.startswith("-")
+    try:
+        amount = money_service.parse_amount(raw.lstrip("-"))
+    except money_service.MoneyError as exc:
+        await update.message.reply_text(exc.message)
+        return
+    amount = -amount if negative else amount
+    said_cur = None
+    for cur, markers in money_service.CURRENCY_MARKERS.items():
+        for m in markers:
+            if re.search(rf"(?<!\w){re.escape(m)}(?!\w)", rest.lower()):
+                said_cur = cur
+                rest = re.sub(rf"(?<!\w){re.escape(m)}(?!\w)", "", rest, flags=re.I).strip()
+    matches = goals_service.find_goal(user["id"], rest)
+    active = [g for g in matches if not g["achieved"]] or matches
+    if said_cur:
+        active = [g for g in active if g["currency"] == said_cur]
+        if not active:
+            await update.message.reply_text(f"Нет цели в {said_cur} с таким названием. Суммы в цель — в её валюте.")
+            return
+    if len(active) == 1:
+        await _apply_goal_move(update.message.reply_text, user, active[0], amount)
+        return
+    if not active:
+        await update.message.reply_text("Не нашёл такую цель. Ваши цели: " + ", ".join(g["name"] for g in goals))
+        return
+    rows = [[InlineKeyboardButton(_short(g["name"], 30), callback_data=f"gs:{g['id']}:{money_service.fmt(amount)}")]
+            for g in active[:8]]
+    await update.message.reply_text("В какую цель?", reply_markup=InlineKeyboardMarkup(rows))
+
+
+async def goal_save_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    user = users_service.get_by_telegram_id(query.from_user.id)
+    _, goal_id, raw = (query.data.split(":") + ["", ""])[:3]
+    await query.answer()
+    if not user:
+        return
+    import goals_service
+    from decimal import Decimal
+    try:
+        goal = goals_service.get_goal(goal_id, user["id"])
+    except money_service.MoneyError as exc:
+        await query.edit_message_text(exc.message)
+        return
+
+    async def reply(text):
+        await query.edit_message_text(text)
+    await _apply_goal_move(reply, user, goal, Decimal(raw))
+
+
 _pending_splits: dict[str, dict] = {}   # /split: токен → найденные задачи и отметки (15 минут в памяти)
 SPLIT_TTL = 15 * 60
 SPLIT_MAX = 10
@@ -1131,7 +1227,7 @@ MENU_ACTIONS = {BTN_TODAY: "today_command", BTN_TASKS: "list_tasks_handler", BTN
 HELP_ACTIONS = {"today": "today_command", "list": "list_tasks_handler", "month": "month_command",
                 "last": "last_command", "currency": "currency_command", "digest": "digest_command",
                 "categories": "categories_handler", "applepay": "applepay_command", "web": "web_link",
-                "remind": "remind_command", "backup": "backup_command"}
+                "remind": "remind_command", "backup": "backup_command", "save": "save_command"}
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1176,6 +1272,8 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("digest", digest_command))
     app.add_handler(CommandHandler("remind", remind_command))
     app.add_handler(CommandHandler("split", split_command))
+    app.add_handler(CommandHandler("save", save_command))
+    app.add_handler(CallbackQueryHandler(goal_save_callback, pattern=r"^gs:[0-9a-f-]{36}:-?\d+\.\d{2}$"))
     app.add_handler(CallbackQueryHandler(split_callback, pattern=r"^sp:[0-9a-f]{8}:(\d+|ok|x)$"))
     app.add_handler(CommandHandler("backup", backup_command))
     app.add_handler(CallbackQueryHandler(access_decision, pattern=r"^(approve|deny):\d+$"))

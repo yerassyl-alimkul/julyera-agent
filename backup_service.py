@@ -3,7 +3,7 @@
 в 21:00 бот присылает её в чат пользователя (digest_service.backup_due), по запросу — командой /backup.
 
 В файл попадает только сам пользователь: задачи с подзадачами и текстом комментариев, заметки, категории,
-деньги (категории, операции, повторяющиеся платежи). Файлы из комментариев (фото, PDF) — только имена:
+деньги (категории, операции, повторяющиеся платежи, цели накопления). Файлы из комментариев (фото, PDF) — только имена:
 сами файлы остаются в хранилище. Токены календаря, ключ доступа и служебные журналы не выгружаются.
 В логи пишется только количество строк.
 """
@@ -54,6 +54,11 @@ def build(user_id: str) -> tuple[str, bytes, int]:
         "money_transactions": _all(money_service.TX_TABLE, user_id),
         "money_recurring": _all(money_service.REC_TABLE, user_id),
     }
+    for table in ("money_goals", "money_goal_moves"):  # цели накопления (миграция 011)
+        try:
+            data[table] = _all(table, user_id)
+        except Exception as exc:
+            logger.warning("Цели в копию не попали: %s", type(exc).__name__)
     count = sum(len(v) for v in data.values() if isinstance(v, list))
     body = json.dumps(data, ensure_ascii=False, indent=1, default=lambda v: str(v) if isinstance(v, Decimal) else str(v))
     day = datetime.now(timezone.utc).date().isoformat()

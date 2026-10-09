@@ -46,6 +46,7 @@ load_dotenv()
 
 import task_service
 import backup_service
+import goals_service
 import calendar_sync
 import categories_service
 import comments_service
@@ -61,6 +62,9 @@ from money_service import MoneyError
 from telegram_auth import InitDataError, verify_init_data
 from models import (
     CalendarChoice,
+    GoalCreate,
+    GoalMove,
+    GoalUpdate,
     CategoryCreate,
     CategoryOrder,
     CategoryUpdate,
@@ -385,6 +389,40 @@ def update_me(payload: MeUpdate, background: BackgroundTasks, user: dict = Depen
 
 
 # ---------- Деньги (задача №3): всё через money_service, user_id только из current_user ----------
+
+# ---------- Цели накопления (goals_service, миграция 011) ----------
+
+@app.get("/money/goals")
+def list_goals(user: dict = Depends(current_user)):
+    return goals_service.list_goals(user["id"])
+
+
+@app.post("/money/goals", status_code=201)
+def create_goal(payload: GoalCreate, user: dict = Depends(current_user)):
+    return goals_service.create_goal(user["id"], payload.model_dump())
+
+
+@app.patch("/money/goals/{goal_id}")
+def update_goal(goal_id: str, payload: GoalUpdate, user: dict = Depends(current_user)):
+    return goals_service.update_goal(goal_id, user["id"], payload.model_dump(exclude_unset=True))
+
+
+@app.delete("/money/goals/{goal_id}", status_code=204)
+def delete_goal(goal_id: str, user: dict = Depends(current_user)):
+    goals_service.delete_goal(goal_id, user["id"])
+
+
+@app.get("/money/goals/{goal_id}/moves")
+def goal_moves(goal_id: str, user: dict = Depends(current_user)):
+    return goals_service.moves(goal_id, user["id"])
+
+
+@app.post("/money/goals/{goal_id}/moves", status_code=201)
+def add_goal_move(goal_id: str, payload: GoalMove, user: dict = Depends(current_user)):
+    """Отложить (take: false) или снять (take: true) сумму в валюте цели."""
+    amount = money_service.parse_amount(payload.amount)
+    return goals_service.add_move(goal_id, user["id"], -amount if payload.take else amount)
+
 
 @app.get("/money/categories")
 def list_money_categories(kind: Optional[str] = Query(None), user: dict = Depends(current_user)):

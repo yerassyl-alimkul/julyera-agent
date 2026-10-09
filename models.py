@@ -236,6 +236,27 @@ class ApplePayIn(BaseModel):
     card: Optional[str] = None      # карта (не сохраняется)
 
 
+class GoalCreate(BaseModel):
+    """POST /money/goals: суммы строкой, как везде в деньгах; проверяет goals_service."""
+    name: str
+    target: Union[str, float, int]
+    currency: Optional[str] = None
+    due_date: Optional[str] = None
+    initial: Optional[Union[str, float, int]] = None
+
+
+class GoalUpdate(BaseModel):
+    name: Optional[str] = None
+    target: Optional[Union[str, float, int]] = None
+    currency: Optional[str] = None
+    due_date: Optional[str] = None
+
+
+class GoalMove(BaseModel):
+    amount: Union[str, float, int]
+    take: bool = False  # true — снять из цели
+
+
 class CalendarChoice(BaseModel):
     """PUT /google/calendars: из каких календарей переносить события ("primary" — основной)."""
     ids: List[str] = Field(..., min_length=1, max_length=30)

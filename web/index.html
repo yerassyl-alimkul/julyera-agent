@@ -1011,6 +1011,28 @@ applyTheme();
   .money-head .t-h1-month { margin: 0; }
   .money-tools { display: flex; flex-wrap: wrap; gap: var(--gap-s); padding-top: var(--gap-l); }
   .money-cards { display: flex; flex-direction: column; gap: var(--gap-m); padding-top: var(--gap-section); }
+  /* Цели накопления */
+  .goals-title { margin: 0; padding-top: var(--gap-section); }
+  .goal-list { display: flex; flex-direction: column; gap: var(--gap-m); padding: var(--gap-m) 0 var(--gap-section); }
+  .goal-card { display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; border: 1px solid var(--line);
+    border-radius: var(--radius-card); background: var(--surface); color: var(--ink); text-align: left; font: inherit; }
+  .goal-card.done { opacity: 0.7; }
+  .goal-top { display: flex; justify-content: space-between; align-items: baseline; gap: var(--gap-s); }
+  .goal-top b { font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
+  .goal-top span, .goal-sub { font-size: 13px; color: var(--ink-muted); white-space: nowrap; }
+  .goal-nums { display: flex; justify-content: space-between; gap: var(--gap-s); font-size: 15px; }
+  .goal-card .money-bar-track { height: 10px; margin: 4px 0; }
+  .goal-card .btn-primary, .goal-card .btn-soft { margin-top: var(--gap-s); }
+  .goal-card .btn-soft { align-self: stretch; }
+  .goal-empty { padding: 28px 18px; border: 1.5px dashed var(--dashed); border-radius: var(--radius-card);
+    color: var(--ink-muted); text-align: center; line-height: 1.5; }
+  #goalSheet .field-row { align-items: center; }
+  .goal-cur { flex: 0 0 auto; margin-top: 0; }
+  .goal-cur button { min-width: 52px; }
+  .goal-amount { font-size: 22px; font-weight: 600; }
+  .goal-history { display: flex; flex-direction: column; }
+  .goal-history div { display: flex; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--hairline); font-size: 15px; }
+  .goal-history div span { color: var(--ink-muted); }
   .money-card {
     padding: 16px 18px;
     border: 1px solid var(--line);
@@ -1730,15 +1752,16 @@ applyTheme();
         <button type="button" data-wtab="expense" aria-pressed="true">Расходы</button>
         <button type="button" data-wtab="income" aria-pressed="false">Доходы</button>
         <button type="button" data-wtab="trend" aria-pressed="false">Динамика</button>
+        <button type="button" data-wtab="goals" aria-pressed="false">Цели</button>
       </div>
-      <div class="money-head">
+      <div class="money-head" id="moneyHead">
         <h1 class="t-h1-month" id="moneyMonthLabel"></h1>
         <div class="cal-nav">
           <button class="tb-btn" id="moneyPrev" aria-label="Предыдущий месяц"><svg viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></svg></button>
           <button class="tb-btn" id="moneyNext" aria-label="Следующий месяц"><svg viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></svg></button>
         </div>
       </div>
-      <div class="money-tools">
+      <div class="money-tools" id="moneyTools">
         <button class="pill-btn" id="moneyCurrent" hidden>Текущий</button>
         <button class="pill-btn" id="moneyCategoriesBtn">Категории</button>
         <button class="pill-btn" id="moneyCurrencyBtn">Валюта</button>
@@ -1766,6 +1789,12 @@ applyTheme();
           </div>
           <div class="money-list" id="moneyList"></div>
         </section>
+      </div>
+
+      <div id="moneyGoalsView" hidden>
+        <h1 class="t-h1-month goals-title">Цели</h1>
+        <div class="money-cards" id="goalsTotal"></div>
+        <div class="goal-list" id="goalsList"></div>
       </div>
 
       <div id="moneyTrendView" hidden>
@@ -2033,6 +2062,83 @@ applyTheme();
     <p class="newtask-hint">События из отмеченных календарей становятся задачами, изменения переносятся в обе стороны. Новые задачи из JulYera попадают в основной календарь.</p>
     <div class="cur-options" id="calendarsOptions" aria-labelledby="calendarsTitle"></div>
     <button class="btn-primary" id="calendarsSave" type="button" hidden>Сохранить</button>
+  </div>
+</div>
+
+<!-- Цель накопления: новая / правка -->
+<div class="sheet" id="goalSheet" role="dialog" aria-modal="true" aria-labelledby="goalTitle" hidden>
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <button class="tb-btn" id="goalClose" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <h2 class="t-modal-title" id="goalTitle">Новая цель</h2>
+      <span></span>
+    </div>
+    <div class="edit-form">
+      <section class="form-section">
+        <label class="form-label" for="goalName">Название</label>
+        <input class="field" id="goalName" maxlength="40" placeholder="Отпуск в Японии" autocomplete="off">
+      </section>
+      <section class="form-section">
+        <label class="form-label" for="goalTarget">Сколько нужно</label>
+        <div class="field-row">
+          <input class="field" id="goalTarget" inputmode="decimal" placeholder="1500" autocomplete="off">
+          <div class="segmented goal-cur" id="goalCurrency" role="group" aria-label="Валюта цели">
+            <button type="button" data-cur="EUR" aria-pressed="true">€</button>
+            <button type="button" data-cur="KZT" aria-pressed="false">₸</button>
+          </div>
+        </div>
+      </section>
+      <section class="form-section">
+        <div class="form-section-head">
+          <label class="form-label" for="goalDue">К какой дате</label>
+          <span class="form-aside">необязательно</span>
+        </div>
+        <input class="field field-date" id="goalDue" type="date">
+      </section>
+      <section class="form-section" id="goalInitialSection">
+        <div class="form-section-head">
+          <label class="form-label" for="goalInitial">Уже отложено</label>
+          <span class="form-aside">необязательно</span>
+        </div>
+        <input class="field" id="goalInitial" inputmode="decimal" placeholder="0" autocomplete="off">
+      </section>
+      <button class="btn-danger" id="goalDelete" type="button" hidden>
+        <svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/></svg>
+        Удалить цель
+      </button>
+    </div>
+  </div>
+  <div class="sheet-footer">
+    <button class="btn-primary" id="goalSave">Создать цель</button>
+  </div>
+</div>
+
+<!-- «Отложить» / «Снять» и история цели -->
+<div class="sheet" id="goalMoveSheet" role="dialog" aria-modal="true" aria-labelledby="goalMoveTitle" hidden>
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <button class="tb-btn" id="goalMoveClose" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <h2 class="t-modal-title" id="goalMoveTitle">Цель</h2>
+      <button class="link-btn" id="goalEditBtn" type="button">Изменить</button>
+    </div>
+    <div class="edit-form">
+      <div class="segmented" id="goalMoveMode" role="group" aria-label="Что сделать">
+        <button type="button" data-take="0" aria-pressed="true">Отложить</button>
+        <button type="button" data-take="1" aria-pressed="false">Снять</button>
+      </div>
+      <section class="form-section">
+        <label class="form-label" for="goalMoveAmount" id="goalMoveLabel">Сумма</label>
+        <input class="field goal-amount" id="goalMoveAmount" inputmode="decimal" placeholder="0" autocomplete="off">
+        <div class="chip-group" id="goalQuick"></div>
+      </section>
+      <section class="form-section">
+        <h3 class="form-label">История</h3>
+        <div class="goal-history" id="goalHistory"></div>
+      </section>
+    </div>
+  </div>
+  <div class="sheet-footer">
+    <button class="btn-primary" id="goalMoveSave">Отложить</button>
   </div>
 </div>
 
@@ -4717,7 +4823,7 @@ document.getElementById('catNewName').onkeydown = (e) => { if (e.key === 'Enter'
 const MONEY_PAGE = 200;
 const WALLET_TAB_STORAGE = 'task_agent_wallet_tab';
 let moneyTab = 'expense';       // 'expense' | 'income' | 'trend'
-try { const t = localStorage.getItem(WALLET_TAB_STORAGE); if (['expense', 'income', 'trend'].includes(t)) moneyTab = t; } catch (e) { /* нет памяти */ }
+try { const t = localStorage.getItem(WALLET_TAB_STORAGE); if (['expense', 'income', 'trend', 'goals'].includes(t)) moneyTab = t; } catch (e) { /* нет памяти */ }
 let moneyMonth = null;          // 'YYYY-MM'; null — текущий
 let moneySummary = null;
 let moneyTrendData = null;
@@ -4801,6 +4907,7 @@ async function loadMoneyCategories() {
 }
 
 async function loadMoney(more) {
+  if (moneyTab === 'goals') { await loadGoals(); if (currentPage === 'money') renderMoney(); return; }
   const key = moneyMonth || currentMonthKey();
   const kindTab = moneyTab !== 'trend';
   // Каждый запрос сам по себе: сбой одного не мешает показать остальное.
@@ -4856,14 +4963,212 @@ function renderMoney() {
   document.getElementById('moneyCurrencyBtn').textContent = `Валюта: ${(moneyMe && moneyMe.default_currency) || 'EUR'}`;
   document.getElementById('moneyNext').disabled = key >= currentMonthKey();
   const trend = moneyTab === 'trend';
-  document.getElementById('moneyKindView').hidden = trend;
+  const goals = moneyTab === 'goals';
+  document.getElementById('moneyKindView').hidden = trend || goals;
   document.getElementById('moneyTrendView').hidden = !trend;
-  document.getElementById('fabBtn').setAttribute('aria-label', moneyTab === 'income' ? 'Добавить доход' : 'Добавить трату');
+  document.getElementById('moneyGoalsView').hidden = !goals;
+  document.getElementById('moneyHead').hidden = goals;   // у целей нет месяцев
+  document.getElementById('moneyTools').hidden = goals;
+  document.getElementById('fabBtn').setAttribute('aria-label',
+    goals ? 'Новая цель' : (moneyTab === 'income' ? 'Добавить доход' : 'Добавить трату'));
+  if (goals) { renderGoals(); return; }
   if (!moneyLoaded) return;
   const summary = moneySummary && moneySummary.month === key ? moneySummary : { currencies: [] };
   if (trend) renderTrendView(summary);
   else renderKindView(summary);
 }
+
+// ---------- Цели накопления (GET/POST/PATCH/DELETE /money/goals, /money/goals/{id}/moves) ----------
+// Отложенное — не расход. Суммы приходят строками, показ — moneyFmt; «Отложено всего» считает сервер.
+let moneyGoals = null;           // { goals: [...], total: {amount, currency, approx} | null }
+let goalEditing = null;          // цель в форме (null — новая)
+let goalMoving = null;           // цель в «Отложить / Снять»
+let goalTake = false;
+let goalCur = 'EUR';
+
+async function loadGoals() {
+  try { moneyGoals = await apiJson('/money/goals'); } catch (e) { if (!moneyGoals) toast(e.message || 'Цели не загрузились'); }
+  if (moneyTab === 'goals') renderGoals();
+}
+
+function goalDue(due) {
+  if (!due) return 'без срока';
+  const [y, m, d] = due.split('-').map(Number);
+  return `до ${d} ${MONTH_GENITIVE[m - 1]}${y !== new Date().getFullYear() ? ' ' + y : ''}`;
+}
+
+function renderGoals() {
+  const total = document.getElementById('goalsTotal');
+  const list = document.getElementById('goalsList');
+  total.innerHTML = '';
+  list.innerHTML = '';
+  if (!moneyGoals) { list.innerHTML = '<div class="goal-empty">Загружаю цели…</div>'; return; }
+  const goals = moneyGoals.goals;
+  if (!goals.length) {
+    list.innerHTML = '<div class="goal-empty">Целей пока нет.<br>Нажмите «+», чтобы начать копить — например, на отпуск.</div>';
+    return;
+  }
+  if (moneyGoals.total) {
+    const card = document.createElement('div');
+    card.className = 'money-card';
+    card.innerHTML = '<div class="money-card-cur">Отложено всего</div><b class="money-total"></b>';
+    card.querySelector('b').textContent = (moneyGoals.total.approx ? '≈ ' : '') + moneyFmt(moneyGoals.total.amount, moneyGoals.total.currency);
+    total.appendChild(card);
+  }
+  goals.forEach(g => {
+    const card = document.createElement('div');
+    card.className = 'goal-card' + (g.achieved ? ' done' : '');
+    card.innerHTML = '<div class="goal-top"><b></b><span></span></div><span class="money-bar-track"><span class="money-bar-fill"></span></span>' +
+      '<div class="goal-nums"><span class="goal-saved"></span><span class="goal-sub goal-pct"></span></div>';
+    card.querySelector('.goal-top b').textContent = g.name;
+    card.querySelector('.goal-top span').textContent = g.achieved ? '✓ достигнута' : goalDue(g.due_date);
+    card.querySelector('.money-bar-fill').style.width = g.percent + '%';
+    card.querySelector('.goal-saved').textContent = `${moneyFmt(g.saved, g.currency)} из ${moneyFmt(g.target, g.currency)}`;
+    card.querySelector('.goal-pct').textContent = g.percent + '%';
+    if (g.per_month && !g.achieved) {
+      const sub = document.createElement('div');
+      sub.className = 'goal-sub';
+      sub.textContent = `≈ ${moneyFmt(g.per_month, g.currency)} в месяц, чтобы успеть`;
+      card.appendChild(sub);
+    }
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = g.achieved ? 'btn-soft' : 'btn-primary';
+    btn.dataset.focusKey = 'goal-' + g.id;
+    btn.textContent = g.achieved ? 'Открыть' : 'Отложить';
+    btn.onclick = () => openGoalMove(g);
+    card.appendChild(btn);
+    list.appendChild(card);
+  });
+}
+
+const goalSheet = document.getElementById('goalSheet');
+const goalMoveSheet = document.getElementById('goalMoveSheet');
+function renderGoalCur() {
+  document.querySelectorAll('#goalCurrency [data-cur]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.cur === goalCur)));
+}
+document.querySelectorAll('#goalCurrency [data-cur]').forEach(b => { b.onclick = () => { goalCur = b.dataset.cur; renderGoalCur(); }; });
+
+function openGoalForm(goal) {
+  goalEditing = goal;
+  document.getElementById('goalTitle').textContent = goal ? 'Изменить цель' : 'Новая цель';
+  document.getElementById('goalName').value = goal ? goal.name : '';
+  document.getElementById('goalTarget').value = goal ? goal.target.replace('.00', '').replace('.', ',') : '';
+  document.getElementById('goalDue').value = goal && goal.due_date ? goal.due_date : '';
+  document.getElementById('goalInitial').value = '';
+  document.getElementById('goalInitialSection').hidden = !!goal;
+  document.getElementById('goalDelete').hidden = !goal;
+  document.getElementById('goalSave').textContent = goal ? 'Сохранить' : 'Создать цель';
+  goalCur = goal ? goal.currency : ((moneyMe && moneyMe.default_currency) || 'EUR');
+  renderGoalCur();
+  goalSheet.hidden = false;
+  document.body.classList.add('no-scroll');
+  setBackgroundInert(true);
+  document.getElementById('goalName').focus();
+}
+function closeGoalForm() {
+  goalSheet.hidden = true;
+  if (goalMoveSheet.hidden) { document.body.classList.remove('no-scroll'); setBackgroundInert(false); }
+}
+async function saveGoal() {
+  const name = document.getElementById('goalName').value.trim();
+  const target = document.getElementById('goalTarget').value.trim();
+  if (!name) { toast('Назовите цель'); document.getElementById('goalName').focus(); return; }
+  if (!target) { toast('Сколько нужно накопить?'); document.getElementById('goalTarget').focus(); return; }
+  const body = { name, target, currency: goalCur, due_date: document.getElementById('goalDue').value || null };
+  const initial = document.getElementById('goalInitial').value.trim();
+  if (!goalEditing && initial) body.initial = initial;
+  const btn = document.getElementById('goalSave');
+  btn.disabled = true;
+  try {
+    const saved = await apiJson(goalEditing ? `/money/goals/${goalEditing.id}` : '/money/goals',
+      { method: goalEditing ? 'PATCH' : 'POST', headers: JSON_HEADERS, body: JSON.stringify(body) });
+    toast(goalEditing ? 'Сохранено' : 'Цель создана');
+    closeGoalForm();
+    loadGoals();
+  } catch (e) { toast(e.message || 'Не удалось сохранить'); }
+  btn.disabled = false;
+}
+async function deleteGoal() {
+  if (!goalEditing || !confirm(`Удалить цель «${goalEditing.name}» вместе с историей?`)) return;
+  try {
+    await apiJson(`/money/goals/${goalEditing.id}`, { method: 'DELETE' });
+    toast('Цель удалена');
+    closeGoalForm();
+    closeGoalMove();
+    loadGoals();
+  } catch (e) { toast(e.message || 'Не удалось удалить'); }
+}
+
+async function openGoalMove(goal) {
+  goalMoving = goal;
+  goalTake = false;
+  document.getElementById('goalMoveAmount').value = '';
+  document.getElementById('goalHistory').innerHTML = '';
+  renderGoalMove();
+  goalMoveSheet.hidden = false;
+  document.body.classList.add('no-scroll');
+  setBackgroundInert(true);
+  document.getElementById('goalMoveAmount').focus();
+  try {
+    const moves = await apiJson(`/money/goals/${goal.id}/moves`);
+    const box = document.getElementById('goalHistory');
+    box.innerHTML = moves.length ? '' : '<p class="form-hint">Пока пусто</p>';
+    moves.forEach(m => {
+      const row = document.createElement('div');
+      const n = Number(m.amount);
+      row.innerHTML = '<b></b><span></span>';
+      row.querySelector('b').textContent = (n > 0 ? '+' : '−') + moneyFmt(m.amount.replace('-', ''), goal.currency);
+      row.querySelector('span').textContent = dayLabel(m.created_at.slice(0, 10));
+      box.appendChild(row);
+    });
+  } catch (e) { /* история не обязательна */ }
+}
+function renderGoalMove() {
+  const g = goalMoving;
+  document.getElementById('goalMoveTitle').textContent = g.name;
+  document.querySelectorAll('#goalMoveMode [data-take]').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.take === '1') === goalTake)));
+  document.getElementById('goalMoveLabel').textContent = `${goalTake ? 'Снять' : 'Отложить'}, ${g.currency === 'EUR' ? '€' : '₸'} · отложено ${moneyFmt(g.saved, g.currency)} из ${moneyFmt(g.target, g.currency)}`;
+  document.getElementById('goalMoveSave').textContent = goalTake ? 'Снять' : 'Отложить';
+  const quick = document.getElementById('goalQuick');
+  quick.innerHTML = '';
+  const options = g.currency === 'KZT' ? ['5000', '10000', '50000'] : ['50', '100', '200'];
+  if (!goalTake && g.per_month) options.push(g.per_month);
+  if (!goalTake && Number(g.left) > 0) options.push(g.left);
+  [...new Set(options)].forEach(v => {
+    const label = v === g.per_month ? `${moneyFmt(v, g.currency)} — по плану` : (v === g.left ? `${moneyFmt(v, g.currency)} — до цели` : moneyFmt(v, g.currency));
+    const [btn, text] = choiceChipEl(label, false, 'quick', () => { document.getElementById('goalMoveAmount').value = v.replace('.00', '').replace('.', ','); });
+    btn.appendChild(text);
+    quick.appendChild(btn);
+  });
+}
+document.querySelectorAll('#goalMoveMode [data-take]').forEach(b => { b.onclick = () => { goalTake = b.dataset.take === '1'; renderGoalMove(); }; });
+function closeGoalMove() {
+  goalMoveSheet.hidden = true;
+  if (goalSheet.hidden) { document.body.classList.remove('no-scroll'); setBackgroundInert(false); }
+}
+async function saveGoalMove() {
+  const amount = document.getElementById('goalMoveAmount').value.trim();
+  if (!amount) { toast('Введите сумму'); document.getElementById('goalMoveAmount').focus(); return; }
+  const btn = document.getElementById('goalMoveSave');
+  btn.disabled = true;
+  try {
+    const g = await apiJson(`/money/goals/${goalMoving.id}/moves`, { method: 'POST', headers: JSON_HEADERS,
+      body: JSON.stringify({ amount, take: goalTake }) });
+    toast(g.first_achieved ? `🎉 Цель «${g.name}» достигнута!` : (goalTake ? 'Снято' : `Отложено · ${g.percent}%`));
+    closeGoalMove();
+    loadGoals();
+  } catch (e) { toast(e.message || 'Не удалось сохранить'); }
+  btn.disabled = false;
+}
+document.getElementById('goalClose').onclick = closeGoalForm;
+document.getElementById('goalSave').onclick = saveGoal;
+document.getElementById('goalDelete').onclick = deleteGoal;
+document.getElementById('goalMoveClose').onclick = closeGoalMove;
+document.getElementById('goalMoveSave').onclick = saveGoalMove;
+// Форма цели в разметке раньше окна «Отложить» — сначала закрываем его, иначе форма окажется под ним.
+document.getElementById('goalEditBtn').onclick = () => { const g = goalMoving; closeGoalMove(); openGoalForm(g); };
+document.getElementById('goalMoveAmount').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); saveGoalMove(); } };
 
 // ---------- Расходы / Доходы ----------
 const CURRENCY_NAMES = { EUR: 'Евро', KZT: 'Тенге' };
@@ -6068,6 +6373,7 @@ document.getElementById('newTaskClose').onclick = closeNewTask;
 document.getElementById('fabBtn').onclick = () => {
   // На вкладке «Заметки» «+» ведёт в поле новой заметки (раздел 5).
   if (currentPage === 'notes') document.getElementById('noteInput').focus();
+  else if (currentPage === 'money' && moneyTab === 'goals') openGoalForm(null);
   else if (currentPage === 'money') openMoneyForm(null, 'tx', { kind: moneyTab === 'income' ? 'income' : 'expense' });
   else openNewTask();
 };
@@ -6693,6 +6999,8 @@ document.addEventListener('keydown', (e) => {
   else if (!moneySheet.hidden) closeMoneyForm();
   else if (!currencySheet.hidden) closeCurrency();
   else if (!calendarsSheet.hidden) closeCalendars();
+  else if (!goalSheet.hidden) closeGoalForm();
+  else if (!goalMoveSheet.hidden) closeGoalMove();
   else if (!analyticsSheet.hidden) closeAnalytics();
   else if (!filtersSheet.hidden) closeFilters();
   else if (!categoriesSheet.hidden) closeCategories();
