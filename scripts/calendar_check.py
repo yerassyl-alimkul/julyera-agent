@@ -254,7 +254,7 @@ def main():
     check("модель получила только названия", all(isinstance(t, str) for batch in titles_seen for t in batch))
     check("задачи B — только из календаря B", {t["google_event_id"] for t in tasks_of(B)} == {"b1"}
           and not tasks_of(C))
-    to_a = [t for c, t in sent if c == A["telegram_user_id"]]
+    to_a = [t for c, t in sent if c == A["telegram_user_id"] and "Google Calendar" in t]  # сводки по часам — не здесь
     check("одно сообщение «перенёс 9 событий»", len(to_a) == 1 and "9" in to_a[0], str(to_a))
 
     sent.clear()

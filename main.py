@@ -45,6 +45,7 @@ from fastapi.staticfiles import StaticFiles
 load_dotenv()
 
 import task_service
+import backup_service
 import calendar_sync
 import categories_service
 import comments_service
@@ -340,13 +341,19 @@ def get_me(user: dict = Depends(current_user)):
             "timezone": user.get("timezone") or users_service.DEFAULT_TIMEZONE,
             "default_currency": money_service.default_currency(user["id"]),
             "currencies": list(money_service.CURRENCIES),
-            "calendar_import": user.get("calendar_import") is not False}
+            "calendar_import": user.get("calendar_import") is not False,
+            "remind_before": digest_service.remind_before(user)}
 
 
 @app.patch("/me")
 def update_me(payload: MeUpdate, background: BackgroundTasks, user: dict = Depends(current_user)):
     if payload.default_currency is not None:
         money_service.set_default_currency(user["id"], payload.default_currency)
+    if payload.remind_before is not None:
+        try:
+            digest_service.set_remind_before(user["id"], payload.remind_before)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Можно 0, 15, 30 или 60 минут")
     if payload.calendar_import is not None:
         users_service.set_calendar_import(user["id"], payload.calendar_import)
         if payload.calendar_import:  # включили обратно — сразу подтянуть, что накопилось в календаре
@@ -514,6 +521,14 @@ async def telegram_webhook(token: str, request: Request):
     return {"ok": True}
 
 
+async def _send_telegram_document(client: httpx.AsyncClient, chat_id: int, filename: str, content: bytes,
+                                  caption: str) -> bool:
+    resp = await client.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendDocument",
+                             data={"chat_id": str(chat_id), "caption": caption},
+                             files={"document": (filename, content, "application/json")})
+    return resp.status_code == 200
+
+
 async def _send_telegram_message(client: httpx.AsyncClient, chat_id: int, text: str, buttons=None) -> bool:
     payload = {"chat_id": chat_id, "text": text}
     if buttons:
@@ -569,6 +584,13 @@ async def run_reminders(request: Request):
                             sent += 1
                     except Exception as exc:
                         logger.warning("Сообщение не отправлено: %s", type(exc).__name__)
+            try:  # воскресенье 21:00 — резервная копия данных пользователя в его чат
+                if digest_service.backup_due(user):
+                    name, content, count = backup_service.build(user["id"])
+                    for chat_id in users_service.get_chat_ids(user["id"]):
+                        await _send_telegram_document(client, chat_id, name, content, backup_service.caption(count))
+            except Exception as exc:
+                logger.warning("Резервная копия не отправлена: %s", type(exc).__name__)
 
     return {"sent": sent, "messages": messages, "recurring_notices": len(recurring_messages)}
 

@@ -23,7 +23,7 @@ def _now() -> str:
 # Значения по умолчанию и первичные ключи — как в schema.sql (после миграции multi-user).
 DEFAULTS = {
     "users": lambda: {"id": str(uuid.uuid4()), "is_admin": False, "telegram_user_id": None,
-                      "access_key": secrets.token_hex(32), "timezone": "Europe/Rome", "default_currency": "EUR", "digest_enabled": True,
+                      "access_key": secrets.token_hex(32), "timezone": "Europe/Rome", "default_currency": "EUR", "digest_enabled": True, "remind_before": 30,
                       "created_at": _now()},
     "money_categories": lambda: {"id": str(uuid.uuid4()), "sort_order": 0, "monthly_limit": None, "limit_currency": None,
                                  "created_at": _now()},
@@ -41,6 +41,7 @@ DEFAULTS = {
                       "status": "To Do", "note": None, "is_recurring": False, "recurrence_pattern": None,
                       "tags": [], "google_event_id": None, "snoozed_until": None, "created_at": _now(), "updated_at": _now()},
     "digest_log": lambda: {"sent_at": _now()},
+    "pre_reminder_log": lambda: {"sent_at": _now()},
     "notes": lambda: {"id": str(uuid.uuid4()), "created_at": _now(), "updated_at": _now()},
     "subtasks": lambda: {"id": str(uuid.uuid4()), "is_done": False, "created_at": _now()},
     "telegram_chats": lambda: {"created_at": _now()},
@@ -138,7 +139,7 @@ class Query:
             if row.get(col) is None:
                 raise FakeError(f'null value in column "{col}" of relation "{self.table}"')
         composite = {"money_limit_alerts": ("user_id", "category_id", "month", "threshold"),
-                     "money_report_log": ("user_id", "month")}
+                     "money_report_log": ("user_id", "month"), "pre_reminder_log": ("task_id", "deadline")}
         if self.table in composite:  # составной первичный ключ
             cols = composite[self.table]
             for other in self._rows():

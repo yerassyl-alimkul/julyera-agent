@@ -1589,6 +1589,16 @@ applyTheme();
     </div>
   </div>
 
+  <div class="menu-theme" id="remindBeforeBox" hidden>
+    <span class="menu-theme-label" id="remindLabel">Напоминать до задачи со временем</span>
+    <div class="segmented" role="group" aria-labelledby="remindLabel">
+      <button type="button" data-remind="15" aria-pressed="false">15 мин</button>
+      <button type="button" data-remind="30" aria-pressed="true">30 мин</button>
+      <button type="button" data-remind="60" aria-pressed="false">1 час</button>
+      <button type="button" data-remind="0" aria-pressed="false">Выкл</button>
+    </div>
+  </div>
+
   <div class="menu-status">
     <div class="menu-status-row" id="backendStatus">
       <span class="status-dot" id="statusDot"></span>
@@ -3760,6 +3770,29 @@ async function showCalendarImportSwitch() {
   row.hidden = false;
   document.getElementById('calendarChoiceRow').hidden = moneyMe.calendar_import === false;
   loadCalendarChoice();
+}
+
+// «Напоминать до задачи со временем» (users.remind_before: 15 / 30 / 60 минут или 0 — выкл; бот — /remind).
+function renderRemindButtons() {
+  const box = document.getElementById('remindBeforeBox');
+  if (!moneyMe) return;
+  const current = moneyMe.remind_before === undefined ? 30 : moneyMe.remind_before;
+  box.querySelectorAll('[data-remind]').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.remind) === current)));
+  box.hidden = false;
+}
+document.querySelectorAll('[data-remind]').forEach(btn => {
+  btn.onclick = async () => {
+    const minutes = Number(btn.dataset.remind);
+    try {
+      moneyMe = await apiJson('/me', { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify({ remind_before: minutes }) });
+      renderRemindButtons();
+      toast(minutes ? `Напомню за ${minutes === 60 ? 'час' : minutes + ' мин'} до задачи` : 'Напоминания перед задачами выключены');
+    } catch (e) { toast(e.message || 'Не удалось сохранить'); }
+  };
+});
+async function loadRemindSetting() {
+  try { if (!moneyMe) moneyMe = await apiJson('/me'); } catch (e) { return; }
+  renderRemindButtons();
 }
 
 // Выбор календарей (GET/PUT /google/calendars). needs_upgrade — старое подключение без права видеть список.
@@ -6369,6 +6402,7 @@ document.addEventListener('keydown', (e) => {
 renderChips();
 firstLoad();
 checkGoogleStatus();
+loadRemindSetting();
 document.addEventListener('visibilitychange', () => { if (!document.hidden) checkGoogleStatus(); });
 setInterval(() => { if (tasksLoaded) loadTasks(); }, 15000);
 </script>

@@ -278,6 +278,109 @@ def main():
     at(8, 20, plus_days=24)
     check("отчёт за месяц не повторяется", not [m for m in to(A, run()) if m.text.startswith("📊")])
 
+    section("Напоминание перед задачей")
+    import json as _json
+    D = users_service.create_user("Тест D", 2004)
+    ic.give_categories(D, "Work")
+    users_service.link_chat(D["telegram_user_id"], D["id"])
+    hD = ic.key_headers(D)
+    pre = lambda msgs: [m for m in to(D, msgs) if m.text.startswith("🔔")]
+    t_pre = add(D, "Пара по праву", "2026-10-08T15:00:00+00:00")
+    add(D, "Без времени", "2026-10-08T23:59:00+00:00")
+    add(D, "Весь день", "2026-10-08T23:59:00+00:00", gcal_all_day=True)
+    check("по умолчанию — за 30 минут", client.get("/me", headers=hD).json()["remind_before"] == 30)
+    at(14, 20)
+    check("за 40 минут — ещё рано", not pre(run()))
+    at(14, 35)
+    got = pre(run())
+    check("за 25 минут — «🔔 В 15:00 (через 25 мин)» с кнопкой «Готово»",
+          len(got) == 1 and "В 15:00 (через 25 мин): Пара по праву" in got[0].text
+          and got[0].buttons[0][0]["callback_data"] == f"done:{t_pre['id']}", str([m.text for m in got]))
+    at(14, 50)
+    check("второй раз не напоминает", not pre(run()))
+    db.table("tasks").update({"deadline": "2026-10-08T16:00:00+00:00"}).eq("id", t_pre["id"]).execute()
+    at(15, 40)
+    check("задачу перенесли — напомнит о новом времени", len(pre(run())) == 1)
+    at(23, 40)
+    check("задачи «без времени» (23:59) и на весь день — без напоминания", not pre(run()))
+    r = client.patch("/me", headers=hD, json={"remind_before": 15})
+    check("в меню можно выбрать 15 минут", r.status_code == 200 and r.json()["remind_before"] == 15)
+    check("другие значения — 422", client.patch("/me", headers=hD, json={"remind_before": 45}).status_code == 422)
+    add(D, "Созвон с другом", "2026-10-09T17:00:00+00:00")
+    at(16, 40, plus_days=1)
+    check("при 15 минутах за 20 минут — ещё рано", not pre(run()))
+    at(16, 47, plus_days=1)
+    check("…а за 13 — напоминает", len(pre(run())) == 1)
+    client.patch("/me", headers=hD, json={"remind_before": 0})
+    add(D, "Ещё созвон", "2026-10-09T18:00:00+00:00")
+    at(17, 50, plus_days=1)
+    check("выключено — не напоминает", not pre(run()))
+    u = ic.tg_update(D["telegram_user_id"], text="/remind 60")
+    asyncio.run(h.remind_command(u, SimpleNamespace(bot=ic.FakeBot())))
+    check("/remind 60 в боте", users_service.get_by_id(D["id"])["remind_before"] == 60 and "60" in u.replies[-1].text)
+    check("чужая настройка не меняется", users_service.get_by_id(A["id"]).get("remind_before", 30) == 30)
+
+    section("Итоги недели и «завтра спишется»")
+    done_week = add(D, "Сделано во вторник", "2026-10-06T10:00:00+00:00", status="Done",
+                    updated_at="2026-10-06T10:00:00+00:00")
+    add(D, "План на понедельник", "2026-10-12T09:00:00+00:00")
+    money_service.ensure_defaults(D["id"])
+    cat = money_service.list_categories(D["id"], "expense")[0]["id"]
+    db.table("money_recurring").insert({"user_id": D["id"], "kind": "expense", "amount": "12.99", "currency": "EUR",
+                                        "category_id": cat, "note": "Netflix", "day_of_month": 12,
+                                        "next_run": "2026-10-12"}).execute()
+    at(20, 10, plus_days=1)  # пятница
+    msgs = to(D, run())
+    check("в будни вечером — обычные «Итоги дня»", any("Итоги дня" in m.text for m in msgs)
+          and not any("Итоги недели" in m.text for m in msgs))
+    check("в пятницу о списании в понедельник не пишет", not any("спишется" in m.text for m in msgs))
+    at(20, 10, plus_days=3)  # воскресенье
+    msgs = to(D, run())
+    week = next((m.text for m in msgs if "Итоги недели" in m.text), "")
+    check("в воскресенье вместо итогов дня — итоги недели", week and not any("Итоги дня" in m.text for m in msgs))
+    check("…с выполненным за неделю и планом по дням",
+          "Сделано во вторник" in week and "План на неделю" in week and "Пн 12 окт: План на понедельник" in week, week)
+    charge = next((m.text for m in msgs if "спишется" in m.text), "")
+    check("накануне платежа — «💳 Завтра спишется: 12.99 EUR — Netflix»", "12.99 EUR — Netflix" in charge, charge)
+    at(20, 40, plus_days=3)
+    check("…один раз", not any("спишется" in m.text for m in to(D, run())))
+
+    section("Резервная копия")
+    docs = []
+
+    async def fake_doc(_client, chat_id, filename, content, caption):
+        docs.append(SimpleNamespace(chat_id=chat_id, filename=filename, data=_json.loads(content), caption=caption))
+        return True
+    app_main._send_telegram_document = fake_doc
+    at(20, 30, plus_days=3)
+    run()
+    check("до 21:00 копии нет", not docs)
+    at(21, 5, plus_days=3)
+    run()
+    mine = [d for d in docs if d.chat_id == D["telegram_user_id"]]
+    data = mine[0].data if mine else {}
+    titles = {t["task"] for t in data.get("tasks", [])}
+    check("в воскресенье в 21:00 — файл каждому в его чат", len(mine) == 1 and mine[0].filename.endswith(".json"))
+    check("в файле только свои данные", "План на понедельник" in titles and "Сдать отчёт" not in titles
+          and all(t["user_id"] == D["id"] for t in data["tasks"]) and data["money_recurring"][0]["note"] == "Netflix")
+    check("ни ключа доступа, ни токенов в файле",
+          D["access_key"] not in _json.dumps(data) and "access_key" not in data.get("user", {}))
+    at(21, 40, plus_days=3)
+    run()
+    check("один раз за воскресенье", len([d for d in docs if d.chat_id == D["telegram_user_id"]]) == 1)
+    at(21, 5, plus_days=4)
+    run()
+    check("в понедельник копии нет", len([d for d in docs if d.chat_id == D["telegram_user_id"]]) == 1)
+    bot_docs = []
+
+    class DocBot(ic.FakeBot):
+        async def send_document(self, chat_id, document, filename, caption):
+            bot_docs.append((chat_id, filename, _json.loads(document)))
+    u = ic.tg_update(D["telegram_user_id"], text="/backup")
+    asyncio.run(h.backup_command(u, SimpleNamespace(bot=DocBot())))
+    check("/backup присылает файл сразу", len(bot_docs) == 1 and bot_docs[0][0] == D["telegram_user_id"]
+          and {t["task"] for t in bot_docs[0][2]["tasks"]} == titles)
+
     section("Устойчивость")
     at(13, 5, plus_days=1)
     real = digest_service.due_messages

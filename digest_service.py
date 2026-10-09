@@ -8,6 +8,11 @@
 вставляется строка (user_id, kind, day), а повторная вставка упирается в первичный ключ.
 Отложенная задача (tasks.snoozed_until) напоминается один раз, когда срок наступил; поле при этом очищается.
 
+Миграция 009: напоминание за users.remind_before минут до задачи со временем (pre_reminder_log — один раз на
+задачу и её дедлайн, перенесли задачу — напомнит снова), итоги недели в воскресенье вместо вечерней сводки,
+вечером накануне — «завтра спишется» по повторяющимся платежам (charges), в воскресенье в 21:00 — резервная
+копия данных пользователя файлом в его чат (backup, сам файл собирает backup_service).
+
 Изоляция как везде: всё по user_id; задача из кнопки проверяется на принадлежность нажавшему.
 """
 import logging
@@ -26,7 +31,13 @@ LOG_TABLE = "digest_log"
 TASKS = "tasks"
 
 # Окна рассылок по местному времени пользователя: (вид, время). Окно — час после указанного времени.
-SLOTS = [("morning", time(8, 0)), ("remind_1", time(13, 0)), ("remind_2", time(17, 0)), ("evening", time(20, 0))]
+SLOTS = [("morning", time(8, 0)), ("remind_1", time(13, 0)), ("remind_2", time(17, 0)), ("evening", time(20, 0)),
+         ("backup", time(21, 0))]
+REMIND_CHOICES = (0, 15, 30, 60)   # минут до задачи со временем; 0 — не напоминать (users.remind_before)
+DEFAULT_REMIND_BEFORE = 30
+PRE_LOG = "pre_reminder_log"
+WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+BACKUP_WEEKDAY = 6  # воскресенье
 WINDOW = timedelta(hours=1)
 SNOOZE = timedelta(hours=1)
 REMINDER_DAYS_AHEAD = 2   # как раньше: дедлайн до «сегодня + 2 дня» по дате
@@ -280,10 +291,17 @@ def due_messages(user: dict, now_utc: Optional[datetime] = None) -> list[tuple[s
                 if report:
                     out.append(report)
             else:
-                text, can_move = evening(uid, now_utc)
+                text, can_move = weekly(uid, now_utc) if local.weekday() == 6 else evening(uid, now_utc)
                 buttons = [[{"text": "➡️ Перенести невыполненное на завтра",
                              "callback_data": f"dmove:{local.date().isoformat()}"}]] if can_move else None
                 out.append((text, buttons))
+    if slot == "evening" and user.get("digest_enabled", True) is not False:
+        charges = charges_text(uid, local.date())
+        if charges and claim(uid, "charges", local.date()):
+            out.append((charges, None))
+    for task in upcoming_tasks(user, now_utc):
+        if _claim_pre(task):
+            out.append(pre_reminder(task, local))
     matured = matured_snoozes(uid, now_utc)
     in_slot = set()
     if slot in ("remind_1", "remind_2"):
@@ -314,6 +332,158 @@ def monthly_report(user_id: str, today: date) -> Optional[tuple[str, list]]:
     except Exception as exc:
         logger.warning("Месячный отчёт не собран: %s", type(exc).__name__)
         return None
+
+
+# ---------------------------------------------------------------- напоминание перед задачей
+
+def remind_before(user: dict) -> int:
+    value = user.get("remind_before")
+    return value if value in REMIND_CHOICES else DEFAULT_REMIND_BEFORE
+
+
+def set_remind_before(user_id: str, minutes: int) -> None:
+    if minutes not in REMIND_CHOICES:
+        raise ValueError("bad remind_before")
+    supabase.table("users").update({"remind_before": minutes}).eq("id", user_id).execute()
+
+
+def _has_time(task: dict) -> bool:
+    """«Без времени» у нас 23:59 (конец дня) — о таких и о событиях на весь день заранее не напоминаем."""
+    d = _deadline(task)
+    return bool(d) and d.strftime("%H:%M") != "23:59" and not task.get("gcal_all_day")
+
+
+def upcoming_tasks(user: dict, now_utc: Optional[datetime] = None) -> list[dict]:
+    """Задачи со временем, до которых осталось не больше remind_before минут (и время ещё не прошло)."""
+    minutes = remind_before(user)
+    if not minutes:
+        return []
+    now_utc = now_utc or utc_now()
+    local = local_now(user["id"], now_utc)
+    out = []
+    for t in _open_tasks(user["id"]):
+        d = _deadline(t)
+        if _has_time(t) and local < d <= local + timedelta(minutes=minutes) and not _is_snoozed(t, now_utc):
+            out.append(t)
+    return sorted(out, key=lambda t: t["deadline"])
+
+
+def _claim_pre(task: dict) -> bool:
+    """Одно напоминание на задачу и её дедлайн (вставка до отправки, повтор упирается в первичный ключ)."""
+    try:
+        supabase.table(PRE_LOG).insert({"task_id": task["id"], "deadline": task["deadline"]}).execute()
+        return True
+    except Exception as exc:
+        if getattr(exc, "code", None) != "23505" and "duplicate key" not in str(exc):
+            logger.warning("pre_reminder_log: вставка не удалась (%s)", type(exc).__name__)
+        return False
+
+
+def pre_reminder(task: dict, local: datetime) -> tuple[str, list]:
+    d = _deadline(task)
+    left = max(1, round((d - local).total_seconds() / 60))
+    left_text = f"через {left} мин" if left < 60 else "через час"
+    cat = f" · {task['category']}" if task.get("category") else ""
+    text = f"🔔 В {d.strftime('%H:%M')} ({left_text}): {task['task']}{cat}"
+    return text, [[{"text": "✅ Готово", "callback_data": f"done:{task['id']}"}]]
+
+
+# ---------------------------------------------------------------- итоги недели (воскресенье, вместо вечерней)
+
+def _done_between(user_id: str, start: date, end: date) -> list[dict]:
+    tz = tz_of(user_id)
+    out = []
+    for t in task_service.list_tasks(user_id, status=Status.done.value):
+        changed = _aware_utc(t.get("updated_at"))
+        if changed and start <= changed.astimezone(tz).date() <= end:
+            out.append(t)
+    return out
+
+
+def _spent_between_line(user_id: str, start: date, end: date) -> Optional[str]:
+    try:
+        import money_service
+        from decimal import Decimal
+
+        rows = money_service._fetch_all(lambda: supabase.table(money_service.TX_TABLE).select("id,amount,currency")
+                                        .eq("user_id", user_id).eq("kind", "expense")
+                                        .gte("spent_on", start.isoformat()).lte("spent_on", end.isoformat()))
+        totals = {}
+        for r in rows:
+            totals[r["currency"]] = totals.get(r["currency"], Decimal(0)) + Decimal(str(r["amount"]))
+        if not totals:
+            return None
+        return "💸 Потрачено за неделю: " + " · ".join(
+            f"{money_service.fmt(totals[c])} {c}" for c in money_service.CURRENCIES if c in totals)
+    except Exception as exc:
+        logger.warning("Траты за неделю не посчитаны: %s", type(exc).__name__)
+        return None
+
+
+def weekly(user_id: str, now_utc: Optional[datetime] = None) -> tuple[str, bool]:
+    """Итоги недели: сделано за неделю (пн–вс), что не закрыто, план на следующую неделю по дням, траты."""
+    v = today_view(user_id, now_utc)
+    today = v["today"]
+    monday = today - timedelta(days=today.weekday())
+    done = _done_between(user_id, monday, today)
+    unfinished = sorted(v["overdue"] + v["today_tasks"], key=lambda t: t["deadline"])
+    next_monday = monday + timedelta(days=7)
+    ahead = [t for t in _open_tasks(user_id)
+             if _deadline(t) and next_monday <= _deadline(t).date() < next_monday + timedelta(days=7)]
+    lines = [f"📅 Итоги недели · {short_date(monday)} – {short_date(today)}"]
+    lines.append(f"\n✅ Выполнено за неделю: {len(done)}" if done else "\nЗа неделю ничего не закрыто.")
+    for t in done[:10]:
+        lines.append(f"    • {t['task']}")
+    if len(done) > 10:
+        lines.append(f"    …и ещё {len(done) - 10}")
+    if unfinished:
+        lines.append(f"\nНе закрыто: {len(unfinished)}")
+        lines += _grouped(unfinished, today)
+    if ahead:
+        lines.append("\nПлан на неделю:")
+        by_day = {}
+        for t in sorted(ahead, key=lambda t: t["deadline"]):
+            by_day.setdefault(_deadline(t).date(), []).append(t)
+        for day, items in by_day.items():
+            names = ", ".join(_short(t["task"], 30) for t in items[:4]) + (f" и ещё {len(items) - 4}" if len(items) > 4 else "")
+            lines.append(f"  {WEEKDAYS[day.weekday()]} {short_date(day)}: {names}")
+    else:
+        lines.append("\nНа следующую неделю задач пока нет.")
+    spent = _spent_between_line(user_id, monday, today)
+    if spent:
+        lines.append(f"\n{spent}")
+    return "\n".join(lines), bool(unfinished)
+
+
+# ---------------------------------------------------------------- «завтра спишется»
+
+def charges_text(user_id: str, today: date) -> Optional[str]:
+    """Повторяющиеся расходы, которые сервер создаст завтра (next_run = завтра, правило активно)."""
+    try:
+        import money_service
+
+        tomorrow = (today + timedelta(days=1)).isoformat()
+        rows = supabase.table(money_service.REC_TABLE).select("*").eq("user_id", user_id).eq("kind", "expense") \
+            .eq("active", True).execute().data
+        rows = [r for r in rows if str(r["next_run"])[:10] == tomorrow]
+        if not rows:
+            return None
+        cats = {c["id"]: c["name"] for c in supabase.table(money_service.CAT_TABLE).select("id,name")
+                .eq("user_id", user_id).execute().data}
+        lines = ["💳 Завтра спишется:"]
+        for r in rows:
+            what = r.get("note") or cats.get(r["category_id"]) or "платёж"
+            lines.append(f"  • {money_service.fmt(r['amount'])} {r['currency']} — {what}")
+        return "\n".join(lines)
+    except Exception as exc:
+        logger.warning("Напоминание о списании не собрано: %s", type(exc).__name__)
+        return None
+
+
+def backup_due(user: dict, now_utc: Optional[datetime] = None) -> bool:
+    """Пора ли прислать еженедельную резервную копию (воскресенье, окно 21:00, один раз)."""
+    local = local_now(user["id"], now_utc)
+    return local.weekday() == BACKUP_WEEKDAY and current_slot(local) == "backup" and claim(user["id"], "backup", local.date())
 
 
 def matured_snoozes(user_id: str, now_utc: datetime) -> list[dict]:

@@ -239,3 +239,4 @@ class CalendarChoice(BaseModel):
 class MeUpdate(BaseModel):
     default_currency: Optional[str] = None
     calendar_import: Optional[bool] = None  # переносить ли события Google Calendar в задачи
+    remind_before: Optional[int] = None     # за сколько минут напоминать о задаче со временем: 0, 15, 30, 60

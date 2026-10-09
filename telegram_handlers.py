@@ -58,6 +58,8 @@ BOT_COMMANDS = [
     BotCommand("last", "Последние операции"),
     BotCommand("currency", "Валюта по умолчанию: /currency EUR или KZT"),
     BotCommand("digest", "Утренняя и вечерняя сводка: /digest on или off"),
+    BotCommand("remind", "Напоминать до задачи: /remind 15, 30, 60 или off"),
+    BotCommand("backup", "Прислать резервную копию моих данных"),
     BotCommand("applepay", "Как подключить траты из Apple Pay"),
     BotCommand("categories", "Категории задач"),
     BotCommand("web", "Ссылка на приложение для браузера"),
@@ -123,7 +125,9 @@ HELP_TEXT = (
     "/currency EUR или KZT — основная валюта\n"
     "/applepay — как подключить траты из Apple Pay\n\n"
     "⚙️ Настройки\n"
-    "/digest on или off — сводки утром в 08:00 и вечером в 20:00\n"
+    "/digest on или off — сводки утром в 08:00 и вечером в 20:00 (в воскресенье — итоги недели)\n"
+    "/remind 15, 30, 60 или off — за сколько минут напоминать о задаче со временем\n"
+    "/backup — резервная копия ваших данных файлом (она и так приходит по воскресеньям)\n"
     "/web — личная ссылка на приложение для браузера\n\n"
     "Кнопки ниже выполняют команду сразу."
 )
@@ -135,6 +139,7 @@ def help_markup() -> InlineKeyboardMarkup:
         [b("📋 Сегодня", "today"), b("📝 Все задачи", "list")],
         [b("💰 Месяц", "month"), b("🧾 Последние", "last")],
         [b("💱 Валюта", "currency"), b("🔔 Сводки", "digest")],
+        [b("⏰ Напоминания", "remind"), b("🗄 Копия данных", "backup")],
         [b("🏷 Категории", "categories"), b("💳 Apple Pay", "applepay")],
         [b("🔗 Ссылка /web", "web"), InlineKeyboardButton("Открыть приложение", web_app=WebAppInfo(url=APP_URL))],
     ])
@@ -756,6 +761,41 @@ async def digest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                                     else "Сводки выключены. Напоминания о дедлайнах остаются.")
 
 
+async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/remind 15|30|60|off — за сколько минут до задачи со временем присылать напоминание."""
+    user = _known_user(update)
+    if not user:
+        await update.message.reply_text(NO_ACCESS_TEXT)
+        return
+    arg = _command_text(update.message.text).lower().replace("мин", "").strip()
+    minutes = 0 if arg in ("off", "выкл", "0") else int(arg) if arg.isdigit() else None
+    if minutes not in digest_service.REMIND_CHOICES:
+        current = digest_service.remind_before(user)
+        state = f"за {current} мин" if current else "выключено"
+        await update.message.reply_text(f"Напоминание до задачи со временем: {state}.\n"
+                                        "Поменять: /remind 15, /remind 30, /remind 60 или /remind off.")
+        return
+    digest_service.set_remind_before(user["id"], minutes)
+    await update.message.reply_text(f"Буду напоминать за {minutes} мин до задачи со временем." if minutes
+                                    else "Напоминания перед задачами выключены. Сводки и напоминания в 13:00 и 17:00 остаются.")
+
+
+async def backup_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/backup — файл с данными пользователя прямо сейчас (только его данные, в его чат)."""
+    user = _known_user(update)
+    if not user:
+        await update.message.reply_text(NO_ACCESS_TEXT)
+        return
+    import backup_service
+    try:
+        name, content, count = backup_service.build(user["id"])
+        await context.bot.send_document(chat_id=update.effective_chat.id, document=content, filename=name,
+                                        caption=backup_service.caption(count))
+    except Exception as exc:
+        logger.warning("Резервная копия не отправлена: %s", type(exc).__name__)
+        await update.message.reply_text("Не получилось собрать копию, попробуйте чуть позже.")
+
+
 def _without_rows(message, needle: str):
     """Клавиатура сообщения без строк, где есть кнопка с needle в callback_data."""
     markup = getattr(message, "reply_markup", None)
@@ -995,7 +1035,8 @@ MENU_ACTIONS = {BTN_TODAY: "today_command", BTN_TASKS: "list_tasks_handler", BTN
                 BTN_LAST: "last_command", BTN_HELP: "help_command"}
 HELP_ACTIONS = {"today": "today_command", "list": "list_tasks_handler", "month": "month_command",
                 "last": "last_command", "currency": "currency_command", "digest": "digest_command",
-                "categories": "categories_handler", "applepay": "applepay_command", "web": "web_link"}
+                "categories": "categories_handler", "applepay": "applepay_command", "web": "web_link",
+                "remind": "remind_command", "backup": "backup_command"}
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1038,6 +1079,8 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("today", today_command))
     app.add_handler(CommandHandler("applepay", applepay_command))
     app.add_handler(CommandHandler("digest", digest_command))
+    app.add_handler(CommandHandler("remind", remind_command))
+    app.add_handler(CommandHandler("backup", backup_command))
     app.add_handler(CallbackQueryHandler(access_decision, pattern=r"^(approve|deny):\d+$"))
     app.add_handler(CallbackQueryHandler(money_callback, pattern=r"^m:"))
     app.add_handler(CallbackQueryHandler(help_callback, pattern=r"^h:[a-z]+$"))
