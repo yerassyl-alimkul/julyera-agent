@@ -1027,6 +1027,9 @@ applyTheme();
   .goal-empty { padding: 28px 18px; border: 1.5px dashed var(--dashed); border-radius: var(--radius-card);
     color: var(--ink-muted); text-align: center; line-height: 1.5; }
   #goalSheet .field-row { align-items: center; }
+  /* Одиночное поле даты: на iPhone у него своя ширина больше экрана — без этого форма уезжает вбок */
+  #goalDue { display: block; width: 100%; min-width: 0; max-width: 100%; -webkit-appearance: none; appearance: none; text-align: left; }
+  #goalDue::-webkit-date-and-time-value { text-align: left; }
   .goal-cur { flex: 0 0 auto; margin-top: 0; }
   .goal-cur button { min-width: 52px; }
   .goal-amount { font-size: 22px; font-weight: 600; }
@@ -2091,9 +2094,10 @@ applyTheme();
       <section class="form-section">
         <div class="form-section-head">
           <label class="form-label" for="goalDue">К какой дате</label>
-          <span class="form-aside">необязательно</span>
+          <button class="link-btn" id="goalDueClear" type="button">Без срока</button>
         </div>
         <input class="field field-date" id="goalDue" type="date">
+        <p class="form-hint repeat-hint" id="goalDueHint"></p>
       </section>
       <section class="form-section" id="goalInitialSection">
         <div class="form-section-head">
@@ -5055,6 +5059,7 @@ function openGoalForm(goal) {
   document.getElementById('goalName').value = goal ? goal.name : '';
   document.getElementById('goalTarget').value = goal ? goal.target.replace('.00', '').replace('.', ',') : '';
   document.getElementById('goalDue').value = goal && goal.due_date ? goal.due_date : '';
+  renderGoalDueHint();
   document.getElementById('goalInitial').value = '';
   document.getElementById('goalInitialSection').hidden = !!goal;
   document.getElementById('goalDelete').hidden = !goal;
@@ -5161,6 +5166,15 @@ async function saveGoalMove() {
   } catch (e) { toast(e.message || 'Не удалось сохранить'); }
   btn.disabled = false;
 }
+// iPhone показывает пустое поле даты как сегодняшнюю дату — подпись говорит, выбран ли срок на самом деле.
+function renderGoalDueHint() {
+  const v = document.getElementById('goalDue').value;
+  document.getElementById('goalDueHint').textContent = v ? `Срок: ${dayLabel(v)} ${v.slice(0, 4)}` : 'Срок не выбран — можно оставить так';
+  document.getElementById('goalDueClear').hidden = !v;
+}
+document.getElementById('goalDue').addEventListener('change', renderGoalDueHint);
+document.getElementById('goalDue').addEventListener('input', renderGoalDueHint);
+document.getElementById('goalDueClear').onclick = () => { document.getElementById('goalDue').value = ''; renderGoalDueHint(); };
 document.getElementById('goalClose').onclick = closeGoalForm;
 document.getElementById('goalSave').onclick = saveGoal;
 document.getElementById('goalDelete').onclick = deleteGoal;
