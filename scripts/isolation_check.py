@@ -68,7 +68,9 @@ def setup_local():
     sys.modules["database"] = database
     import rates_service  # без сети: постоянный курс для проверок (1 € = 500,35 ₸)
     from decimal import Decimal
-    rates_service.get_rates = lambda: {"date": "2026-10-08", "kzt_per": {"KZT": Decimal(1), "EUR": Decimal("500.35")}}
+    rates_service.get_rates = lambda: {"date": "2026-10-08", "kzt_per": {"KZT": Decimal(1), "EUR": Decimal("500.35"),
+                                                                       "USD": Decimal("480.10"), "AZN": Decimal("282.40"),
+                                                                       "TRY": Decimal("11.70")}}
     return db
 
 

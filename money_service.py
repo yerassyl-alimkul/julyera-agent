@@ -25,7 +25,9 @@ from database import supabase
 
 logger = logging.getLogger(__name__)
 
-CURRENCIES = ("EUR", "KZT")  # чтобы добавить валюту: сюда, в CHECK миграции и в CURRENCY_MARKERS
+# Чтобы добавить валюту: сюда, в CHECK миграции, в CURRENCY_MARKERS, _CURRENCY_TOKENS и CURRENCY_META во фронтенде.
+# Курс берётся у Нацбанка РК (там есть все пять). У пользователя пара: основная + дополнительная (миграция 012).
+CURRENCIES = ("EUR", "KZT", "USD", "AZN", "TRY")
 KINDS = ("expense", "income")
 SOURCES = ("app", "text", "voice", "recurring", "applepay")
 
@@ -196,7 +198,28 @@ def default_currency(user_id: str) -> str:
 
 def set_default_currency(user_id: str, currency) -> str:
     cur = clean_currency(currency)
-    supabase.table("users").update({"default_currency": cur}).eq("id", user_id).execute()
+    data = {"default_currency": cur}
+    if second_currency(user_id) == cur:  # основная и дополнительная не совпадают: меняем их местами
+        data["second_currency"] = default_currency(user_id)
+    supabase.table("users").update(data).eq("id", user_id).execute()
+    return cur
+
+
+def second_currency(user_id: str) -> str:
+    """Дополнительная валюта (вторая кнопка в форме траты). Не задана — вторая из EUR/KZT."""
+    user = users_service.get_by_id(user_id) or {}
+    main = user.get("default_currency") if user.get("default_currency") in CURRENCIES else CURRENCIES[0]
+    cur = user.get("second_currency")
+    if cur in CURRENCIES and cur != main:
+        return cur
+    return "KZT" if main != "KZT" else "EUR"
+
+
+def set_second_currency(user_id: str, currency) -> str:
+    cur = clean_currency(currency)
+    if cur == default_currency(user_id):
+        raise MoneyError(422, "Дополнительная валюта должна отличаться от основной", "same_currency")
+    supabase.table("users").update({"second_currency": cur}).eq("id", user_id).execute()
     return cur
 
 
@@ -963,6 +986,9 @@ def run_recurring(today_of=None, utc_today: Optional[date] = None) -> list[tuple
 CURRENCY_MARKERS = {
     "EUR": ("€", "евро", "eur", "euro"),
     "KZT": ("₸", "тенге", "тг", "kzt"),
+    "USD": ("$", "доллар", "доллара", "долларов", "долл", "бакс", "бакса", "баксов", "usd"),
+    "AZN": ("₼", "манат", "маната", "манатов", "azn"),
+    "TRY": ("₺", "лира", "лиры", "лир", "лиру", "try"),
 }
 _MARKER_RE = "|".join(sorted((re.escape(m) for ms in CURRENCY_MARKERS.values() for m in ms), key=len, reverse=True))
 _NUMBER_RE = r"\d[\d\s ]*(?:[.,]\d+)?\s*(?:к|k|тыс\.?)?"
@@ -1037,12 +1063,13 @@ def drafts_from_text(user_id: str, text: str, force_kind: Optional[str] = None) 
 APPLEPAY_DEDUP = timedelta(minutes=2)
 MERCHANT_TABLE = "money_merchant_rules"
 _CURRENCY_TOKENS = [("тенге", "KZT"), ("euro", "EUR"), ("евро", "EUR"), ("kzt", "KZT"), ("eur", "EUR"),
-                    ("тг", "KZT"), ("€", "EUR"), ("₸", "KZT")]
-_OTHER_CURRENCY = re.compile(r"[$£¥₽₺]|\b(usd|gbp|rub|try|chf|jpy|cny|aed)\b", re.IGNORECASE)
+                    ("тг", "KZT"), ("€", "EUR"), ("₸", "KZT"), ("usd", "USD"), ("us$", "USD"), ("$", "USD"),
+                    ("azn", "AZN"), ("₼", "AZN"), ("try", "TRY"), ("₺", "TRY"), ("tl", "TRY")]
+_OTHER_CURRENCY = re.compile(r"[£¥₽]|\b(gbp|rub|chf|jpy|cny|aed)\b", re.IGNORECASE)
 
 
 def parse_applepay_amount(text, default_cur: str) -> tuple[Decimal, str, bool]:
-    """Сумма из «Команд» в любом виде → (Decimal, валюта, это возврат?). Валюта не EUR/KZT — 422."""
+    """Сумма из «Команд» в любом виде → (Decimal, валюта, это возврат?). Валюта не из CURRENCIES — 422."""
     raw = str(text or "").strip()
     low = raw.lower()
     currency = next((cur for token, cur in _CURRENCY_TOKENS if token in low), None)

@@ -311,6 +311,22 @@ applyTheme();
   .status-dot.ok { border-color: var(--accent); background: var(--accent); }
   .status-dot.err { border-color: var(--danger); background: var(--danger); }
   .menu-status-row.err { color: var(--danger); }
+  /* «Настройки» */
+  .set-group { margin: var(--gap-section) 4px var(--gap-s); font-size: 13px; font-weight: 600; color: var(--ink-muted); }
+  .set-card { display: flex; flex-direction: column; padding: 4px 14px; border: 1px solid var(--line); border-radius: var(--radius-card);
+    background: var(--surface); }
+  .set-row { display: flex; align-items: center; gap: var(--gap-m); min-height: 52px; padding: 0; border: 0;
+    border-top: 1px solid var(--hairline); background: transparent; color: var(--ink); font: inherit; font-size: 16px; text-align: left; cursor: pointer; }
+  .set-card > :first-child { border-top: 0; }
+  .set-row svg { width: 22px; height: 22px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .set-label { flex: 1 1 auto; min-width: 0; }
+  .set-val { font-size: 14px; color: var(--ink-muted); white-space: nowrap; }
+  .set-chev { width: 18px !important; height: 18px !important; color: var(--ink-muted); }
+  .set-block { padding: 12px 0; border-top: 1px solid var(--hairline); }
+  .set-text { margin: 12px 0 4px; font-size: 14px; line-height: 1.45; color: var(--ink-muted); }
+  .set-google .set-status { min-height: 44px; font-size: 15px; color: var(--ink); }
+  .set-google .menu-switch-row { margin-top: 0; padding-left: calc(8px + var(--gap-m)); }
+  #settingsSheet .menu-note { margin: 0 0 12px; }
   /* Под строкой «Google Calendar подключён»: подпись — вровень с её текстом (после точки статуса) */
   .menu-switch-row { justify-content: space-between; margin-top: calc(-1 * var(--gap-m));
     padding-left: calc(8px + var(--gap-m)); line-height: 1.3; }
@@ -580,6 +596,7 @@ applyTheme();
   }
   .btn-plain.danger { margin-left: auto; padding-right: 4px; color: var(--danger); font-weight: 600; }
   .tb-btn.recording { border-color: var(--danger); color: var(--danger); background: rgba(179, 38, 30, .08); }
+  .tb-btn.busy, .btn-mic.busy { opacity: 0.6; }
 
   .note-card { padding: 16px 18px; }
   .note-view { display: flex; flex-direction: column; gap: var(--gap-s); cursor: pointer; }
@@ -1031,6 +1048,11 @@ applyTheme();
   #goalDue { display: block; width: 100%; min-width: 0; max-width: 100%; -webkit-appearance: none; appearance: none; text-align: left; }
   #goalDue::-webkit-date-and-time-value { text-align: left; }
   .goal-cur { flex: 0 0 auto; margin-top: 0; }
+  .cur-group-label { margin-top: var(--gap-section); }
+  #currencyMainLabel { margin-top: var(--gap-header); }
+  #currencySecondLabel { margin-top: var(--gap-section); }
+  #currencySheet .cur-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding-top: var(--gap-m); }
+  #currencySheet .cur-option { min-height: var(--touch); padding: 0 14px; font-size: 16px; }
   .goal-cur button { min-width: 52px; }
   .goal-amount { font-size: 22px; font-weight: 600; }
   .goal-history { display: flex; flex-direction: column; }
@@ -1115,6 +1137,7 @@ applyTheme();
   .money-bar-fill { display: block; height: 100%; border-radius: var(--radius-pill); background: var(--chip-color, var(--accent)); }
   .money-cur-label { margin: var(--gap-l) 0 var(--gap-s); font-size: 13px; font-weight: 600; color: var(--ink-muted); }
   .money-trend svg { display: block; width: 100%; height: auto; }
+  .an-trend { margin-top: var(--gap-section); padding-top: var(--gap-section); border-top: 1px solid var(--line); }
   .trend-expense { fill: var(--ink); }
   .trend-income { fill: var(--accent); opacity: 0.55; }
   .trend-label { fill: var(--ink-muted); font-size: 11px; font-family: var(--font-text); }
@@ -1234,6 +1257,12 @@ applyTheme();
   .field-row { display: flex; gap: var(--gap-s); }
   .field-row .field-date { flex: 1.6; min-width: 0; }
   .field-row .field-time { flex: 1; min-width: 0; }
+  /* Дата · с · до: дата — на всю ширину, ниже два времени (три поля в строку на телефоне обрезаются) */
+  .field-row.dt-range { flex-wrap: wrap; }
+  .field-row.dt-range .field-date { flex: 1 1 100%; }
+  .field-row.dt-range .field-time { flex: 1 1 0; }
+  /* iPhone рисует поля даты и времени шире контейнера — без этого форма уезжает вбок */
+  .field-date, .field-time { min-width: 0; max-width: 100%; -webkit-appearance: none; appearance: none; }
 
   /* FilterChip (выбор категории и приоритета) */
   .chip-group { display: flex; flex-wrap: wrap; gap: var(--gap-s); }
@@ -1614,31 +1643,35 @@ applyTheme();
       <svg viewBox="0 0 24 24"><path d="M4 7h16v4H4zM6 11v8h12v-8M10 15h4"/></svg>
       Архив
     </button>
-    <button class="menu-item" id="menuCategories">
-      <svg viewBox="0 0 24 24"><path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="8.5" r="1.5"/></svg>
-      Категории
-    </button>
-    <button class="menu-item" id="exportCsvBtn">
-      <svg viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14"/></svg>
-      Экспорт CSV
-    </button>
-    <button class="menu-item" id="exportPdfBtn">
-      <svg viewBox="0 0 24 24"><path d="M7 9V4h10v5M7 17H5v-6h14v6h-2M7 14h10v6H7z"/></svg>
-      Печать / PDF
+    <button class="menu-item" id="menuSettings">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg>
+      Настройки
     </button>
   </nav>
-  <p class="menu-note" id="exportNote" hidden>Экспорт CSV и печать работают в браузере: пришлите боту /web, он даст личную ссылку.</p>
 
-  <div class="menu-theme">
-    <span class="menu-theme-label" id="themeLabel">Тема</span>
-    <div class="segmented" role="group" aria-labelledby="themeLabel">
-      <button type="button" data-theme-pref="auto" aria-pressed="true">Авто</button>
-      <button type="button" data-theme-pref="light" aria-pressed="false">Светлая</button>
-      <button type="button" data-theme-pref="dark" aria-pressed="false">Тёмная</button>
+
+
+  <div class="menu-status">
+    <div class="menu-status-row" id="backendStatus">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">Проверка backend…</span>
     </div>
   </div>
+</aside>
 
-  <div class="menu-theme" id="remindBeforeBox" hidden>
+<!-- «Настройки»: всё, что раньше было в меню, по разделам. Стоит в разметке раньше остальных окон:
+     окна, которые открываются отсюда, сначала закрывают «Настройки» (одинаковый z-index — позже в DOM значит сверху). -->
+<div class="sheet" id="settingsSheet" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" hidden>
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <button class="tb-btn" id="settingsClose" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <h2 class="t-modal-title" id="settingsTitle">Настройки</h2>
+      <span></span>
+    </div>
+    <h3 class="set-group">Задачи</h3>
+    <div class="set-card">
+      <button class="set-row" id="setTaskCats" type="button"><svg viewBox="0 0 24 24"><path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="8.5" r="1.5"/></svg><span class="set-label">Категории задач</span><span class="set-val" id="setTaskCatsVal"></span><svg class="set-chev" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></svg></button>
+  <div class="menu-theme set-block" id="remindBeforeBox" hidden>
     <span class="menu-theme-label" id="remindLabel">Напоминать до задачи со временем</span>
     <div class="segmented" role="group" aria-labelledby="remindLabel">
       <button type="button" data-remind="15" aria-pressed="false">15 мин</button>
@@ -1647,25 +1680,52 @@ applyTheme();
       <button type="button" data-remind="0" aria-pressed="false">Выкл</button>
     </div>
   </div>
-
-  <div class="menu-status">
-    <div class="menu-status-row" id="backendStatus">
-      <span class="status-dot" id="statusDot"></span>
-      <span id="statusText">Проверка backend…</span>
     </div>
-    <div class="menu-status-row" id="googleStatusRow">
+    <h3 class="set-group">Кошелёк</h3>
+    <div class="set-card">
+      <button class="set-row" id="setMoneyCats" type="button"><svg viewBox="0 0 24 24"><path d="M4 7h16v12H4zM4 11h16M8 15h3"/></svg><span class="set-label">Категории расходов и доходов</span><svg class="set-chev" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></svg></button>
+      <button class="set-row" id="setCurrencies" type="button"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M14.5 9.5c-.5-1-1.5-1.5-2.5-1.5-1.7 0-2.5 1-2.5 2s1 1.6 2.5 2 2.5 1 2.5 2-1 2-2.5 2c-1 0-2-.5-2.5-1.5M12 6.5V8M12 16v1.5"/></svg><span class="set-label">Валюты</span><span class="set-val" id="setCurrenciesVal"></span><svg class="set-chev" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></svg></button>
+      <button class="set-row" id="setStatement" type="button"><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7zM14 3v4h4M10 12h5M10 16h5"/></svg><span class="set-label">Выписка PDF</span><svg class="set-chev" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></svg></button>
+    </div>
+    <h3 class="set-group">Google Calendar</h3>
+    <div class="set-card set-google">
+      <p class="set-text">Задачи с датой сами попадают в ваш Google Calendar, а события из выбранных календарей — в задачи. Изменения переносятся в обе стороны, удаление тоже.</p>
+    <div class="set-status menu-status-row" id="googleStatusRow">
       <span class="status-dot" id="googleDot"></span>
       <span id="googleStatusText">Google Calendar…</span>
     </div>
-    <div class="menu-status-row menu-switch-row" id="calendarImportRow" hidden>
+    <div class="set-status menu-status-row menu-switch-row" id="calendarImportRow" hidden>
       <span id="calendarImportLabel">Переносить события в задачи</span>
       <button type="button" class="switch" id="calendarImportSwitch" role="switch" aria-checked="true" aria-labelledby="calendarImportLabel"></button>
     </div>
-    <div class="menu-status-row menu-switch-row" id="calendarChoiceRow" hidden>
+    <div class="set-status menu-status-row menu-switch-row" id="calendarChoiceRow" hidden>
       <span>Из календарей: <a href="#" id="calendarChoiceLink">выбрать</a></span>
     </div>
+    </div>
+    <h3 class="set-group">Прочее</h3>
+    <div class="set-card">
+  <div class="menu-theme set-block">
+    <span class="menu-theme-label" id="themeLabel">Тема</span>
+    <div class="segmented" role="group" aria-labelledby="themeLabel">
+      <button type="button" data-theme-pref="auto" aria-pressed="true">Авто</button>
+      <button type="button" data-theme-pref="light" aria-pressed="false">Светлая</button>
+      <button type="button" data-theme-pref="dark" aria-pressed="false">Тёмная</button>
+    </div>
   </div>
-</aside>
+    <button class="set-row" id="exportCsvBtn">
+      <svg viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14"/></svg>
+      <span class="set-label">Экспорт задач CSV</span>
+    </button>
+    <button class="set-row" id="exportPdfBtn">
+      <svg viewBox="0 0 24 24"><path d="M7 9V4h10v5M7 17H5v-6h14v6h-2M7 14h10v6H7z"/></svg>
+      <span class="set-label">Печать задач / PDF</span>
+    </button>
+  <p class="menu-note" id="exportNote" hidden>Экспорт CSV и печать работают в браузере: пришлите боту /web, он даст личную ссылку.</p>
+      <button class="set-row" id="setBackup" type="button"><svg viewBox="0 0 24 24"><path d="M5 7c0-1.7 3.1-3 7-3s7 1.3 7 3-3.1 3-7 3-7-1.3-7-3zM5 7v10c0 1.7 3.1 3 7 3s7-1.3 7-3V7M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg><span class="set-label">Резервная копия в бот</span><svg class="set-chev" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></svg></button>
+    </div>
+  </div>
+</div>
+
 
 <div class="app">
   <header class="topbar">
@@ -1754,7 +1814,6 @@ applyTheme();
       <div class="segmented page-switch" id="walletSwitch" role="group" aria-label="Раздел кошелька">
         <button type="button" data-wtab="expense" aria-pressed="true">Расходы</button>
         <button type="button" data-wtab="income" aria-pressed="false">Доходы</button>
-        <button type="button" data-wtab="trend" aria-pressed="false">Динамика</button>
         <button type="button" data-wtab="goals" aria-pressed="false">Цели</button>
       </div>
       <div class="money-head" id="moneyHead">
@@ -1769,6 +1828,7 @@ applyTheme();
         <button class="pill-btn" id="moneyCategoriesBtn">Категории</button>
         <button class="pill-btn" id="moneyCurrencyBtn">Валюта</button>
         <button class="pill-btn" id="moneyAnalyticsBtn">Аналитика</button>
+        <button class="pill-btn" id="moneyStatementBtn">Выписка</button>
       </div>
 
       <div id="moneyKindView">
@@ -1800,20 +1860,6 @@ applyTheme();
         <div class="goal-list" id="goalsList"></div>
       </div>
 
-      <div id="moneyTrendView" hidden>
-        <div class="segmented" id="trendCurrency" role="group" aria-label="Валюта" style="margin-top: var(--gap-section);"></div>
-        <div class="money-cards" id="trendBalance"></div>
-        <p class="money-rate" id="trendRate" hidden></p>
-        <section class="money-block" id="trendBarsBlock" aria-labelledby="moneyTrendTitle">
-          <h2 class="money-h2" id="moneyTrendTitle">Доходы и расходы за 6 месяцев</h2>
-          <div class="trend-legend" aria-hidden="true"><span><i class="i"></i>доходы</span><span><i class="e"></i>расходы</span></div>
-          <div class="money-trend" id="moneyTrend"></div>
-        </section>
-        <section class="money-block" id="pieBlock" aria-labelledby="pieTitle">
-          <h2 class="money-h2" id="pieTitle">Расходы по категориям</h2>
-          <div id="moneyPie"></div>
-        </section>
-      </div>
     </section>
 
     <section id="notesView" style="display: none;" aria-labelledby="notesTitle">
@@ -1885,10 +1931,12 @@ applyTheme();
           <h3 class="form-label">Дедлайн</h3>
           <button class="link-btn" id="newClearDeadline" type="button">Без даты</button>
         </div>
-        <div class="field-row">
+        <div class="field-row dt-range">
           <input class="field field-date" id="newDate" type="date" aria-label="Дата дедлайна">
-          <input class="field field-time" id="newTime" type="time" aria-label="Время дедлайна">
+          <input class="field field-time" id="newTime" type="time" aria-label="Время начала">
+          <input class="field field-time" id="newEndTime" type="time" aria-label="Время окончания (необязательно)">
         </div>
+        <p class="form-hint repeat-hint">Время: с · до (необязательно)</p>
       </section>
       <section class="form-section" id="newRepeatSection">
         <h3 class="form-label" id="newRepeatLabel">Повторять</h3>
@@ -2043,6 +2091,21 @@ applyTheme();
     </div>
     <p class="money-rate" id="anRange"></p>
     <div id="anBody"></div>
+    <!-- Бывшая вкладка «Динамика»: баланс, 6 месяцев, круговая диаграмма — всегда по месяцу, открытому в кошельке -->
+      <div id="moneyTrendView" class="an-trend">
+        <div class="segmented" id="trendCurrency" role="group" aria-label="Валюта" style="margin-top: var(--gap-section);"></div>
+        <div class="money-cards" id="trendBalance"></div>
+        <p class="money-rate" id="trendRate" hidden></p>
+        <section class="money-block" id="trendBarsBlock" aria-labelledby="moneyTrendTitle">
+          <h2 class="money-h2" id="moneyTrendTitle">Доходы и расходы за 6 месяцев</h2>
+          <div class="trend-legend" aria-hidden="true"><span><i class="i"></i>доходы</span><span><i class="e"></i>расходы</span></div>
+          <div class="money-trend" id="moneyTrend"></div>
+        </section>
+        <section class="money-block" id="pieBlock" aria-labelledby="pieTitle">
+          <h2 class="money-h2" id="pieTitle">Расходы по категориям</h2>
+          <div id="moneyPie"></div>
+        </section>
+      </div>
   </div>
 </div>
 
@@ -2085,10 +2148,7 @@ applyTheme();
         <label class="form-label" for="goalTarget">Сколько нужно</label>
         <div class="field-row">
           <input class="field" id="goalTarget" inputmode="decimal" placeholder="1500" autocomplete="off">
-          <div class="segmented goal-cur" id="goalCurrency" role="group" aria-label="Валюта цели">
-            <button type="button" data-cur="EUR" aria-pressed="true">€</button>
-            <button type="button" data-cur="KZT" aria-pressed="false">₸</button>
-          </div>
+          <div class="segmented goal-cur" id="goalCurrency" role="group" aria-label="Валюта цели"></div>
         </div>
       </section>
       <section class="form-section">
@@ -2146,16 +2206,48 @@ applyTheme();
   </div>
 </div>
 
+<!-- Выписка PDF (POST /money/statement): в Telegram — в бот, в браузере — скачивание -->
+<div class="sheet" id="statementSheet" role="dialog" aria-modal="true" aria-labelledby="statementTitle" hidden>
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <button class="tb-btn" id="statementClose" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <h2 class="t-modal-title" id="statementTitle">Выписка</h2>
+      <span></span>
+    </div>
+    <p class="newtask-hint">PDF в стиле JulYera: итоги по валютам, расходы по категориям, цели и все операции за период.</p>
+    <div class="edit-form">
+      <div class="chip-group" id="stPeriod" role="group" aria-label="Период">
+        <button type="button" class="choice-chip" data-st="prev" aria-pressed="true"><span>Прошлый месяц</span></button>
+        <button type="button" class="choice-chip" data-st="month" aria-pressed="false"><span>Этот месяц</span></button>
+        <button type="button" class="choice-chip" data-st="3m" aria-pressed="false"><span>3 месяца</span></button>
+        <button type="button" class="choice-chip" data-st="custom" aria-pressed="false"><span>Свой</span></button>
+      </div>
+      <div class="field-row">
+        <input class="field field-date" id="stFrom" type="date" aria-label="С">
+        <input class="field field-date" id="stTo" type="date" aria-label="По">
+      </div>
+      <p class="form-hint repeat-hint" id="stRange"></p>
+    </div>
+  </div>
+  <div class="sheet-footer">
+    <button class="btn-primary" id="statementGet">Получить выписку</button>
+  </div>
+</div>
+
 <!-- Основная валюта кошелька -->
 <div class="sheet" id="currencySheet" role="dialog" aria-modal="true" aria-labelledby="currencyTitle" hidden>
   <div class="sheet-inner">
     <div class="sheet-head">
       <button class="tb-btn" id="currencyClose" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-      <h2 class="t-modal-title" id="currencyTitle">Основная валюта</h2>
+      <h2 class="t-modal-title" id="currencyTitle">Валюты</h2>
       <span></span>
     </div>
-    <p class="newtask-hint">В ней показываются итоги, категории и графики, другие валюты пересчитываются по курсу Нацбанка РК. Её же подставляет бот, если в сообщении валюта не названа. У каждого своя.</p>
-    <div class="cur-options" id="currencyOptions" role="radiogroup" aria-labelledby="currencyTitle"></div>
+    <h3 class="form-label cur-group-label" id="currencyMainLabel">Основная</h3>
+    <p class="newtask-hint">В ней итоги, категории, графики и аналитика; остальные валюты пересчитываются по курсу Нацбанка РК. Её же подставляет бот, если валюта не названа.</p>
+    <div class="cur-options" id="currencyOptions" role="radiogroup" aria-labelledby="currencyMainLabel"></div>
+    <h3 class="form-label cur-group-label" id="currencySecondLabel">Дополнительная</h3>
+    <p class="newtask-hint">Вторая кнопка в форме траты и в целях. В боте можно писать любую из пяти валют.</p>
+    <div class="cur-options" id="currencyOptions2" role="radiogroup" aria-labelledby="currencySecondLabel"></div>
   </div>
 </div>
 
@@ -2213,10 +2305,12 @@ applyTheme();
           <h3 class="form-label">Дедлайн</h3>
           <button class="link-btn" id="editClearDeadline" type="button">Без даты</button>
         </div>
-        <div class="field-row">
+        <div class="field-row dt-range">
           <input class="field field-date" id="editDate" type="date" aria-label="Дата дедлайна">
-          <input class="field field-time" id="editTime" type="time" aria-label="Время дедлайна">
+          <input class="field field-time" id="editTime" type="time" aria-label="Время начала">
+          <input class="field field-time" id="editEndTime" type="time" aria-label="Время окончания (необязательно)">
         </div>
+        <p class="form-hint repeat-hint">Время: с · до (необязательно)</p>
       </section>
       <section class="form-section" id="editRepeatSection">
         <h3 class="form-label" id="editRepeatLabel">Повторять</h3>
@@ -2667,6 +2761,7 @@ async function saveEdit(id, fields) {
     priority: fields.priority.value,
     deadline: fields.deadline.value ? fields.deadline.value + ':00' : null,
     ...(fields.extra || {}),
+    ...(fields.ends !== undefined ? { ends_at: fields.ends } : {}),
   };
   try {
     const res = await api(`/tasks/${id}`, {
@@ -2816,6 +2911,26 @@ function moveButtonsEl(task) {
     box.appendChild(btn);
   });
   return box;
+}
+
+// «до» из формы: только при дате и позже начала (сервер проверяет так же). undefined — ошибка (уже показана).
+function endsFromForm(prefix) {
+  const date = document.getElementById(prefix + 'Date').value;
+  const start = document.getElementById(prefix + 'Time').value || '23:59';
+  const end = document.getElementById(prefix + 'EndTime').value;
+  if (!end) return null;
+  if (!date) { toast('Чтобы указать «до», поставьте дату'); return undefined; }
+  if (end <= start) { toast('Время «до» должно быть позже начала'); return undefined; }
+  return `${date}T${end}:00`;
+}
+
+// «09:00–10:30», если у задачи есть «до» (ends_at, тот же день); иначе просто время начала.
+function timeRange(task) {
+  const start = timeOf(task.deadline);
+  if (!task.ends_at) return start;
+  const a = parseNaiveDeadline(task.deadline), b = parseNaiveDeadline(task.ends_at);
+  const sameDay = a && b && a.toDateString() === b.toDateString();
+  return sameDay ? `${start}–${timeOf(task.ends_at)}` : start;
 }
 
 function timeOf(deadline) {
@@ -2970,10 +3085,10 @@ function taskRowEl(task, mode) {
     time.textContent = 'Без срока';
   } else if (mode === DAY_OVERDUE) {
     const dt = parseNaiveDeadline(task.deadline);
-    time.textContent = `${dt.getDate()} ${MONTH_GENITIVE[dt.getMonth()]}, ${timeOf(task.deadline)}`;
+    time.textContent = `${dt.getDate()} ${MONTH_GENITIVE[dt.getMonth()]}, ${timeRange(task)}`;
     time.classList.add('overdue');
   } else {
-    time.textContent = timeOf(task.deadline);
+    time.textContent = timeRange(task);
   }
   const rest = [task.category];
   if (steps.length) rest.push(stepsText(steps.filter(s => s.is_done).length, steps.length));
@@ -3500,7 +3615,7 @@ function renderCalendar() {
     row.setAttribute('aria-label', `${timeOf(task.deadline)}, ${task.task}, ${task.category}. Изменить`);
     const time = document.createElement('span');
     time.className = 'compact-time';
-    time.textContent = timeOf(task.deadline);
+    time.textContent = timeRange(task);
     const title = document.createElement('span');
     title.className = 'compact-title';
     title.textContent = task.task;
@@ -3616,7 +3731,7 @@ function noteCardEl(note) {
     const area = document.querySelector('#notesList .note-edit-textarea');
     if (area) { area.focus(); area.setSelectionRange(area.value.length, area.value.length); }
   };
-  view.onclick = startEdit;
+  view.onclick = () => { if (Date.now() >= suppressRowClickUntil) startEdit(); };
   view.onkeydown = (e) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEdit(); }
   };
@@ -3735,7 +3850,14 @@ function renderNotes() {
     empty.textContent = 'Заметок пока нет';
     container.appendChild(empty);
   } else {
-    allNotes.forEach(n => container.appendChild(noteCardEl(n)));
+    // Свайп влево — «Изменить» / «Удалить» (как у задач); у открытой правки и списка «Нашёл задач» свайпа нет.
+    allNotes.forEach(n => {
+      const card = noteCardEl(n);
+      const plain = editingNoteId !== n.id && !(notePreview && notePreview.noteId === n.id);
+      container.appendChild(plain ? swipeWrapEl(card, 'note-' + n.id, {
+        edit: () => { editingNoteId = n.id; notePreview = null; renderNotes(); },
+        del: () => deleteNote(n.id), noun: 'заметку' }) : card);
+    });
   }
 }
 
@@ -4166,6 +4288,7 @@ async function saveCalendars() {
 }
 async function openCalendars() {
   closeMobileMenu();
+  closeSettings();
   if (!calendarsData || calendarsData.needs_upgrade) await loadCalendarChoice();
   calendarsPicked = new Set(((calendarsData && calendarsData.calendars) || []).filter(c => c.selected).map(c => c.id));
   renderCalendarsSheet();
@@ -4306,6 +4429,9 @@ async function submitManual() {
     source: 'web',
     ...repeatPayload('new'),
   };
+  const endsAt = endsFromForm('new');
+  if (endsAt === undefined) return;
+  payload.ends_at = endsAt;
   if (repeatState.new.pattern === 'days' && !repeatState.new.days.length) { toast('Выберите хотя бы один день недели'); return; }
   btn.disabled = true;
   btn.textContent = 'Сохраняю…';
@@ -4324,7 +4450,7 @@ async function submitManual() {
     }
     const created = await res.json();
     await postNewTaskComment([created]);
-    ['newText', 'newDate', 'newTime', 'composerInput'].forEach(id => { document.getElementById(id).value = ''; });
+    ['newText', 'newDate', 'newTime', 'newEndTime', 'composerInput'].forEach(id => { document.getElementById(id).value = ''; });
     repeatState.new = { pattern: null, days: [] };
     renderRepeat('new');
     newChoice.priority = 'Mid';
@@ -4353,62 +4479,81 @@ document.getElementById('newText').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitManual();
 });
 
-// ---------- Голосовой ввод (Web Speech API, без backend) ----------
+// ---------- Голосовой ввод: запись с микрофона → POST /voice/transcribe (Whisper, как голосовые в боте) ----------
+// Распознавание браузера (Web Speech API) в Telegram на iPhone и в приложении с экрана «Домой» не работает,
+// поэтому пишем звук сами (MediaRecorder) и распознаём на сервере. Нажал — говоришь — нажал ещё раз; максимум минута.
+const VOICE_MAX_MS = 60000;
+function pickVoiceType() {
+  const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'];
+  try { return types.find(t => window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || ''; }
+  catch (e) { return ''; }
+}
 function setupVoiceInput(buttonId, textareaId) {
   const btn = document.getElementById(buttonId);
   const textarea = document.getElementById(textareaId);
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
   const hideMic = () => {
     btn.style.display = 'none';
     const hint = document.getElementById(buttonId + 'Hint');
     if (hint) hint.hidden = false;
   };
-  if (!SpeechRecognition) {
-    hideMic(); // браузер (или Telegram) не поддерживает — прячем кнопку
+  if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder)) {
+    hideMic(); // запись звука здесь недоступна — прячем кнопку, подсказка про бота остаётся
     return;
   }
-
-  const recognition = new SpeechRecognition();
-  recognition.lang = 'ru-RU';
-  recognition.interimResults = false;
-  recognition.maxAlternatives = 1;
-
-  let isRecording = false;
-
-  recognition.onresult = (event) => {
-    const transcript = event.results[0][0].transcript;
-    const sep = textarea.value.trim() ? ' ' : '';
-    textarea.value = textarea.value.trim() + sep + transcript;
+  let recorder = null, chunks = [], stream = null, timer = null, busy = false;
+  const label = btn.getAttribute('aria-label');
+  const setState = (state) => {
+    btn.classList.toggle('recording', state === 'rec');
+    btn.classList.toggle('busy', state === 'busy');
+    btn.setAttribute('aria-label', state === 'rec' ? 'Остановить запись' : state === 'busy' ? 'Распознаю…' : label);
   };
+  const stopStream = () => { if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; };
 
-  recognition.onerror = (event) => {
-    // Во встроенном браузере Telegram API может быть, но микрофон недоступен.
-    if (['not-allowed', 'service-not-allowed', 'audio-capture'].includes(event.error)) {
-      hideMic();
-      toast('Микрофон здесь недоступен. Отправьте голосовое сообщение боту');
-    } else {
-      toast('Не удалось распознать речь');
-    }
-  };
-
-  recognition.onend = () => {
-    isRecording = false;
-    btn.classList.remove('recording');
-  };
-
-  btn.onclick = () => {
-    if (isRecording) {
-      recognition.stop();
+  btn.onclick = async () => {
+    if (busy) return;
+    if (recorder && recorder.state === 'recording') { recorder.stop(); return; }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) {
+      toast('Нет доступа к микрофону. Разрешите его в настройках или отправьте голосовое сообщение боту');
       return;
     }
-    try {
-      recognition.start();
-      isRecording = true;
-      btn.classList.add('recording');
-    } catch (e) {
-      // start() бросает ошибку, если распознавание уже идёт — игнорируем
-    }
+    const type = pickVoiceType();
+    try { recorder = type ? new MediaRecorder(stream, { mimeType: type }) : new MediaRecorder(stream); }
+    catch (e) { stopStream(); toast('Запись звука здесь не работает. Отправьте голосовое сообщение боту'); return; }
+    chunks = [];
+    recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    recorder.onstop = async () => {
+      clearTimeout(timer);
+      stopStream();
+      const blob = new Blob(chunks, { type: recorder.mimeType || type || 'audio/webm' });
+      if (blob.size < 1000) { setState('idle'); toast('Слишком коротко — скажите ещё раз'); return; }
+      busy = true;
+      setState('busy');
+      try {
+        const data = await new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(String(r.result).split(',')[1] || '');
+          r.onerror = reject;
+          r.readAsDataURL(blob);
+        });
+        const res = await apiJson('/voice/transcribe', { method: 'POST', headers: JSON_HEADERS,
+          body: JSON.stringify({ audio: data, type: blob.type }) });
+        if (res.text) {
+          const sep = textarea.value.trim() ? ' ' : '';
+          textarea.value = textarea.value.trim() + sep + res.text;
+          textarea.dispatchEvent(new Event('input'));
+        } else toast('Ничего не расслышал');
+      } catch (e) {
+        toast(e.message || 'Не получилось распознать');
+      } finally {
+        busy = false;
+        setState('idle');
+      }
+    };
+    recorder.start();
+    setState('rec');
+    timer = setTimeout(() => { if (recorder && recorder.state === 'recording') recorder.stop(); }, VOICE_MAX_MS);
   };
 }
 
@@ -4618,6 +4763,11 @@ function renderCategoriesScreen() {
   const list = document.getElementById('catList');
   const focusKey = list.contains(document.activeElement) ? document.activeElement.dataset.focusKey : null;
   document.querySelectorAll('[data-cat-scope]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.catScope === catScope)));
+  // Категории задач и кошелька — раздельно: у задач вкладок нет, у кошелька только «Расходы / Доходы».
+  const taskScope = catScope === 'tasks';
+  document.querySelector('[data-cat-scope="tasks"]').hidden = true;
+  document.querySelector('#categoriesSheet .segmented').hidden = taskScope;
+  document.getElementById('categoriesTitle').textContent = taskScope ? 'Категории задач' : 'Категории кошелька';
   const items = catItems();
   const itemsWord = catScope === 'tasks' ? 'Задачи' : 'Операции';
   list.innerHTML = '';
@@ -4815,7 +4965,112 @@ document.querySelectorAll('[data-cat-scope]').forEach(btn => {
   };
 });
 
-document.getElementById('menuCategories').onclick = () => openCategories('tasks');
+// ---------- Выписка PDF ----------
+const statementSheet = document.getElementById('statementSheet');
+let stPeriod = 'prev';
+const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+function stBounds() {
+  const now = new Date();
+  if (stPeriod === 'custom') return { from: document.getElementById('stFrom').value, to: document.getElementById('stTo').value };
+  if (stPeriod === 'month') return { from: isoDay(new Date(now.getFullYear(), now.getMonth(), 1)), to: isoDay(now) };
+  if (stPeriod === '3m') return { from: isoDay(new Date(now.getFullYear(), now.getMonth() - 2, 1)), to: isoDay(now) };
+  return { from: isoDay(new Date(now.getFullYear(), now.getMonth() - 1, 1)), to: isoDay(new Date(now.getFullYear(), now.getMonth(), 0)) };
+}
+function renderStatement() {
+  document.querySelectorAll('#stPeriod [data-st]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.st === stPeriod)));
+  const { from, to } = stBounds();
+  if (stPeriod !== 'custom') { document.getElementById('stFrom').value = from; document.getElementById('stTo').value = to; }
+  document.getElementById('stRange').textContent = from && to
+    ? `${dayLabel(from)} ${from.slice(0, 4)} — ${dayLabel(to)} ${to.slice(0, 4)} · ${inTelegram ? 'файл придёт в бот' : 'файл скачается'}`
+    : 'Выберите даты «с» и «по»';
+}
+function openStatement() {
+  stPeriod = 'prev';
+  renderStatement();
+  statementSheet.hidden = false;
+  document.body.classList.add('no-scroll');
+  setBackgroundInert(true);
+  document.getElementById('statementClose').focus();
+}
+function closeStatement() {
+  statementSheet.hidden = true;
+  document.body.classList.remove('no-scroll');
+  setBackgroundInert(false);
+}
+async function getStatement() {
+  const { from, to } = stBounds();
+  if (!from || !to) { toast('Выберите даты «с» и «по»'); return; }
+  if (to < from) { toast('Дата «по» раньше даты «с»'); return; }
+  const btn = document.getElementById('statementGet');
+  btn.disabled = true;
+  btn.textContent = 'Собираю выписку…';
+  try {
+    if (inTelegram) {
+      await apiJson('/money/statement', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ from, to, send: true }) });
+      toast('Выписка отправлена в бот');
+      closeStatement();
+    } else {
+      const res = await api('/money/statement', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ from, to }) });
+      if (!res.ok) {
+        let msg = null;
+        try { const d = (await res.json()).detail; msg = d && (d.message || d); } catch (e) { msg = null; }
+        throw new Error(typeof msg === 'string' ? msg : 'Не получилось собрать выписку');
+      }
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `julyera-statement-${from}_${to}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      toast('Выписка скачана');
+    }
+  } catch (e) { toast(e.message || 'Не получилось собрать выписку'); }
+  btn.disabled = false;
+  btn.textContent = 'Получить выписку';
+}
+document.querySelectorAll('#stPeriod [data-st]').forEach(b => { b.onclick = () => { stPeriod = b.dataset.st; renderStatement(); }; });
+['stFrom', 'stTo'].forEach(id => document.getElementById(id).addEventListener('change', () => { stPeriod = 'custom'; renderStatement(); }));
+document.getElementById('statementClose').onclick = closeStatement;
+document.getElementById('statementGet').onclick = getStatement;
+
+// ---------- «Настройки» ----------
+const settingsSheet = document.getElementById('settingsSheet');
+async function openSettings() {
+  closeMobileMenu();
+  settingsSheet.hidden = false;
+  settingsSheet.scrollTop = 0;
+  document.body.classList.add('no-scroll');
+  setBackgroundInert(true);
+  document.getElementById('settingsClose').focus();
+  document.getElementById('setTaskCatsVal').textContent = String(categoryNames().length || '');
+  try { if (!moneyMe) moneyMe = await apiJson('/me'); } catch (e) { /* без валют и напоминаний */ }
+  document.getElementById('setCurrenciesVal').textContent = userCurrencies().map(c => CURRENCY_SYMBOLS[c] || c).join(' · ');
+  renderRemindButtons();
+  checkGoogleStatus();
+}
+function closeSettings() {
+  if (settingsSheet.hidden) return;
+  settingsSheet.hidden = true;
+  document.body.classList.remove('no-scroll');
+  setBackgroundInert(false);
+}
+// Окна, открытые из «Настроек», сначала закрывают их (см. комментарий у разметки settingsSheet).
+const fromSettings = (fn) => () => { closeSettings(); fn(); };
+document.getElementById('menuSettings').onclick = openSettings;
+document.getElementById('settingsClose').onclick = closeSettings;
+document.getElementById('setTaskCats').onclick = fromSettings(() => openCategories('tasks'));
+document.getElementById('setMoneyCats').onclick = fromSettings(() => openCategories('expense'));
+document.getElementById('setCurrencies').onclick = fromSettings(openCurrency);
+document.getElementById('setStatement').onclick = fromSettings(openStatement);
+document.getElementById('moneyStatementBtn').onclick = openStatement;
+document.getElementById('setBackup').onclick = async () => {
+  try {
+    await apiJson('/backup/send', { method: 'POST' });
+    toast('Копия отправлена в бот');
+  } catch (e) { toast(e.message || 'Не получилось отправить копию'); }
+};
 document.getElementById('categoriesClose').onclick = closeCategories;
 document.getElementById('catAdd').onclick = addCategory;
 document.getElementById('catNewName').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); addCategory(); } };
@@ -4827,7 +5082,7 @@ document.getElementById('catNewName').onkeydown = (e) => { if (e.key === 'Enter'
 const MONEY_PAGE = 200;
 const WALLET_TAB_STORAGE = 'task_agent_wallet_tab';
 let moneyTab = 'expense';       // 'expense' | 'income' | 'trend'
-try { const t = localStorage.getItem(WALLET_TAB_STORAGE); if (['expense', 'income', 'trend', 'goals'].includes(t)) moneyTab = t; } catch (e) { /* нет памяти */ }
+try { const t = localStorage.getItem(WALLET_TAB_STORAGE); if (['expense', 'income', 'goals'].includes(t)) moneyTab = t; } catch (e) { /* нет памяти */ }
 let moneyMonth = null;          // 'YYYY-MM'; null — текущий
 let moneySummary = null;
 let moneyTrendData = null;
@@ -4964,12 +5219,11 @@ function renderMoney() {
   document.querySelectorAll('#walletSwitch [data-wtab]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.wtab === moneyTab)));
   document.getElementById('moneyMonthLabel').textContent = monthTitle(key);
   document.getElementById('moneyCurrent').hidden = key === currentMonthKey();
-  document.getElementById('moneyCurrencyBtn').textContent = `Валюта: ${(moneyMe && moneyMe.default_currency) || 'EUR'}`;
+  document.getElementById('moneyCurrencyBtn').textContent = `Валюты: ${userCurrencies().map(c => CURRENCY_SYMBOLS[c] || c).join(' · ')}`;
   document.getElementById('moneyNext').disabled = key >= currentMonthKey();
   const trend = moneyTab === 'trend';
   const goals = moneyTab === 'goals';
   document.getElementById('moneyKindView').hidden = trend || goals;
-  document.getElementById('moneyTrendView').hidden = !trend;
   document.getElementById('moneyGoalsView').hidden = !goals;
   document.getElementById('moneyHead').hidden = goals;   // у целей нет месяцев
   document.getElementById('moneyTools').hidden = goals;
@@ -4978,8 +5232,7 @@ function renderMoney() {
   if (goals) { renderGoals(); return; }
   if (!moneyLoaded) return;
   const summary = moneySummary && moneySummary.month === key ? moneySummary : { currencies: [] };
-  if (trend) renderTrendView(summary);
-  else renderKindView(summary);
+  if (!trend) renderKindView(summary);
 }
 
 // ---------- Цели накопления (GET/POST/PATCH/DELETE /money/goals, /money/goals/{id}/moves) ----------
@@ -5049,9 +5302,18 @@ function renderGoals() {
 const goalSheet = document.getElementById('goalSheet');
 const goalMoveSheet = document.getElementById('goalMoveSheet');
 function renderGoalCur() {
-  document.querySelectorAll('#goalCurrency [data-cur]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.cur === goalCur)));
+  const box = document.getElementById('goalCurrency');
+  box.innerHTML = '';
+  userCurrencies(goalCur).forEach(cur => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = CURRENCY_SYMBOLS[cur] || cur;
+    b.setAttribute('aria-label', CURRENCY_NAMES[cur] || cur);
+    b.setAttribute('aria-pressed', String(cur === goalCur));
+    b.onclick = () => { goalCur = cur; renderGoalCur(); };
+    box.appendChild(b);
+  });
 }
-document.querySelectorAll('#goalCurrency [data-cur]').forEach(b => { b.onclick = () => { goalCur = b.dataset.cur; renderGoalCur(); }; });
 
 function openGoalForm(goal) {
   goalEditing = goal;
@@ -5133,11 +5395,11 @@ function renderGoalMove() {
   const g = goalMoving;
   document.getElementById('goalMoveTitle').textContent = g.name;
   document.querySelectorAll('#goalMoveMode [data-take]').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.take === '1') === goalTake)));
-  document.getElementById('goalMoveLabel').textContent = `${goalTake ? 'Снять' : 'Отложить'}, ${g.currency === 'EUR' ? '€' : '₸'} · отложено ${moneyFmt(g.saved, g.currency)} из ${moneyFmt(g.target, g.currency)}`;
+  document.getElementById('goalMoveLabel').textContent = `${goalTake ? 'Снять' : 'Отложить'}, ${CURRENCY_SYMBOLS[g.currency] || g.currency} · отложено ${moneyFmt(g.saved, g.currency)} из ${moneyFmt(g.target, g.currency)}`;
   document.getElementById('goalMoveSave').textContent = goalTake ? 'Снять' : 'Отложить';
   const quick = document.getElementById('goalQuick');
   quick.innerHTML = '';
-  const options = g.currency === 'KZT' ? ['5000', '10000', '50000'] : ['50', '100', '200'];
+  const options = { KZT: ['5000', '10000', '50000'], TRY: ['500', '1000', '5000'] }[g.currency] || ['50', '100', '200'];
   if (!goalTake && g.per_month) options.push(g.per_month);
   if (!goalTake && Number(g.left) > 0) options.push(g.left);
   [...new Set(options)].forEach(v => {
@@ -5185,7 +5447,16 @@ document.getElementById('goalEditBtn').onclick = () => { const g = goalMoving; c
 document.getElementById('goalMoveAmount').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); saveGoalMove(); } };
 
 // ---------- Расходы / Доходы ----------
-const CURRENCY_NAMES = { EUR: 'Евро', KZT: 'Тенге' };
+const CURRENCY_NAMES = { EUR: 'Евро', KZT: 'Тенге', USD: 'Доллар', AZN: 'Манат', TRY: 'Лира' };
+const CURRENCY_SYMBOLS = { EUR: '€', KZT: '₸', USD: '$', AZN: '₼', TRY: '₺' };
+// Пара пользователя: основная + дополнительная (в форме траты и целей только они; чужая валюту операции — тоже).
+function userCurrencies(extra) {
+  const main = (moneyMe && moneyMe.default_currency) || 'EUR';
+  const second = (moneyMe && moneyMe.second_currency) || (main === 'KZT' ? 'EUR' : 'KZT');
+  const list = [main, second];
+  if (extra && !list.includes(extra)) list.push(extra);
+  return list;
+}
 
 function rateText(summary) {
   const r = summary && summary.rate;
@@ -5534,7 +5805,7 @@ function renderTrendView(summary) {
     b.type = 'button';
     b.textContent = cur;
     b.setAttribute('aria-pressed', String(cur === trendCurrency));
-    b.onclick = () => { trendCurrency = cur; renderMoney(); };
+    b.onclick = () => { trendCurrency = cur; renderTrendView(summary); };
     switcher.appendChild(b);
   });
 
@@ -5855,6 +6126,16 @@ function openAnalytics() {
   setBackgroundInert(true);
   document.getElementById('analyticsClose').focus();
   loadAnalytics();
+  loadAnalyticsTrend();
+}
+
+// Ниже аналитики — графики бывшей «Динамики» (GET /money/trend и итоги открытого в кошельке месяца).
+async function loadAnalyticsTrend() {
+  const key = moneyMonth || currentMonthKey();
+  const [summary, trend] = await Promise.allSettled([apiJson(`/money/summary?month=${key}`), apiJson('/money/trend?months=6')]);
+  if (trend.status === 'fulfilled') moneyTrendData = trend.value;
+  const sum = summary.status === 'fulfilled' ? summary.value : (moneySummary && moneySummary.month === key ? moneySummary : { currencies: [] });
+  if (!analyticsSheet.hidden) renderTrendView(sum);
 }
 function closeAnalytics() {
   analyticsSheet.hidden = true;
@@ -5869,26 +6150,32 @@ document.querySelectorAll('#anPeriod [data-period]').forEach(b => { b.onclick = 
 
 const currencySheet = document.getElementById('currencySheet');
 function renderCurrencyOptions() {
-  const box = document.getElementById('currencyOptions');
+  renderCurrencyGroup('currencyOptions', 'default_currency');
+  renderCurrencyGroup('currencyOptions2', 'second_currency');
+}
+function renderCurrencyGroup(boxId, field) {
+  const box = document.getElementById(boxId);
   box.innerHTML = '';
-  const current = (moneyMe && moneyMe.default_currency) || 'EUR';
-  ((moneyMe && moneyMe.currencies) || ['EUR', 'KZT']).forEach(cur => {
+  const [main, second] = userCurrencies();
+  const current = field === 'default_currency' ? main : second;
+  const all = (moneyMe && moneyMe.currencies) || ['EUR', 'KZT', 'USD', 'AZN', 'TRY'];
+  all.filter(cur => field === 'default_currency' || cur !== main).forEach(cur => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'cur-option';
     btn.setAttribute('role', 'radio');
     btn.setAttribute('aria-checked', String(cur === current));
-    btn.dataset.focusKey = 'cur-' + cur;
-    const symbol = moneyFmt('0', cur).replace(/[\d\s,.]/g, '');
+    btn.dataset.focusKey = `cur-${field}-${cur}`;
+    const symbol = CURRENCY_SYMBOLS[cur] || cur;
     btn.innerHTML = `<span></span>${cur === current ? '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>' : ''}`;
     btn.querySelector('span').textContent = `${symbol}  ${CURRENCY_NAMES[cur] || cur}`;
     btn.onclick = async () => {
-      if (cur === current) { closeCurrency(); return; }
+      if (cur === current) return;
       try {
-        moneyMe = await apiJson('/me', { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify({ default_currency: cur }) });
-        toast(`Основная валюта: ${CURRENCY_NAMES[cur] || cur}`);
+        moneyMe = await apiJson('/me', { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify({ [field]: cur }) });
+        toast(`${field === 'default_currency' ? 'Основная' : 'Дополнительная'} валюта: ${CURRENCY_NAMES[cur] || cur}`);
       } catch (e) { toast(e.message || 'Не удалось сохранить'); }
-      closeCurrency();
+      renderCurrencyOptions();
       loadMoney();
     };
     box.appendChild(btn);
@@ -5925,8 +6212,8 @@ let moneyReturnFocus = null;
 function rememberedCurrency() {
   let cur = null;
   try { cur = localStorage.getItem(MONEY_CUR_STORAGE); } catch (e) { cur = null; }
-  const allowed = (moneyMe && moneyMe.currencies) || ['EUR', 'KZT'];
-  return allowed.includes(cur) ? cur : ((moneyMe && moneyMe.default_currency) || allowed[0]);
+  const allowed = userCurrencies();
+  return allowed.includes(cur) ? cur : allowed[0];
 }
 function rememberedCategory(kind) {
   let id = null;
@@ -5939,8 +6226,8 @@ function renderMoneyForm() {
   const f = moneyForm;
   const curWrap = document.getElementById('moneyCurrency');
   curWrap.innerHTML = '';
-  ((moneyMe && moneyMe.currencies) || ['EUR', 'KZT']).forEach(cur => {
-    const [btn, text] = choiceChipEl(cur, f.currency === cur, 'solid', () => { f.currency = cur; renderMoneyForm(); });
+  userCurrencies(f.currency).forEach(cur => {
+    const [btn, text] = choiceChipEl(`${CURRENCY_SYMBOLS[cur] || ''} ${cur}`.trim(), f.currency === cur, 'solid', () => { f.currency = cur; renderMoneyForm(); });
     btn.appendChild(text);
     curWrap.appendChild(btn);
   });
@@ -6374,6 +6661,7 @@ function openNewTask() {
 document.getElementById('newModeAi').onclick = () => setNewTaskMode('ai', true);
 document.getElementById('newModeManual').onclick = () => setNewTaskMode('manual', true);
 document.getElementById('newClearDeadline').onclick = () => {
+  document.getElementById('newEndTime').value = '';
   document.getElementById('newDate').value = '';
   document.getElementById('newTime').value = '';
 };
@@ -6714,6 +7002,7 @@ function openEdit(id) {
   document.getElementById('editText').value = task.task;
   document.getElementById('editDate').value = task.deadline ? task.deadline.slice(0, 10) : '';
   document.getElementById('editTime').value = task.deadline ? task.deadline.slice(11, 16) : '';
+  document.getElementById('editEndTime').value = task.ends_at ? task.ends_at.slice(11, 16) : '';
   resetAttach('edit');
   document.getElementById('editComment').value = '';
   loadEditComments(id);
@@ -6969,6 +7258,9 @@ async function submitEdit() {
     priority: { value: editChoice.priority },
     deadline: { value: date ? `${date}T${time}` : '' }, // saveEdit добавит секунды; пусто → null
   };
+  const endsAt = endsFromForm('edit');
+  if (endsAt === undefined) return;
+  fields.ends = endsAt;
   const task = findTask(editingId);
   if (task && !task.gcal_imported) {
     if (repeatState.edit.pattern === 'days' && !repeatState.edit.days.length) { toast('Выберите хотя бы один день недели'); return; }
@@ -6987,6 +7279,7 @@ async function submitEdit() {
 document.getElementById('editClose').onclick = closeEdit;
 document.getElementById('editSave').onclick = submitEdit;
 document.getElementById('editClearDeadline').onclick = () => {
+  document.getElementById('editEndTime').value = '';
   document.getElementById('editDate').value = '';
   document.getElementById('editTime').value = '';
 };
@@ -7012,6 +7305,8 @@ document.addEventListener('keydown', (e) => {
   else if (!editSheet.hidden) closeEdit();
   else if (!moneySheet.hidden) closeMoneyForm();
   else if (!currencySheet.hidden) closeCurrency();
+  else if (!statementSheet.hidden) closeStatement();
+  else if (!settingsSheet.hidden) closeSettings();
   else if (!calendarsSheet.hidden) closeCalendars();
   else if (!goalSheet.hidden) closeGoalForm();
   else if (!goalMoveSheet.hidden) closeGoalMove();

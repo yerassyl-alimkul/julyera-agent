@@ -109,8 +109,8 @@ def http_checks(client, token, A, B, db_insert):
                         ("1000000000000", "10^12"), ("abc", "не число")):
         r = client.post("/money/transactions", headers=hA, json={**base, "amount": amount})
         check(f"сумма: {why} → 422", r.status_code == 422, str(r.status_code))
-    r = client.post("/money/transactions", headers=hA, json={**base, "amount": "1", "currency": "USD"})
-    check("валюта USD → 422", r.status_code == 422)
+    r = client.post("/money/transactions", headers=hA, json={**base, "amount": "1", "currency": "GBP"})
+    check("валюта GBP (её нет) → 422", r.status_code == 422)
     for day, why in (("2026-13-01", "13-й месяц"), ("10.09.2026", "не ГГГГ-ММ-ДД"), ("2040-01-01", "дальше 5 лет")):
         r = client.post("/money/transactions", headers=hA, json={**base, "amount": "1", "spent_on": day})
         check(f"дата: {why} → 422", r.status_code == 422, str(r.status_code))
@@ -230,7 +230,7 @@ def http_checks(client, token, A, B, db_insert):
     section("Валюта по умолчанию и /me")
     r = client.patch("/me", headers=hA, json={"default_currency": "KZT"})
     check("PATCH /me меняет валюту по умолчанию", r.status_code == 200 and r.json().get("default_currency") == "KZT")
-    check("PATCH /me с USD → 422", client.patch("/me", headers=hA, json={"default_currency": "USD"}).status_code == 422)
+    check("PATCH /me с GBP → 422", client.patch("/me", headers=hA, json={"default_currency": "GBP"}).status_code == 422)
     check("у B валюта не изменилась", client.get("/me", headers=hB).json().get("default_currency") == "EUR")
     check("операция без входа → 401", client.get("/money/summary").status_code == 401)
     return {"food_a": food_a, "rec": rec}
@@ -334,7 +334,7 @@ def applepay_checks(client, token, A, B, local: bool):
     check("память магазинов у каждого своя", rb.status_code == 201 and rb.json()["transaction"]["category_id"] != other["id"])
     check("операция Apple Pay другого пользователя → 404", client.get(f"/money/transactions/{tx['id']}", headers=hB).status_code == 404)
     check("возврат не записывается (422)", pay(hA, "-5,00 €", "Esselunga").status_code == 422)
-    check("валюта не EUR/KZT → 422 с понятным текстом", "не поддерживается" in pay(hA, "$10.00", "Shop").text)
+    check("валюта не из пяти (£) → 422 с понятным текстом", "не поддерживается" in pay(hA, "£10.00", "Shop").text)
     check("без входа → 401", client.post("/money/applepay", json={"amount": "€1", "merchant": "X"}).status_code == 401)
     return tx
 
@@ -614,9 +614,9 @@ def bot_checks(db, A, B):
     u = ic.tg_update(A["telegram_user_id"], text="/currency KZT")
     run(h.currency_command(u, ctx))
     check("/currency KZT меняет валюту по умолчанию", __import__("money_service").default_currency(A["id"]) == "KZT")
-    u = ic.tg_update(A["telegram_user_id"], text="/currency USD")
+    u = ic.tg_update(A["telegram_user_id"], text="/currency GBP")
     run(h.currency_command(u, ctx))
-    check("/currency USD отклоняется", "Такой валюты нет" in u.replies[-1].text)
+    check("/currency GBP отклоняется", "Такой валюты нет" in u.replies[-1].text)
     u = ic.tg_update(A["telegram_user_id"], text="/month")
     run(h.month_command(u, ctx))
     check("/month показывает итоги месяца по валютам", "EUR: расходы" in u.replies[-1].text, u.replies[-1].text[:80])

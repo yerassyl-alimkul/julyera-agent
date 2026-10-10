@@ -18,7 +18,7 @@ from groq_client import parse_text_to_tasks
 from models import Status, TaskCreate, TaskUpdate
 
 TABLE = "tasks"
-NULLABLE_FIELDS = {"deadline", "note", "source", "recurrence_pattern", "recurrence_days"}
+NULLABLE_FIELDS = {"deadline", "ends_at", "note", "source", "recurrence_pattern", "recurrence_days"}
 # Повторения одного события Google Calendar связаны: эти поля, изменённые у одного, меняются у всех незакрытых.
 # Время, статус и удаление — только у самого повторения (как «только это событие» в Google).
 SERIES_FIELDS = ("task", "category", "priority", "note")
@@ -65,6 +65,32 @@ def next_occurrence(current: Optional[datetime], pattern: Optional[str], days: O
             break
         nxt = _step(nxt, pattern, days)
     return nxt
+
+
+def _dt(value) -> Optional[datetime]:
+    if not value:
+        return None
+    dt = value if isinstance(value, datetime) else datetime.fromisoformat(str(value))
+    return dt.replace(tzinfo=None)
+
+
+def _normalize_ends(data: dict, current: Optional[dict] = None) -> None:
+    """«с — до» (migration 012): ends_at только при дедлайне и позже него, иначе 422. Перенесли задачу, не трогая
+    «до» (кнопки «На завтра», перетаскивание в календаре), — конец едет вместе с началом, длительность та же.
+    Сняли дедлайн — снимается и конец."""
+    current = current or {}
+    start = _dt(data["deadline"]) if "deadline" in data else _dt(current.get("deadline"))
+    if "ends_at" in data:
+        end = _dt(data["ends_at"])
+    elif "deadline" in data and current.get("ends_at") and current.get("deadline") and start:
+        end = start + (_dt(current["ends_at"]) - _dt(current["deadline"]))
+    else:
+        return
+    if end and not start:
+        end = None
+    if end and end <= start:
+        raise CategoryError(422, "Время «до» должно быть позже начала", "bad_ends_at")
+    data["ends_at"] = end.isoformat() if end else None
 
 
 def _normalize_recurrence(data: dict, deadline_value) -> None:
@@ -135,6 +161,7 @@ def create_task(payload: TaskCreate, user_id: str) -> dict:
     data["user_id"] = user_id  # владельца ставит сервер, не клиент
     data["category"] = _known_category(user_id, data["category"])
     _normalize_recurrence(data, data.get("deadline"))
+    _normalize_ends(data)
     result = supabase.table(TABLE).insert(data).execute()
     if not result.data:
         raise RuntimeError("Не удалось создать задачу")
@@ -250,6 +277,7 @@ def update_task(task_id: str, payload: TaskUpdate, user_id: str) -> Optional[dic
         if "recurrence_pattern" not in update_data:
             update_data["recurrence_pattern"] = current.get("recurrence_pattern")
         _normalize_recurrence(update_data, update_data.get("deadline", current.get("deadline")))
+    _normalize_ends(update_data, current)
     update_data["updated_at"] = datetime.utcnow().isoformat()
 
     result = supabase.table(TABLE).update(update_data).eq("id", task_id).eq("user_id", user_id).execute()
@@ -277,6 +305,8 @@ def update_task(task_id: str, payload: TaskUpdate, user_id: str) -> Optional[dic
             "category": current["category"],
             "source": current.get("source"),
             "deadline": next_deadline.isoformat() if next_deadline else None,
+            "ends_at": (next_deadline + (_dt(current["ends_at"]) - _dt(current["deadline"]))).isoformat()
+            if next_deadline and current.get("ends_at") and current.get("deadline") else None,
             "priority": current["priority"],
             "status": Status.todo.value,
             "note": current.get("note"),

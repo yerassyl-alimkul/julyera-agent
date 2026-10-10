@@ -37,6 +37,7 @@ class TaskBase(BaseModel):
     category: str = Field(..., min_length=1, max_length=30)
     source: Optional[str] = None
     deadline: Optional[datetime] = None
+    ends_at: Optional[datetime] = None  # «до»: конец задачи в тот же день или позже, «голые часы» как deadline
     priority: Priority = Priority.mid
     status: Status = Status.todo
     note: Optional[str] = None
@@ -69,6 +70,7 @@ class TaskUpdate(BaseModel):
     category: Optional[str] = Field(None, min_length=1, max_length=30)
     source: Optional[str] = None
     deadline: Optional[datetime] = None
+    ends_at: Optional[datetime] = None
     priority: Optional[Priority] = None
     status: Optional[Status] = None
     note: Optional[str] = None
@@ -236,6 +238,19 @@ class ApplePayIn(BaseModel):
     card: Optional[str] = None      # карта (не сохраняется)
 
 
+class StatementIn(BaseModel):
+    """POST /money/statement: период; send — прислать файл в бот (в Telegram так надёжнее), иначе отдать PDF."""
+    date_from: str = Field(..., alias="from")
+    date_to: str = Field(..., alias="to")
+    send: bool = False
+
+
+class VoiceIn(BaseModel):
+    """POST /voice/transcribe: запись с микрофона приложения (base64), тип — как его дал MediaRecorder."""
+    audio: str = Field(..., min_length=10, max_length=14_000_000)  # ~10 МБ после декодирования
+    type: str = Field("audio/webm", max_length=60)
+
+
 class GoalCreate(BaseModel):
     """POST /money/goals: суммы строкой, как везде в деньгах; проверяет goals_service."""
     name: str
@@ -264,5 +279,6 @@ class CalendarChoice(BaseModel):
 
 class MeUpdate(BaseModel):
     default_currency: Optional[str] = None
+    second_currency: Optional[str] = None   # дополнительная валюта (вторая кнопка в форме траты)
     calendar_import: Optional[bool] = None  # переносить ли события Google Calendar в задачи
     remind_before: Optional[int] = None     # за сколько минут напоминать о задаче со временем: 0, 15, 30, 60

@@ -62,6 +62,8 @@ from money_service import MoneyError
 from telegram_auth import InitDataError, verify_init_data
 from models import (
     CalendarChoice,
+    StatementIn,
+    VoiceIn,
     GoalCreate,
     GoalMove,
     GoalUpdate,
@@ -213,6 +215,33 @@ def current_user(
 @app.post("/tasks", response_model=Task, status_code=201)
 def create_task(payload: TaskCreate, user: dict = Depends(current_user)):
     return task_service.create_task(payload, user["id"])
+
+
+VOICE_EXT = {"audio/webm": "webm", "audio/mp4": "m4a", "audio/aac": "m4a", "audio/x-m4a": "m4a",
+             "audio/ogg": "ogg", "audio/mpeg": "mp3", "audio/wav": "wav"}
+
+
+@app.post("/voice/transcribe")
+def transcribe_voice(payload: VoiceIn, user: dict = Depends(current_user)):
+    """Диктовка в приложении: тот же Whisper, что у голосовых в боте (Web Speech API в Telegram на iPhone
+    не работает). Текст не сохраняется и не пишется в лог — только длина."""
+    import base64
+    import binascii
+    from groq_client import transcribe_audio
+    try:
+        audio = base64.b64decode(payload.audio, validate=True)
+    except (binascii.Error, ValueError):
+        raise HTTPException(status_code=422, detail="Запись повреждена, попробуйте ещё раз")
+    if len(audio) < 1000:
+        raise HTTPException(status_code=422, detail="Слишком короткая запись")
+    ext = VOICE_EXT.get(payload.type.split(";")[0].strip().lower(), "webm")
+    try:
+        text = transcribe_audio(audio, f"voice.{ext}").strip()
+    except Exception as exc:
+        logger.warning("Диктовка не распознана: %s", type(exc).__name__)
+        raise HTTPException(status_code=502, detail="Не получилось распознать, попробуйте ещё раз")
+    logger.info("Диктовка: %s символов", len(text))
+    return {"text": text}
 
 
 @app.post("/tasks/preview")
@@ -367,6 +396,7 @@ def get_me(user: dict = Depends(current_user)):
     return {"name": user.get("name"), "is_admin": bool(user.get("is_admin")),
             "timezone": user.get("timezone") or users_service.DEFAULT_TIMEZONE,
             "default_currency": money_service.default_currency(user["id"]),
+            "second_currency": money_service.second_currency(user["id"]),
             "currencies": list(money_service.CURRENCIES),
             "calendar_import": user.get("calendar_import") is not False,
             "remind_before": digest_service.remind_before(user)}
@@ -376,6 +406,8 @@ def get_me(user: dict = Depends(current_user)):
 def update_me(payload: MeUpdate, background: BackgroundTasks, user: dict = Depends(current_user)):
     if payload.default_currency is not None:
         money_service.set_default_currency(user["id"], payload.default_currency)
+    if payload.second_currency is not None:
+        money_service.set_second_currency(user["id"], payload.second_currency)
     if payload.remind_before is not None:
         try:
             digest_service.set_remind_before(user["id"], payload.remind_before)
@@ -583,11 +615,50 @@ async def telegram_webhook(token: str, request: Request):
 
 
 async def _send_telegram_document(client: httpx.AsyncClient, chat_id: int, filename: str, content: bytes,
-                                  caption: str) -> bool:
+                                  caption: str, mime: str = "application/json") -> bool:
     resp = await client.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendDocument",
                              data={"chat_id": str(chat_id), "caption": caption},
-                             files={"document": (filename, content, "application/json")})
+                             files={"document": (filename, content, mime)})
     return resp.status_code == 200
+
+
+async def _send_file_to_user(user_id: str, filename: str, content: bytes, caption: str, mime: str) -> int:
+    """Файл во все чаты пользователя; сколько отправлено. Нет бота или чатов — 0."""
+    if not TELEGRAM_BOT_TOKEN:
+        return 0
+    sent = 0
+    async with httpx.AsyncClient(timeout=30) as client:
+        for chat_id in users_service.get_chat_ids(user_id):
+            try:
+                sent += await _send_telegram_document(client, chat_id, filename, content, caption, mime)
+            except Exception as exc:
+                logger.warning("Файл в бот не отправлен: %s", type(exc).__name__)
+    return sent
+
+
+@app.post("/money/statement")
+async def money_statement(payload: StatementIn, user: dict = Depends(current_user)):
+    """Выписка PDF за период: send — в бот (ответ {sent}), иначе сам файл для скачивания в браузере."""
+    import statement_service
+    name, pdf, _ = statement_service.build(user["id"], payload.date_from, payload.date_to)
+    if payload.send:
+        sent = await _send_file_to_user(user["id"], name, pdf, statement_service.caption(payload.date_from, payload.date_to),
+                                        "application/pdf")
+        if not sent:
+            raise HTTPException(status_code=502, detail="Не получилось отправить в бот. Напишите боту /start и попробуйте снова")
+        return {"sent": sent}
+    from fastapi.responses import Response
+    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+@app.post("/backup/send")
+async def send_backup(user: dict = Depends(current_user)):
+    """Кнопка «Резервная копия в бот» в «Настройках» — то же, что /backup."""
+    name, content, count = backup_service.build(user["id"])
+    sent = await _send_file_to_user(user["id"], name, content, backup_service.caption(count), "application/json")
+    if not sent:
+        raise HTTPException(status_code=502, detail="Не получилось отправить в бот. Напишите боту /start и попробуйте снова")
+    return {"sent": sent}
 
 
 async def _send_telegram_message(client: httpx.AsyncClient, chat_id: int, text: str, buttons=None) -> bool:

@@ -255,7 +255,7 @@ def _event_body(task: dict, tz: str = "Europe/Rome") -> dict:
     # смещению — поэтому убираем его и передаём зону отдельным полем timeZone.
     if start_dt.tzinfo is not None:
         start_dt = start_dt.replace(tzinfo=None)
-    end_dt = start_dt + timedelta(minutes=30)
+    end_dt = _naive(task["ends_at"]) if task.get("ends_at") else start_dt + timedelta(minutes=30)
     return {
         "summary": f"{emoji_c} {emoji_p} {task['task']}".strip(),
         "description": task.get("note") or "",
@@ -319,7 +319,9 @@ def _imported_patch(task: dict, event: dict, tz: str) -> dict:
         body["end"] = {"date": (start.date() + timedelta(days=days)).isoformat(), "dateTime": None, "timeZone": None}
         return body
     duration = timedelta(minutes=30)
-    if old_start.get("dateTime") and old_end.get("dateTime"):
+    if task.get("ends_at"):  # «до» задано в JulYera — конец события ровно по нему
+        duration = _naive(task["ends_at"]) - start
+    elif old_start.get("dateTime") and old_end.get("dateTime"):
         duration = max(timedelta(0), datetime.fromisoformat(old_end["dateTime"]) - datetime.fromisoformat(old_start["dateTime"]))
     body["start"] = {"dateTime": start.isoformat(), "timeZone": tz, "date": None}
     body["end"] = {"dateTime": (start + duration).isoformat(), "timeZone": tz, "date": None}

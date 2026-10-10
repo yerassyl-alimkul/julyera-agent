@@ -82,6 +82,17 @@ def event_deadline(event: dict, tz: str) -> tuple[Optional[datetime], bool]:
     return None, False
 
 
+def event_end(event: dict, tz: str) -> Optional[datetime]:
+    """Конец события со временем — «до» у задачи; у событий на весь день его нет."""
+    end = (event.get("end") or {}).get("dateTime")
+    if not end:
+        return None
+    dt = datetime.fromisoformat(end.replace("Z", "+00:00"))
+    if dt.tzinfo:
+        dt = dt.astimezone(ZoneInfo(tz)).replace(tzinfo=None)
+    return dt.replace(second=0, microsecond=0)
+
+
 def _plain(description: Optional[str]) -> Optional[str]:
     """Описание события (Google хранит его с HTML) → текст заметки."""
     if not description:
@@ -173,6 +184,9 @@ def _apply_event(task: dict, event: dict, user_id: str, tz: str) -> bool:
             changes["deadline"] = deadline.isoformat()
         if task.get("gcal_imported") and all_day != bool(task.get("gcal_all_day")):
             changes["gcal_all_day"] = all_day
+        end = event_end(event, tz)
+        if end != _naive(task.get("ends_at")) and (end is None or (deadline and end > deadline)):
+            changes["ends_at"] = end.isoformat() if end else None
         note = _plain(event.get("description"))
         if note != (task.get("note") or None):
             changes["note"] = note
@@ -264,6 +278,9 @@ def sync_user(user_id: str, now_utc: Optional[datetime] = None) -> Optional[dict
                    "note": _plain(ev.get("description")), "is_recurring": False, "tags": [],
                    "google_event_id": ev["id"], "gcal_imported": True, "gcal_all_day": all_day,
                    "gcal_updated": ev.get("updated")}
+            end = event_end(ev, tz)
+            if end and end > deadline:
+                row["ends_at"] = end.isoformat()
             if ev["_cal"] != "primary":  # у задач из основного календаря колонка пустая, как до миграции 008
                 row["gcal_calendar_id"] = ev["_cal"]
             try:

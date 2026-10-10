@@ -53,7 +53,7 @@ def main():
     check("пустое название → 422", client.post("/money/goals", headers=hA, json={"name": " ", "target": "10"}).status_code == 422)
     check("сумма 0 → 422", client.post("/money/goals", headers=hA, json={"name": "x", "target": "0"}).status_code == 422)
     check("странная валюта → 422",
-          client.post("/money/goals", headers=hA, json={"name": "x", "target": "1", "currency": "USD"}).status_code == 422)
+          client.post("/money/goals", headers=hA, json={"name": "x", "target": "1", "currency": "GBP"}).status_code == 422)
 
     section("Отложить и снять")
     move = lambda gid, amount, take=False, hh=hA: client.post(f"/money/goals/{gid}/moves", headers=hh,
