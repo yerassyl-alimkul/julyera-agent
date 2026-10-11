@@ -161,7 +161,10 @@ def _known_category(user_id: str, name: str) -> str:
 def create_task(payload: TaskCreate, user_id: str) -> dict:
     data = payload.model_dump(mode="json", exclude_none=False)
     data["user_id"] = user_id  # владельца ставит сервер, не клиент
-    data["category"] = _known_category(user_id, data["category"])
+    import shared_service
+    group = shared_service.prepare_group_task(data, user_id)  # задача группы: категория — название группы
+    if not group:
+        data["category"] = _known_category(user_id, data["category"])
     data["location"] = (data.get("location") or "").strip() or None
     if not data["location"]:
         data.pop("location")  # колонку пишем, только когда место есть
@@ -171,7 +174,10 @@ def create_task(payload: TaskCreate, user_id: str) -> dict:
     if not result.data:
         raise RuntimeError("Не удалось создать задачу")
     task = result.data[0]
-    return _sync_google_upsert(task, user_id)
+    task = _sync_google_upsert(task, user_id)
+    if group:  # сразу у всех участников группы (migration 014)
+        task = shared_service.spread(task, group, user_id)
+    return task
 
 
 def _parsed_tasks(raw_text: str, user_id: str, source_hint: Optional[str] = None,
@@ -204,10 +210,14 @@ def _parsed_tasks(raw_text: str, user_id: str, source_hint: Optional[str] = None
 
 
 def create_tasks_from_text(raw_text: str, user_id: str, source_hint: Optional[str] = None,
-                           default_date: Optional[str] = None) -> list[dict]:
+                           default_date: Optional[str] = None, group_id: Optional[str] = None) -> list[dict]:
     """default_date ("YYYY-MM-DD") — день, открытый в приложении: задачи без даты в тексте встают на него
-    (время — из текста или 23:59). Своя дата в тексте главнее."""
-    return [create_task(t, user_id) for t in _parsed_tasks(raw_text, user_id, source_hint, default_date)]
+    (время — из текста или 23:59). Своя дата в тексте главнее. group_id — задачи сразу в группу."""
+    tasks = _parsed_tasks(raw_text, user_id, source_hint, default_date)
+    if group_id:
+        tasks = [t.model_copy(update={"group_id": group_id, "is_recurring": False, "recurrence_pattern": None,
+                                      "recurrence_days": None}) for t in tasks]
+    return [create_task(t, user_id) for t in tasks]
 
 
 def preview_tasks_from_text(raw_text: str, user_id: str) -> list[dict]:
@@ -281,8 +291,9 @@ def update_task(task_id: str, payload: TaskUpdate, user_id: str, propagate: bool
         update_data["category"] = _known_category(user_id, update_data["category"])
     if "location" in update_data:
         update_data["location"] = (update_data["location"] or "").strip() or None
-    if current.get("shared_id") and update_data.get("recurrence_pattern"):
-        raise CategoryError(422, "Совместную задачу пока нельзя сделать повторяющейся", "shared_recurring")
+    if (current.get("shared_id") or current.get("group_id")) and update_data.get("recurrence_pattern"):
+        raise CategoryError(422, "Задачу группы пока нельзя сделать повторяющейся", "shared_recurring")
+    update_data.pop("group_id", None)  # группу у задачи не меняют
     if "recurrence_pattern" in update_data or "recurrence_days" in update_data:
         if "recurrence_pattern" not in update_data:
             update_data["recurrence_pattern"] = current.get("recurrence_pattern")
@@ -371,14 +382,14 @@ def _update_series(user_id: str, series_id: str, task_id: str, shared: dict) -> 
             supabase.table(TABLE).update(data).eq("id", row["id"]).eq("user_id", user_id).execute()
 
 
-def delete_task(task_id: str, user_id: str, payment_hook: bool = True) -> bool:
+def delete_task(task_id: str, user_id: str, payment_hook: bool = True, quiet: bool = False) -> bool:
     """payment_hook=False — задачу платежа убирает сам кошелёк (платёж удалён, на паузе, снова списывается сам)."""
     task = get_task(task_id, user_id)
     if not task:
         return False
     if task.get("shared_id"):  # совместная: удаление = выход, у остальных задача остаётся (migration 014)
         import shared_service
-        shared_service.leave(task, user_id)
+        shared_service.leave(task, user_id, notify=not quiet)
     gcal.sync_task_delete(task.get("google_event_id"), user_id, task.get("gcal_calendar_id"))
     import comments_service  # файлы комментариев — из хранилища; строки уйдут каскадом вместе с задачей
     comments_service.delete_task_files(task_id, user_id)

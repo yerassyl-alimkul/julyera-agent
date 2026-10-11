@@ -50,7 +50,7 @@ import goals_service
 import calendar_sync
 import categories_service
 import comments_service
-import contacts_service
+import groups_service
 import places_service
 import shared_service
 import digest_service
@@ -81,7 +81,6 @@ from models import (
     MoneyCategoryUpdate,
     MoneyParseRequest,
     NotePhotoIn,
-    ShareIn,
     GroupIn,
     RecurringCreate,
     RecurringUpdate,
@@ -277,7 +276,8 @@ def breakdown_task(task_id: UUID, user: dict = Depends(current_user)):
 def parse_and_create_tasks(payload: ParseRequest, user: dict = Depends(current_user)):
     try:
         created = task_service.create_tasks_from_text(payload.text, user["id"], source_hint=payload.source,
-                                                      default_date=payload.default_date)
+                                                      default_date=payload.default_date,
+                                                      group_id=str(payload.group_id) if payload.group_id else None)
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=f"Ошибка разбора LLM: {exc}")
 
@@ -313,62 +313,45 @@ def list_tasks(
     return tasks
 
 
-@app.get("/people")
-def list_people(user: dict = Depends(current_user)):
-    """С кем можно поделиться задачей (остальные допущенные пользователи)."""
-    return shared_service.partners(user["id"])
-
-
-@app.post("/tasks/{task_id}/share")
-def share_task(task_id: UUID, payload: ShareIn, user: dict = Depends(current_user)):
-    """Пригласить в свою задачу: второму приходит приглашение в бот, задача появится у него после «Принять»."""
-    if bool(payload.user_id) == bool(payload.group_id):
-        raise HTTPException(status_code=422, detail="Укажите одного человека или группу")
-    return shared_service.invite(str(task_id), user["id"], str(payload.user_id) if payload.user_id else None,
-                                 str(payload.group_id) if payload.group_id else None)
-
-
-@app.get("/contacts")
-def list_contacts(user: dict = Depends(current_user)):
-    return contacts_service.contacts(user["id"])
-
-
-@app.post("/contacts/link")
-def contact_link(user: dict = Depends(current_user)):
-    """Ссылка-приглашение в контакты: второй открывает её в боте и нажимает «Принять»."""
-    return contacts_service.link(user["id"])
-
-
-@app.delete("/contacts/{contact_id}", status_code=204)
-def remove_contact(contact_id: UUID, user: dict = Depends(current_user)):
-    if not contacts_service.remove(user["id"], str(contact_id)):
-        raise HTTPException(status_code=404, detail="Контакт не найден")
-    return None
-
-
 @app.get("/groups")
 def list_groups(user: dict = Depends(current_user)):
-    return contacts_service.list_groups(user["id"])
+    """Группы, в которых пользователь состоит (у каждой — страница с общими задачами)."""
+    return groups_service.list_groups(user["id"])
 
 
 @app.post("/groups", status_code=201)
 def create_group(payload: GroupIn, user: dict = Depends(current_user)):
-    return contacts_service.create_group(user["id"], payload.name, [str(m) for m in payload.member_ids or []])
+    return groups_service.create_group(user["id"], payload.name, True if payload.tick_all is None else payload.tick_all)
 
 
-@app.patch("/groups/{group_id}")
-def update_group(group_id: UUID, payload: GroupIn, user: dict = Depends(current_user)):
-    group = contacts_service.update_group(str(group_id), user["id"], payload.name,
-                                          [str(m) for m in payload.member_ids] if payload.member_ids is not None else None)
+@app.get("/groups/{group_id}")
+def get_group(group_id: UUID, user: dict = Depends(current_user)):
+    group = groups_service.get_group(str(group_id), user["id"])
     if not group:
         raise HTTPException(status_code=404, detail="Группа не найдена")
     return group
 
 
+@app.patch("/groups/{group_id}")
+def update_group(group_id: UUID, payload: GroupIn, user: dict = Depends(current_user)):
+    return groups_service.update_group(str(group_id), user["id"], payload.name, payload.tick_all)
+
+
 @app.delete("/groups/{group_id}", status_code=204)
 def delete_group(group_id: UUID, user: dict = Depends(current_user)):
-    if not contacts_service.delete_group(str(group_id), user["id"]):
-        raise HTTPException(status_code=404, detail="Группа не найдена")
+    groups_service.delete_group(str(group_id), user["id"])
+    return None
+
+
+@app.post("/groups/{group_id}/leave", status_code=204)
+def leave_group(group_id: UUID, user: dict = Depends(current_user)):
+    groups_service.leave(str(group_id), user["id"])
+    return None
+
+
+@app.delete("/groups/{group_id}/members/{member_id}", status_code=204)
+def remove_group_member(group_id: UUID, member_id: UUID, user: dict = Depends(current_user)):
+    groups_service.remove_member(str(group_id), user["id"], str(member_id))
     return None
 
 

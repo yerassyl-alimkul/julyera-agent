@@ -1,6 +1,6 @@
 """
-Проверки миграции 014: совместные задачи (приглашение, «Принять / Отклонить», общие поля, галочка у обоих,
-общие шаги и комментарии, выход при удалении, изоляция), место у задач и заметок, поиск адреса,
+Проверки миграции 014: группы с общими задачами (вступление по ссылке, задачи сразу у всех, общие поля, шаги и
+комментарии, галочка у всех или у каждого своя, права, выход), место у задач и заметок, поиск адреса,
 галочка у повторяющегося платежа в кошельке.
 
     python scripts/shared_check.py
@@ -34,8 +34,8 @@ def main():
     import users_service
 
     client = TestClient(app_main.app, raise_server_exceptions=False)
-    import contacts_service
-    contacts_service.bot_username = lambda: "JulYeraTestBot"
+    import groups_service
+    groups_service.bot_username = lambda: "JulYeraTestBot"
     Y = users_service.create_user("Yera", 8001)
     J = users_service.create_user("Julie", 8002)
     X = users_service.create_user("Чужой", 8003)
@@ -55,64 +55,50 @@ def main():
     def copy_of(user, title):
         return next((t for t in db.tables["tasks"] if t["user_id"] == user["id"] and t["task"] == title), None)
 
-    section("Контакты по ссылке")
-    check("без контактов «С кем» пусто — чужих не видно", client.get("/people", headers=hY).json() == [])
+    def join(user, group):
+        token = group["invite"]["start"].split("g_")[1]
+        u = ic.tg_update(user["telegram_user_id"], text=group["invite"]["start"])
+        asyncio.run(h.start(u, SimpleNamespace(bot=ic.FakeBot(), args=[f"g_{token}"])))
+        cu = ic.tg_update(user["telegram_user_id"], callback_data=f"gj:y:{token}")
+        asyncio.run(h.group_join_callback(cu, SimpleNamespace(bot=ic.FakeBot())))
+        return u, cu
 
-    def befriend(a, ha, b):
-        link = client.post("/contacts/link", headers=ha).json()
-        u = ic.tg_update(b["telegram_user_id"], text=link["start"])
-        asyncio.run(h.start(u, SimpleNamespace(bot=ic.FakeBot(), args=[link["start"].split()[1]])))
-        return link, u
-    link, u = befriend(Y, hY, J)
-    check("Julie открыла ссылку — бот спрашивает «Принять»", "Yera хочет добавить вас в контакты" in u.replies[-1].text
-          and u.replies[-1].markup.inline_keyboard[0][0].callback_data == f"ct:y:{link['token']}")
-    check("пока не приняла — не в контактах", client.get("/people", headers=hY).json() == [])
-    cu = ic.tg_update(J["telegram_user_id"], callback_data=f"ct:y:{link['token']}")
-    asyncio.run(h.contact_callback(cu, SimpleNamespace(bot=ic.FakeBot())))
-    check("приняла — видят друг друга", [p["name"] for p in client.get("/people", headers=hY).json()] == ["Julie"]
-          and [p["name"] for p in client.get("/people", headers=hJ).json()] == ["Yera"])
-    check("Чужой никого не видит", client.get("/people", headers=hX).json() == [])
-    u = ic.tg_update(Y["telegram_user_id"], text=link["start"])
-    asyncio.run(h.start(u, SimpleNamespace(bot=ic.FakeBot(), args=[link["start"].split()[1]])))
-    check("своя ссылка — подсказка, без кнопок", "ваша ссылка" in u.replies[-1].text and u.replies[-1].markup is None)
-    check("та же ссылка, пока не устарела", client.post("/contacts/link", headers=hY).json()["token"] == link["token"])
-
-    section("Приглашение")
-    t = client.post("/tasks", headers=hY, json={"task": "Купить подарок маме", "category": "Work",
+    section("Группа и вступление по ссылке")
+    check("групп пока нет", client.get("/groups", headers=hY).json() == [])
+    check("пустое название → 422", client.post("/groups", headers=hY, json={"name": " "}).status_code == 422)
+    pair = client.post("/groups", headers=hY, json={"name": "Мы с Julie", "tick_all": True}).json()
+    check("группа создана, создатель — участник", pair["owner"] and [m["name"] for m in pair["members"]] == ["Yera"]
+          and pair["invite"]["url"] == f"https://t.me/JulYeraTestBot?start={pair['invite']['start'].split()[1]}")
+    check("чужой группу не видит", client.get(f"/groups/{pair['id']}", headers=hX).status_code == 404)
+    t = client.post("/tasks", headers=hY, json={"task": "Купить подарок маме", "category": "Work", "group_id": pair["id"],
                                                "deadline": "2030-01-18T18:00:00", "location": " Stephansplatz 1, Wien "}).json()
-    check("место сохраняется у задачи (без лишних пробелов)", t["location"] == "Stephansplatz 1, Wien")
-    r = client.post(f"/tasks/{t['id']}/share", headers=hY, json={"user_id": J["id"]})
-    check("приглашение отправлено", r.status_code == 200 and r.json()["status"] == "pending", r.text[:200])
-    msg = [m for m in sent if m[0] == J["telegram_user_id"]][-1]
-    data = msg[2][0][0]["callback_data"]
-    check("Julie пришло приглашение с кнопками", "Yera предлагает задачу на двоих" in msg[1] and data.startswith("sh:y:")
-          and len(data.encode()) <= 64)
-    me = next(x for x in client.get("/tasks", headers=hY).json() if x["id"] == t["id"])
-    check("у автора категория «С Julie» и пометка «ждёт Julie»", me["category"] == "С Julie" and me["shared"]["pending"] == ["Julie"])
-    check("повторное приглашение не дублируется", client.post(f"/tasks/{t['id']}/share", headers=hY, json={"user_id": J["id"]}).json()["invite_id"]
-          == data.split(":")[2])
-    check("пригласить себя нельзя", client.post(f"/tasks/{t['id']}/share", headers=hY, json={"user_id": Y["id"]}).status_code == 404)
-    check("не контакт — нельзя", client.post(f"/tasks/{t['id']}/share", headers=hY, json={"user_id": X["id"]}).status_code == 404)
-    check("чужой задачей не поделиться", client.post(f"/tasks/{t['id']}/share", headers=hX, json={"user_id": J["id"]}).status_code == 404)
-    rec = client.post("/tasks", headers=hY, json={"task": "Спорт", "category": "Work", "deadline": "2030-01-07T09:00:00",
-                                                 "recurrence_pattern": "daily"}).json()
-    check("повторяющейся задачей поделиться нельзя (422)",
-          client.post(f"/tasks/{rec['id']}/share", headers=hY, json={"user_id": J["id"]}).status_code == 422)
-
-    section("Ответ")
-    check("чужой человек не может принять приглашение", "не найдено" in press(X, data) and not copy_of(X, "Купить подарок маме"))
+    check("задача группы: категория — название группы, место без лишних пробелов",
+          t["category"] == "Мы с Julie" and t["group_id"] == pair["id"] and t["location"] == "Stephansplatz 1, Wien", str(t)[:200])
+    check("чужой в группу задачу не добавит", client.post("/tasks", headers=hX, json={"task": "x", "category": "Work",
+                                                                                     "group_id": pair["id"]}).status_code == 404)
+    check("задачу группы нельзя сделать повторяющейся",
+          client.post("/tasks", headers=hY, json={"task": "x", "category": "Work", "group_id": pair["id"],
+                                                  "deadline": "2030-01-07T09:00:00", "recurrence_pattern": "daily"}).status_code == 422)
     sent.clear()
-    text = press(J, data)
+    u, cu = join(J, pair)
+    check("Julie открыла ссылку — «Вступить?»", "зовёт вас в группу «Мы с Julie»" in u.replies[-1].text
+          and u.replies[-1].markup.inline_keyboard[0][0].callback_data.startswith("gj:y:"))
     jt = copy_of(J, "Купить подарок маме")
-    check("Julie приняла — у неё своя копия в категории «С Yera»", jt and jt["category"] == "С Yera" and "добавлена" in text
-          and jt["deadline"].startswith("2030-01-18T18:00") and jt["location"] == "Stephansplatz 1, Wien")
-    check("автору пришло «теперь общая»", any(m[0] == Y["telegram_user_id"] and "теперь общая с Julie" in m[1] for m in sent))
-    check("повторное нажатие ничего не дублирует", "уже ответили" in press(J, data)
+    check("вступила — получила открытые задачи группы в категории группы", jt and jt["category"] == "Мы с Julie"
+          and jt["group_id"] == pair["id"] and jt["location"] == "Stephansplatz 1, Wien" and "Добавил открытые задачи группы: 1" in cu.edits[-1])
+    check("Yera пришло «теперь в группе»", any(m[0] == Y["telegram_user_id"] and "теперь в группе" in m[1] for m in sent))
+    check("повторное нажатие ничего не дублирует", "уже в группе" in join(J, pair)[1].edits[-1]
           and len([x for x in db.tables["tasks"] if x["task"] == "Купить подарок маме"]) == 2)
+    check("группу видят оба", [g["name"] for g in client.get("/groups", headers=hJ).json()] == ["Мы с Julie"]
+          and client.get("/groups", headers=hJ).json()[0]["owner"] is False)
+    sent.clear()
+    t2 = client.post("/tasks", headers=hJ, json={"task": "Забронировать столик", "category": "что угодно", "group_id": pair["id"]}).json()
+    check("Julie тоже добавляет — у Yera задача появилась сразу, без приглашения",
+          copy_of(Y, "Забронировать столик") is not None and copy_of(Y, "Забронировать столик")["category"] == "Мы с Julie")
+    check("Yera пришло «новая задача от Julie»", any(m[0] == Y["telegram_user_id"] and "новая задача от Julie" in m[1] for m in sent))
     me = next(x for x in client.get("/tasks", headers=hY).json() if x["id"] == t["id"])
-    check("у автора — «С Julie», без «ждёт»", me["shared"]["with"] == ["Julie"] and me["shared"]["pending"] == []
-          and me["shared"]["each"] is False)
-    check("у Julie — «С Yera»", next(x for x in client.get("/tasks", headers=hJ).json() if x["id"] == jt["id"])["shared"]["with"] == ["Yera"])
+    check("в списке задач — группа и с кем", me["shared"]["group"]["name"] == "Мы с Julie" and me["shared"]["with"] == ["Julie"]
+          and me["shared"]["tick_all"] is True)
 
     section("Общие поля, шаги и комментарии")
     client.patch(f"/tasks/{t['id']}", headers=hY, json={"task": "Купить подарок маме и цветы", "deadline": "2030-01-19T17:00:00",
@@ -120,9 +106,7 @@ def main():
     jt = next(x for x in db.tables["tasks"] if x["id"] == jt["id"])
     check("название, срок и заметка поменялись и у Julie", jt["task"] == "Купить подарок маме и цветы"
           and jt["deadline"].startswith("2030-01-19T17:00") and jt["note"] == "бюджет 100 €", str((jt["task"], jt["deadline"], jt["note"])))
-    client.patch(f"/tasks/{jt['id']}", headers=hJ, json={"category": "Work"})
-    check("категория у каждого своя", next(x for x in db.tables["tasks"] if x["id"] == t["id"])["category"] == "С Julie")
-    check("повтор у совместной задачи → 422",
+    check("повтор у задачи группы → 422",
           client.patch(f"/tasks/{jt['id']}", headers=hJ, json={"recurrence_pattern": "daily"}).status_code == 422)
     s1 = client.post(f"/tasks/{jt['id']}/subtasks", headers=hJ, json={"content": "Торт"}).json()
     check("шаг, добавленный Julie, виден у Yera под его копией",
@@ -138,88 +122,65 @@ def main():
     check("чужой комментарий удалить нельзя", client.delete(f"/comments/{cm[0]['id']}", headers=hJ).status_code == 404)
     check("чужой не читает комментарии", client.get(f"/tasks/{jt['id']}/comments", headers=hX).status_code == 404)
 
-    section("Галочка у обоих")
+    section("Галочка у всех (tick_all)")
     sent.clear()
     client.patch(f"/tasks/{jt['id']}", headers=hJ, json={"status": "Done"})
-    yt = next(x for x in db.tables["tasks"] if x["id"] == t["id"])
-    check("Julie отметила — закрыто и у Yera", yt["status"] == "Done")
+    check("Julie отметила — закрыто и у Yera", next(x for x in db.tables["tasks"] if x["id"] == t["id"])["status"] == "Done")
     check("Yera пришло «выполнено (Julie)»", any(m[0] == Y["telegram_user_id"] and "выполнено (Julie)" in m[1] for m in sent))
-    check("Julie себе не пишет", not any(m[0] == J["telegram_user_id"] for m in sent))
 
-    section("Выход при удалении")
-    t2 = client.post("/tasks", headers=hY, json={"task": "Отпуск", "category": "Work"}).json()
-    inv = client.post(f"/tasks/{t2['id']}/share", headers=hY, json={"user_id": J["id"]}).json()["invite_id"]
-    press(J, f"sh:y:{inv}")
-    j2 = copy_of(J, "Отпуск")
-    client.post(f"/tasks/{t2['id']}/subtasks", headers=hY, json={"content": "Билеты"})
-    client.post(f"/tasks/{t2['id']}/comments", headers=hY, json={"text": "в июле"})
-    sent.clear()
-    check("Yera удалил (главная копия) — 204", client.delete(f"/tasks/{t2['id']}", headers=hY).status_code == 204)
-    j2 = next(x for x in db.tables["tasks"] if x["id"] == j2["id"])
-    check("у Julie задача осталась обычной", j2["shared_id"] is None)
-    check("шаги и комментарии переехали к Julie", any(s["content"] == "Билеты" and s["task_id"] == j2["id"]
-                                                     for s in client.get("/subtasks", headers=hJ).json())
-          and len(client.get(f"/tasks/{j2['id']}/comments", headers=hJ).json()) == 1)
-    check("Julie пришло «больше не участвует»", any(m[0] == J["telegram_user_id"] and "больше не участвует" in m[1] for m in sent))
-    t3 = client.post("/tasks", headers=hY, json={"task": "Отклоню", "category": "Work"}).json()
-    inv = client.post(f"/tasks/{t3['id']}/share", headers=hY, json={"user_id": J["id"]}).json()["invite_id"]
-    sent.clear()
-    press(J, f"sh:n:{inv}")
-    check("отклонила — копии нет, автору сообщение", not copy_of(J, "Отклоню")
-          and any(m[0] == Y["telegram_user_id"] and "отклонено" in m[1] for m in sent))
-    t4 = client.post("/tasks", headers=hY, json={"task": "Удалю до ответа", "category": "Work"}).json()
-    inv = client.post(f"/tasks/{t4['id']}/share", headers=hY, json={"user_id": J["id"]}).json()["invite_id"]
-    client.delete(f"/tasks/{t4['id']}", headers=hY)
-    check("задачу удалили до ответа — «Принять» ничего не создаёт", "не найдено" in press(J, f"sh:y:{inv}")
-          and not copy_of(J, "Удалю до ответа"))
-
-    section("Группы")
+    section("Группа, где у каждого своя галочка")
     M = users_service.create_user("Мама", 8004)
     ic.give_categories(M, "Дом")
     users_service.link_chat(M["telegram_user_id"], M["id"])
     hM = ic.key_headers(M)
-    for other in (M,):
-        lk = client.post("/contacts/link", headers=hY).json()
-        cu = ic.tg_update(other["telegram_user_id"], callback_data=f"ct:y:{lk['token']}")
-        asyncio.run(h.contact_callback(cu, SimpleNamespace(bot=ic.FakeBot())))
-    check("группа из одного — нельзя", client.post("/groups", headers=hY, json={"name": "Семья", "member_ids": [J["id"]]}).status_code == 422)
-    check("в группу — только свои контакты",
-          client.post("/groups", headers=hY, json={"name": "Семья", "member_ids": [J["id"], X["id"]]}).status_code == 422)
-    g = client.post("/groups", headers=hY, json={"name": "Семья", "member_ids": [J["id"], M["id"]]}).json()
-    check("группа создана", g["name"] == "Семья" and {m["name"] for m in g["members"]} == {"Julie", "Мама"})
-    check("группы видит только автор", client.get("/groups", headers=hJ).json() == []
-          and client.patch(f"/groups/{g['id']}", headers=hJ, json={"name": "x"}).status_code == 404)
-    gt = client.post("/tasks", headers=hY, json={"task": "Сдать документы", "category": "Work"}).json()
+    fam = client.post("/groups", headers=hY, json={"name": "Семья", "tick_all": False}).json()
+    join(J, fam)
+    join(M, fam)
+    check("в группе трое", len(client.get(f"/groups/{fam['id']}", headers=hM).json()["members"]) == 3)
+    gt = client.post("/tasks", headers=hM, json={"task": "Сдать документы", "category": "Дом", "group_id": fam["id"]}).json()
+    check("задача мамы появилась у всех в «Семья»", all(copy_of(u, "Сдать документы")["category"] == "Семья" for u in (Y, J, M)))
     sent.clear()
-    r = client.post(f"/tasks/{gt['id']}/share", headers=hY, json={"group_id": g["id"]})
-    check("задача группе — приглашения обоим", r.status_code == 200 and len(r.json()["invite_ids"]) == 2
-          and sum(1 for m in sent if "группе «Семья»" in m[1]) == 2, r.text[:200])
-    check("у автора категория «Семья»", next(x for x in db.tables["tasks"] if x["id"] == gt["id"])["category"] == "Семья")
-    two = client.post("/tasks", headers=hY, json={"task": "На двоих", "category": "Work"}).json()
-    client.post(f"/tasks/{two['id']}/share", headers=hY, json={"user_id": J["id"]})
-    check("добавить третьего к задаче на двоих нельзя — нужна группа",
-          client.post(f"/tasks/{two['id']}/share", headers=hY, json={"user_id": M["id"]}).status_code == 409)
-    for inv in [x for x in db.tables["task_invites"] if x["task_id"] == gt["id"]]:
-        who = J if inv["to_user"] == J["id"] else M
-        press(who, f"sh:y:{inv['id']}")
-    jt, mt = copy_of(J, "Сдать документы"), copy_of(M, "Сдать документы")
-    check("у участников категория «Семья»", jt["category"] == "Семья" and mt["category"] == "Семья")
-    sent.clear()
-    client.patch(f"/tasks/{jt['id']}", headers=hJ, json={"status": "Done"})
-    check("галочка у каждого своя — у Yera и мамы задача открыта",
-          next(x for x in db.tables["tasks"] if x["id"] == gt["id"])["status"] != "Done"
-          and next(x for x in db.tables["tasks"] if x["id"] == mt["id"])["status"] != "Done")
+    client.patch(f"/tasks/{copy_of(J, 'Сдать документы')['id']}", headers=hJ, json={"status": "Done"})
+    check("галочка у каждого своя — у Yera и мамы открыта",
+          copy_of(Y, "Сдать документы")["status"] != "Done" and copy_of(M, "Сдать документы")["status"] != "Done")
     check("остальным — «Julie — готово (1 из 3)»", sum(1 for m in sent if "Julie — готово (1 из 3)" in m[1]) == 2)
-    info = next(x for x in client.get("/tasks", headers=hY).json() if x["id"] == gt["id"])["shared"]
-    check("у автора «1 из 3 готово»", info["each"] and info["done"] == 1 and info["total"] == 3, str(info))
-    client.patch(f"/tasks/{gt['id']}", headers=hY, json={"task": "Сдать документы в ЦОН"})
-    check("название меняется у всех", copy_of(M, "Сдать документы в ЦОН") is not None)
-    check("удалить контакт — пропадает из «С кем» и групп",
-          client.delete(f"/contacts/{M['id']}", headers=hY).status_code == 204
-          and [p["name"] for p in client.get("/people", headers=hY).json()] == ["Julie"]
-          and [m["name"] for m in client.get("/groups", headers=hY).json()[0]["members"]] == ["Julie"])
-    check("удаление группы", client.delete(f"/groups/{g['id']}", headers=hY).status_code == 204
-          and client.get("/groups", headers=hY).json() == [])
+    info = next(x for x in client.get("/tasks", headers=hY).json() if x["task"] == "Сдать документы")["shared"]
+    check("у Yera «1 из 3 готово»", info["tick_all"] is False and info["done"] == 1 and info["total"] == 3, str(info))
+
+    section("Права в группе")
+    check("переименовать может только создатель", client.patch(f"/groups/{fam['id']}", headers=hJ, json={"name": "x"}).status_code == 403)
+    r = client.patch(f"/groups/{fam['id']}", headers=hY, json={"name": "Родные"})
+    check("переименовали — категория у участников тоже", r.json()["name"] == "Родные" and copy_of(M, "Сдать документы")["category"] == "Родные")
+    check("создатель выйти не может", client.post(f"/groups/{fam['id']}/leave", headers=hY).status_code == 422)
+    sent.clear()
+    check("мама вышла", client.post(f"/groups/{fam['id']}/leave", headers=hM).status_code == 204)
+    check("её открытые копии удалены, у остальных задача осталась", copy_of(M, "Сдать документы") is None
+          and copy_of(Y, "Сдать документы") is not None)
+    check("остальным — «больше не в группе», без писем по каждой задаче",
+          sum(1 for m in sent if "больше не в группе" in m[1]) == 2 and not any("больше не участвует" in m[1] for m in sent))
+    check("выйти из чужой группы нельзя", client.post(f"/groups/{fam['id']}/leave", headers=hX).status_code == 404)
+    check("убрать участника может создатель", client.delete(f"/groups/{fam['id']}/members/{J['id']}", headers=hY).status_code == 204
+          and len(client.get(f"/groups/{fam['id']}", headers=hY).json()["members"]) == 1)
+    check("участник убрать не может", client.delete(f"/groups/{pair['id']}/members/{Y['id']}", headers=hJ).status_code == 403)
+
+    section("Выход из задачи при удалении")
+    t3 = client.post("/tasks", headers=hY, json={"task": "Отпуск", "category": "Work", "group_id": pair["id"]}).json()
+    j3 = copy_of(J, "Отпуск")
+    client.post(f"/tasks/{t3['id']}/subtasks", headers=hY, json={"content": "Билеты"})
+    client.post(f"/tasks/{t3['id']}/comments", headers=hY, json={"text": "в июле"})
+    sent.clear()
+    check("Yera удалил (главная копия) — 204", client.delete(f"/tasks/{t3['id']}", headers=hY).status_code == 204)
+    j3 = next(x for x in db.tables["tasks"] if x["id"] == j3["id"])
+    check("у Julie задача осталась (без связи)", j3["shared_id"] is None)
+    check("шаги и комментарии переехали к Julie", any(s["content"] == "Билеты" and s["task_id"] == j3["id"]
+                                                     for s in client.get("/subtasks", headers=hJ).json())
+          and len(client.get(f"/tasks/{j3['id']}/comments", headers=hJ).json()) == 1)
+    check("Julie пришло «больше не участвует»", any(m[0] == J["telegram_user_id"] and "больше не участвует" in m[1] for m in sent))
+    sent.clear()
+    check("удалить группу может только создатель", client.delete(f"/groups/{pair['id']}", headers=hJ).status_code == 403)
+    check("группа удалена — задачи остались обычными", client.delete(f"/groups/{pair['id']}", headers=hY).status_code == 204
+          and copy_of(J, "Забронировать столик")["group_id"] is None and client.get("/groups", headers=hJ).json() == []
+          and any(m[0] == J["telegram_user_id"] and "Группу «Мы с Julie» удалили" in m[1] for m in sent))
 
     section("Место")
     body = gcal._event_body({"task": "x", "deadline": "2030-01-07T09:00:00", "location": "Stephansplatz 1"}, "Europe/Rome")

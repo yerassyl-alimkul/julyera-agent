@@ -927,7 +927,7 @@ applyTheme();
     transition: background-color var(--dur-chip) ease, color var(--dur-chip) ease;
   }
   .dock-btn.active { background: var(--dock-active-bg); color: var(--dock-active-ink); font-weight: 600; }
-  @media (max-width: 400px) { .dock { gap: 2px; padding: 6px 4px; } .dock-btn { font-size: 13px; padding: 0 2px; } }
+  @media (max-width: 400px) { .dock { gap: 2px; padding: 6px 4px; } .dock-btn { font-size: 12.5px; padding: 0 2px; } }
   .fab {
     flex: 0 0 var(--touch-l);
     width: var(--touch-l);
@@ -1202,6 +1202,16 @@ applyTheme();
   .money-list-head .money-h2 { margin: 0; }
   .money-list-tools { display: flex; align-items: center; gap: 4px; }
   .people-list { display: flex; flex-direction: column; gap: var(--gap-s); }
+  .newtask-group { margin: 0 0 var(--gap-m); padding: 10px 14px; border-radius: var(--radius-compact); background: var(--surface);
+    border: 1px solid var(--line); font-size: 15px; font-weight: 600; }
+  .group-page-head { display: flex; align-items: center; gap: var(--gap-s); padding-top: 20px; }
+  .group-page-title { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .group-members { display: flex; align-items: center; gap: var(--gap-s); padding: var(--gap-m) 0; font-size: 14px; color: var(--ink-muted); }
+  .group-members .people-av { flex: 0 0 28px; width: 28px; height: 28px; font-size: 12px; margin-right: -12px;
+    border: 2px solid var(--bg); }
+  .group-members .people-av:last-of-type { margin-right: 4px; }
+  .group-task-list { display: flex; flex-direction: column; gap: var(--gap-s); }
+  #groupDoneToggle { align-self: flex-start; margin: var(--gap-l) 0 var(--gap-s); }
   .people-row { display: flex; align-items: center; gap: var(--gap-m); min-height: 52px; padding: 4px 4px 4px 12px;
     border: 1px solid var(--line); border-radius: var(--radius-compact); background: var(--surface); color: var(--ink);
     font: inherit; font-size: 16px; text-align: left; }
@@ -1778,10 +1788,6 @@ applyTheme();
     </div>
   </div>
     </div>
-    <h3 class="set-group">Люди</h3>
-    <div class="set-card">
-      <button class="set-row" id="setPeople" type="button"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3 2.8-5 5.5-5s4.9 2 5.5 5"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2c2.3.3 4.2 2 4.7 4.8"/></svg><span class="set-label">Мои люди и группы</span><span class="set-val" id="setPeopleVal"></span><svg class="set-chev" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></svg></button>
-    </div>
     <h3 class="set-group">Кошелёк</h3>
     <div class="set-card">
       <button class="set-row" id="setMoneyCats" type="button"><svg viewBox="0 0 24 24"><path d="M4 7h16v12H4zM4 11h16M8 15h3"/></svg><span class="set-label">Категории расходов и доходов</span><svg class="set-chev" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></svg></button>
@@ -2028,12 +2034,38 @@ applyTheme();
         <div class="notes-list" id="notesList" style="padding-top: 0;"></div>
       </div>
     </section>
+
+    <section id="groupsView" style="display: none;" aria-labelledby="groupsTitle">
+      <div id="groupsListView">
+        <div class="day-head">
+          <div class="day-head-text">
+            <h1 class="t-h1" id="groupsTitle">Группы</h1>
+            <div class="day-sub" id="groupsSubtitle">Общие задачи с близкими</div>
+          </div>
+        </div>
+        <div class="people-list" id="groupsList" style="padding-top: 20px;"></div>
+        <button class="btn-soft" id="groupsNew" type="button" style="margin-top: var(--gap-m);"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Новая группа</span></button>
+        <p class="form-hint repeat-hint" style="margin-top: var(--gap-m);">Создайте группу и отправьте ссылку: человек откроет её в боте и нажмёт «Вступить». Задачи, добавленные на странице группы, сразу появляются у всех.</p>
+      </div>
+      <div id="groupPageView" hidden>
+        <div class="group-page-head">
+          <button class="tb-btn" id="groupBack" aria-label="Назад к группам"><svg viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></svg></button>
+          <h1 class="t-h1 group-page-title" id="groupPageTitle"></h1>
+          <button class="tb-btn" id="groupSettingsBtn" aria-label="Настройки группы"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.6"/><path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4L18 18M6 18l1.6-1.6M16.4 7.6L18 6"/></svg></button>
+        </div>
+        <div class="group-members" id="groupPageMembers"></div>
+        <div class="group-task-list" id="groupTasks"></div>
+        <button class="link-btn" id="groupDoneToggle" type="button" hidden></button>
+        <div class="group-task-list" id="groupDoneTasks" hidden></div>
+      </div>
+    </section>
   </main>
 </div>
 
 <div class="dock-wrap">
   <nav class="dock" aria-label="Разделы">
     <button class="dock-btn active" data-page="list" aria-current="page">Задачи</button>
+    <button class="dock-btn" data-page="groups">Группы</button>
     <button class="dock-btn" data-page="notes">Заметки</button>
     <button class="dock-btn" data-page="money">Кошелёк</button>
   </nav>
@@ -2050,6 +2082,7 @@ applyTheme();
       <h2 class="t-modal-title" id="newTaskTitle">Новая задача</h2>
       <span></span>
     </div>
+    <p class="newtask-group" id="newTaskGroup" hidden></p>
     <div class="segmented" role="group" aria-label="Как создать задачу">
       <button type="button" id="newModeAi" aria-pressed="true">ИИ</button>
       <button type="button" id="newModeManual" aria-pressed="false">Вручную</button>
@@ -2065,7 +2098,7 @@ applyTheme();
         <label class="form-label" for="newText">Задача</label>
         <textarea class="field field-title" id="newText"></textarea>
       </section>
-      <section class="form-section">
+      <section class="form-section" id="newCatSection">
         <h3 class="form-label" id="newCatLabel">Категория</h3>
         <div class="chip-group" id="newCategory" role="group" aria-labelledby="newCatLabel"></div>
       </section>
@@ -2089,11 +2122,6 @@ applyTheme();
       <section class="form-section">
         <h3 class="form-label">Место</h3>
         <div id="newPlace"></div>
-      </section>
-      <section class="form-section" id="newShareSection">
-        <h3 class="form-label" id="newShareLabel">С кем</h3>
-        <div class="chip-group" id="newShare" role="group" aria-labelledby="newShareLabel"></div>
-        <p class="form-hint repeat-hint" id="newShareHint" hidden></p>
       </section>
       <section class="form-section" id="newRepeatSection">
         <h3 class="form-label" id="newRepeatLabel">Повторять</h3>
@@ -2381,27 +2409,7 @@ applyTheme();
   </div>
 </div>
 
-<!-- Мои люди и группы (совместные задачи, migration 014) -->
-<div class="sheet" id="peopleSheet" role="dialog" aria-modal="true" aria-labelledby="peopleTitle" hidden>
-  <div class="sheet-inner">
-    <div class="sheet-head">
-      <button class="tb-btn" id="peopleClose" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-      <h2 class="t-modal-title" id="peopleTitle">Мои люди</h2>
-      <span></span>
-    </div>
-    <p class="newtask-hint">С ними можно ставить общие задачи. Человек появится здесь, когда откроет вашу ссылку и нажмёт «Принять» в боте. Задача на одного — напрямую, на двоих и больше — группой.</p>
-    <div class="edit-form">
-      <h3 class="form-label">Контакты</h3>
-      <div class="people-list" id="peopleList"></div>
-      <button class="btn-soft" id="peopleInvite" type="button"><svg viewBox="0 0 24 24"><circle cx="10" cy="8" r="3.2"/><path d="M4 19c.6-3 2.9-5 6-5 1.4 0 2.6.4 3.6 1.1M18 13v6M15 16h6"/></svg><span>Пригласить по ссылке</span></button>
-      <p class="form-hint repeat-hint" id="peopleLinkHint" hidden></p>
-      <h3 class="form-label" style="margin-top: var(--gap-l);">Группы</h3>
-      <div class="people-list" id="groupList"></div>
-      <button class="btn-soft" id="groupNew" type="button"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Новая группа</span></button>
-    </div>
-  </div>
-</div>
-
+<!-- Группа: создание и настройки (migration 014) -->
 <div class="sheet" id="groupSheet" role="dialog" aria-modal="true" aria-labelledby="groupTitle" hidden>
   <div class="sheet-inner">
     <div class="sheet-head">
@@ -2410,15 +2418,29 @@ applyTheme();
       <span></span>
     </div>
     <div class="edit-form">
-      <label class="form-label" for="groupName">Название</label>
-      <input class="field" id="groupName" type="text" maxlength="30" autocomplete="off" placeholder="Например: Семья">
-      <h3 class="form-label" style="margin-top: var(--gap-l);">Кто в группе (хотя бы двое)</h3>
-      <div class="people-list" id="groupMembers"></div>
-      <button class="btn-danger" id="groupDelete" type="button" hidden><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/></svg><span>Удалить группу</span></button>
+      <section class="form-section" id="groupNameSection">
+        <label class="form-label" for="groupName">Название</label>
+        <input class="field" id="groupName" type="text" maxlength="30" autocomplete="off" placeholder="Например: Семья">
+      </section>
+      <section class="form-section" id="groupTickSection">
+        <h3 class="form-label" id="groupTickLabel">Галочка</h3>
+        <div class="chip-group" id="groupTick" role="group" aria-labelledby="groupTickLabel">
+          <button type="button" class="choice-chip solid" data-tick="all" aria-pressed="true"><span>Закрывает у всех</span></button>
+          <button type="button" class="choice-chip solid" data-tick="each" aria-pressed="false"><span>У каждого своя</span></button>
+        </div>
+        <p class="form-hint repeat-hint" id="groupTickHint"></p>
+      </section>
+      <section class="form-section" id="groupMembersSection" hidden>
+        <h3 class="form-label">Участники</h3>
+        <div class="people-list" id="groupMembers"></div>
+        <button class="btn-soft" id="groupInvite" type="button"><svg viewBox="0 0 24 24"><circle cx="10" cy="8" r="3.2"/><path d="M4 19c.6-3 2.9-5 6-5 1.4 0 2.6.4 3.6 1.1M18 13v6M15 16h6"/></svg><span>Пригласить по ссылке</span></button>
+        <p class="form-hint repeat-hint" id="groupLinkHint" hidden></p>
+      </section>
+      <button class="btn-danger" id="groupDelete" type="button" hidden><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/></svg><span id="groupDeleteLabel">Удалить группу</span></button>
     </div>
   </div>
   <div class="sheet-footer">
-    <button class="btn-primary" id="groupSave">Сохранить</button>
+    <button class="btn-primary" id="groupSave">Создать группу</button>
   </div>
 </div>
 
@@ -2506,9 +2528,8 @@ applyTheme();
         <div id="editPlace"></div>
       </section>
       <section class="form-section" id="editShareSection" hidden>
-        <h3 class="form-label" id="editShareLabel">Совместная задача</h3>
-        <div class="chip-group" id="editShare" role="group" aria-labelledby="editShareLabel"></div>
-        <p class="form-hint repeat-hint" id="editShareHint" hidden></p>
+        <h3 class="form-label">Группа</h3>
+        <p class="form-hint repeat-hint" id="editShareHint"></p>
       </section>
       <section class="form-section" id="editRepeatSection">
         <h3 class="form-label" id="editRepeatLabel">Повторять</h3>
@@ -3022,6 +3043,8 @@ function renderCurrentPage() {
     renderCalendar();
   } else if (currentPage === 'money') {
     renderMoney();
+  } else if (currentPage === 'groups') {
+    renderGroups();
   }
 }
 
@@ -3040,11 +3063,13 @@ function switchPage(page) {
   document.getElementById('listView').style.display = page === 'list' ? '' : 'none';
   document.getElementById('calendarView').style.display = page === 'calendar' ? '' : 'none';
   document.getElementById('notesView').style.display = page === 'notes' ? '' : 'none';
+  document.getElementById('groupsView').style.display = page === 'groups' ? '' : 'none';
   document.getElementById('moneyView').style.display = page === 'money' ? '' : 'none';
   document.getElementById('fabBtn').setAttribute('aria-label',
     page === 'notes' ? 'Добавить заметку' : page === 'money' ? 'Добавить операцию' : 'Добавить задачу');
   if (page === 'notes') loadNotes();
   else if (page === 'money') loadMoney();
+  else if (page === 'groups') showGroups();
   else renderCurrentPage();
 }
 
@@ -3313,6 +3338,9 @@ function taskRowEl(task, mode) {
   time.className = 'row-time';
   if (mode === DAY_NODATE) {
     time.textContent = 'Без срока';
+  } else if (mode === 'group' && task.deadline) {   // страница группы: дата и время
+    const dt = parseNaiveDeadline(task.deadline);
+    time.textContent = `${dt.getDate()} ${MONTH_GENITIVE[dt.getMonth()]}, ${timeRange(task)}`;
   } else if (mode === DAY_OVERDUE) {
     const dt = parseNaiveDeadline(task.deadline);
     time.textContent = `${dt.getDate()} ${MONTH_GENITIVE[dt.getMonth()]}, ${timeRange(task)}`;
@@ -3321,12 +3349,12 @@ function taskRowEl(task, mode) {
     time.textContent = timeRange(task);
   }
   const rest = [task.category];
-  if (task.shared && task.shared.with.length) {   // категория «С Julie» / «Семья» и так говорит, с кем — значок вместо повтора
-    if (task.shared.each) { rest[0] = `👥 ${task.category}`; rest.push(`${task.shared.done} из ${task.shared.total} готово`); }
-    else if (task.shared.with.some(n => task.category === `С ${n}`)) rest[0] = `👥 ${task.category}`;
-    else rest.push(`👥 с ${task.shared.with.join(', ')}`);
+  if (task.shared) {   // задача группы: категория — название группы, значок вместо повтора
+    const gname = task.shared.group ? task.shared.group.name : null;
+    if (gname && task.category === gname) rest[0] = `👥 ${gname}`;
+    else rest.push(`👥 ${gname || 'общая'}`);
+    if (!task.shared.tick_all && task.shared.total > 1) rest.push(`${task.shared.done} из ${task.shared.total} готово`);
   }
-  else if (task.shared && task.shared.pending.length) rest.push(`⏳ ждёт ${task.shared.pending.join(', ')}`);
   if (task.location) rest.push(`📍 ${placeShort(task.location)}`);
   if (steps.length) rest.push(stepsText(steps.filter(s => s.is_done).length, steps.length));
   if (task.comments_count) rest.push(`💬 ${task.comments_count}`);
@@ -4894,7 +4922,7 @@ async function submitComposer() {
     const res = await api(`/tasks/parse`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, default_date: newTaskDefaultDay }),
+      body: JSON.stringify({ text, default_date: newTaskDefaultDay, ...(newTaskGroup ? { group_id: newTaskGroup.id } : {}) }),
     });
     if (!res.ok) {
       // 422 и 502 — разбор не удался, задач нет. Другая ошибка могла случиться уже после
@@ -4915,7 +4943,7 @@ async function submitComposer() {
     }
     viewMode = 'active';
     renderChips();
-    switchPage('list');
+    switchPage(newTaskGroup ? 'groups' : 'list');  // задача группы — остаёмся на странице группы
     await loadTasks();
   } catch (e) {
     // Нет ответа (сеть, сервер просыпается): запрос мог дойти, поэтому тоже перечитываем список.
@@ -4948,6 +4976,7 @@ async function submitManual() {
   if (endsAt === undefined) return;
   payload.ends_at = endsAt;
   if (placeState.new && placeState.new.value) payload.location = placeState.new.value;
+  if (newTaskGroup) payload.group_id = newTaskGroup.id;
   if (repeatState.new.pattern === 'days' && !repeatState.new.days.length) { toast('Выберите хотя бы один день недели'); return; }
   btn.disabled = true;
   btn.textContent = 'Сохраняю…';
@@ -4966,17 +4995,6 @@ async function submitManual() {
     }
     const created = await res.json();
     await postNewTaskComment([created]);
-    if (newShareWith) {
-      const who = newShareWith.user ? (people || []).find(p => p.id === newShareWith.user)
-        : (groups || []).find(g => g.id === newShareWith.group);
-      const body = newShareWith.user ? { user_id: newShareWith.user } : { group_id: newShareWith.group };
-      try {
-        await apiJson(`/tasks/${created.id}/share`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(body) });
-        toast(`Задача добавлена. Приглашение отправлено: ${who ? who.name : ''}`);
-      } catch (e) { toast(e.message || 'Задача добавлена, но приглашение не отправилось'); }
-      newShareWith = null;
-      loadTasks();
-    }
     placeState.new = placeField(document.getElementById('newPlace'), '', 'Место задачи');
     ['newText', 'newDate', 'newEndDate', 'newTime', 'newEndTime', 'composerInput'].forEach(id => { document.getElementById(id).value = ''; });
     repeatState.new = { pattern: null, days: [] };
@@ -4988,7 +5006,7 @@ async function submitManual() {
     stripNeedsScroll = true;
     viewMode = 'active';
     renderChips();
-    switchPage('list');
+    switchPage(newTaskGroup ? 'groups' : 'list');  // задача группы — остаёмся на странице группы
     await loadTasks();
   } catch (e) {
     toast('Нет связи с сервером. Проверь список: задача могла сохраниться');
@@ -5577,7 +5595,6 @@ async function openSettings() {
   document.getElementById('setCurrenciesVal').textContent = userCurrencies().map(c => CURRENCY_SYMBOLS[c] || c).join(' · ');
   renderRemindButtons();
   checkGoogleStatus();
-  loadPeople(true).then(() => { document.getElementById('setPeopleVal').textContent = people.length ? String(people.length) : ''; });
 }
 function closeSettings() {
   if (settingsSheet.hidden) return;
@@ -5593,7 +5610,6 @@ document.getElementById('setTaskCats').onclick = fromSettings(() => openCategori
 document.getElementById('setMoneyCats').onclick = fromSettings(() => openCategories('expense'));
 document.getElementById('setCurrencies').onclick = fromSettings(openCurrency);
 document.getElementById('setStatement').onclick = fromSettings(openStatement);
-document.getElementById('setPeople').onclick = fromSettings(openPeople);
 document.getElementById('moneyStatementBtn').onclick = openStatement;
 
 // «Ещё» в верхней строке кошелька: Категории, Валюты, Аналитика, Выписка выпадающим списком.
@@ -7321,7 +7337,13 @@ function openNewTask() {
   renderNewTaskDay();
   if (newTaskDefaultDay) document.getElementById('newDate').value = newTaskDefaultDay;  // «Вручную» — сразу эта дата
   if (!placeState.new) placeState.new = placeField(document.getElementById('newPlace'), '', 'Место задачи');
-  renderNewShare();
+  // «+» на странице группы — задача сразу всем участникам: без категории и повтора
+  newTaskGroup = currentPage === 'groups' && openGroupId ? groupById(openGroupId) : null;
+  document.getElementById('newTaskGroup').hidden = !newTaskGroup;
+  document.getElementById('newTaskGroup').textContent = newTaskGroup ? `👥 В группу «${newTaskGroup.name}» — появится у всех участников` : '';
+  document.getElementById('newCatSection').hidden = !!newTaskGroup;
+  if (newTaskGroup) { repeatState.new = { pattern: null, days: [] }; renderRepeat('new'); }
+  document.getElementById('newRepeatSection').hidden = !!newTaskGroup;
   setNewTaskMode(newTaskMode, false);
   newTaskSheet.hidden = false;
   newTaskSheet.scrollTop = 0;
@@ -7348,6 +7370,7 @@ document.getElementById('fabBtn').onclick = () => {
   // На вкладке «Заметки» «+» ведёт в поле новой заметки (раздел 5).
   if (currentPage === 'notes') document.getElementById('noteInput').focus();
   else if (currentPage === 'money' && moneyTab === 'goals') openGoalForm(null);
+  else if (currentPage === 'groups' && !openGroupId) openGroupSheet(null);
   else if (currentPage === 'money') openMoneyForm(null, 'tx', { kind: moneyTab === 'income' ? 'income' : 'expense' });
   else openNewTask();
 };
@@ -7581,239 +7604,232 @@ function placeField(box, initial, label) {
 }
 const placeState = { new: null, edit: null };
 
-// ---------- Совместные задачи (migration 014): «С кем» в новой задаче, приглашение из «Изменить» ----------
-// «С кем» — только свои контакты (взаимно, по ссылке) и свои группы; на одного — напрямую, на двоих+ — группой.
-let people = null;          // GET /people: [{id, name}] — контакты
-let groups = null;          // GET /groups: [{id, name, members}]
-let newShareWith = null;    // { user: id } | { group: id } | null — только я
-async function loadPeople(force) {
-  if (people && groups && !force) return people;
-  const [p, g] = await Promise.allSettled([apiJson('/people'), apiJson('/groups')]);
-  people = p.status === 'fulfilled' ? p.value : [];
-  groups = g.status === 'fulfilled' ? g.value : [];
-  return people;
+// ---------- Группы (migration 014): вкладка «Группы», страница группы, задачи сразу у всех участников ----------
+let groups = null;          // GET /groups: [{id, name, tick_all, owner, members, invite}]
+let openGroupId = null;     // открытая страница группы или null — список групп
+let groupDoneOpen = false;
+let newTaskGroup = null;    // группа, в которую создаётся задача («+» на странице группы)
+async function loadGroups() {
+  try { groups = await apiJson('/groups'); } catch (e) { groups = groups || []; }
+  return groups;
 }
 function initials(name) { return (String(name || '?').trim()[0] || '?').toUpperCase(); }
+function groupById(id) { return (groups || []).find(g => g.id === id); }
 
-const peopleSheet = document.getElementById('peopleSheet');
-const groupSheet = document.getElementById('groupSheet');
-let groupEditing = null;     // группа или null (новая)
-let groupPicked = new Set();
-
-async function openPeople() {
-  await loadPeople(true);
-  renderPeople();
-  peopleSheet.hidden = false;
-  document.body.classList.add('no-scroll');
-  setBackgroundInert(true);
-  document.getElementById('peopleClose').focus();
+async function showGroups() {
+  await loadGroups();
+  if (openGroupId && !groupById(openGroupId)) openGroupId = null;
+  renderGroups();
 }
-function closePeople() {
-  peopleSheet.hidden = true;
-  document.body.classList.remove('no-scroll');
-  setBackgroundInert(false);
-}
-function renderPeople() {
-  const list = document.getElementById('peopleList');
+function renderGroups() {
+  if (currentPage !== 'groups' || !groups) return;
+  const page = openGroupId && groupById(openGroupId);
+  document.getElementById('groupsListView').hidden = !!page;
+  document.getElementById('groupPageView').hidden = !page;
+  document.getElementById('fabBtn').setAttribute('aria-label', page ? `Новая задача в группу «${page.name}»` : 'Новая группа');
+  if (page) { renderGroupPage(page); return; }
+  const list = document.getElementById('groupsList');
   list.innerHTML = '';
-  if (!people.length) {
-    const empty = document.createElement('div');
-    empty.className = 'empty-dashed';
-    empty.textContent = 'Пока никого. Нажмите «Пригласить по ссылке» и отправьте ссылку человеку';
-    list.appendChild(empty);
-  }
-  people.forEach(p => {
-    const row = document.createElement('div');
-    row.className = 'people-row';
-    row.innerHTML = '<span class="people-av" aria-hidden="true"></span><span class="people-name"></span>';
-    row.querySelector('.people-av').textContent = initials(p.name);
-    row.querySelector('.people-name').textContent = p.name;
-    const del = iconButton('M7 7l10 10M17 7L7 17', `Убрать ${p.name} из контактов`, () => removeContact(p));
-    del.dataset.focusKey = 'contact-del-' + p.id;
-    row.appendChild(del);
-    list.appendChild(row);
-  });
-  const glist = document.getElementById('groupList');
-  glist.innerHTML = '';
   if (!groups.length) {
     const empty = document.createElement('div');
     empty.className = 'empty-dashed';
-    empty.textContent = people.length < 2 ? 'Для группы нужно хотя бы двое контактов' : 'Групп пока нет — например, «Семья»';
-    glist.appendChild(empty);
+    empty.textContent = 'Групп пока нет — например, «Семья» или «Мы с Julie»';
+    list.appendChild(empty);
   }
   groups.forEach(g => {
+    const open = allTasks.filter(t => t.group_id === g.id && t.status !== 'Done').length;
     const row = document.createElement('button');
     row.type = 'button';
     row.className = 'people-row';
     row.dataset.focusKey = 'group-' + g.id;
-    row.innerHTML = '<span class="people-av" aria-hidden="true">👥</span><span class="people-name"><span></span><small></small></span>';
+    row.innerHTML = '<span class="people-av" aria-hidden="true">👥</span><span class="people-name"><span></span><small></small></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg>';
     row.querySelector('.people-name span').textContent = g.name;
-    row.querySelector('.people-name small').textContent = g.members.map(m => m.name).join(', ');
-    row.onclick = () => openGroup(g);
-    glist.appendChild(row);
+    row.querySelector('.people-name small').textContent =
+      `${g.members.length > 1 ? g.members.map(m => m.name).join(', ') : 'пока только вы'} · ${pluralTasks(open)}`;
+    row.onclick = () => { openGroupId = g.id; groupDoneOpen = false; renderGroups(); window.scrollTo(0, 0); };
+    list.appendChild(row);
   });
-  document.getElementById('groupNew').hidden = people.length < 2;
 }
-async function removeContact(p) {
-  try {
-    await apiJson(`/contacts/${p.id}`, { method: 'DELETE' });
-    toast(`${p.name} больше не в контактах. Общие задачи остались`);
-  } catch (e) { toast(e.message || 'Не получилось'); }
-  await loadPeople(true);
-  renderPeople();
+function renderGroupPage(g) {
+  document.getElementById('groupPageTitle').textContent = g.name;
+  const mem = document.getElementById('groupPageMembers');
+  mem.innerHTML = '';
+  g.members.slice(0, 5).forEach(m => {
+    const av = document.createElement('span');
+    av.className = 'people-av';
+    av.textContent = initials(m.name);
+    av.title = m.name;
+    mem.appendChild(av);
+  });
+  const label = document.createElement('span');
+  label.textContent = g.members.length > 1
+    ? `${g.members.map(m => m.name).join(', ')} · ${g.tick_all ? 'галочка у всех' : 'у каждого своя галочка'}`
+    : 'Пока только вы — пригласите людей в настройках группы';
+  mem.appendChild(label);
+  const mine = allTasks.filter(t => t.group_id === g.id);
+  const open = mine.filter(t => t.status !== 'Done').sort(byDeadline);
+  const done = mine.filter(t => t.status === 'Done');
+  const box = document.getElementById('groupTasks');
+  box.innerHTML = '';
+  if (!open.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-dashed';
+    empty.textContent = 'Задач нет. Нажмите «+», чтобы добавить задачу для всей группы';
+    box.appendChild(empty);
+  }
+  open.forEach(t => box.appendChild(taskRowEl(t, t.deadline ? (dateKey(t.deadline) < localDateKey(new Date()) ? DAY_OVERDUE : 'group') : DAY_NODATE)));
+  const toggle = document.getElementById('groupDoneToggle');
+  toggle.hidden = !done.length;
+  toggle.textContent = groupDoneOpen ? `Скрыть выполненные (${done.length})` : `Выполненные (${done.length})`;
+  const doneBox = document.getElementById('groupDoneTasks');
+  doneBox.hidden = !groupDoneOpen;
+  doneBox.innerHTML = '';
+  if (groupDoneOpen) done.forEach(t => {
+    const row = document.createElement('div');
+    row.className = 'archive-row';
+    paintRow(row, t.category);
+    row.innerHTML = '<div class="row-body"><div class="row-title"></div><div class="row-meta"><span class="row-time"></span></div></div>';
+    row.querySelector('.row-title').textContent = t.task;
+    const dt = t.deadline && parseNaiveDeadline(t.deadline);
+    row.querySelector('.row-time').textContent = dt ? `${dt.getDate()} ${MONTH_SHORT[dt.getMonth()]} · ${timeOf(t.deadline)}` : 'Без срока';
+    doneBox.appendChild(row);
+  });
 }
-document.getElementById('peopleInvite').onclick = async () => {
-  try {
-    const link = await apiJson('/contacts/link', { method: 'POST' });
-    const hint = document.getElementById('peopleLinkHint');
-    if (link.url) {
-      const text = 'Давай ставить общие задачи в JulYera — открой ссылку и нажми «Принять»';
-      if (inTelegram && tg && typeof tg.openTelegramLink === 'function') {
-        try { tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link.url)}&text=${encodeURIComponent(text)}`); } catch (e) { /* ниже */ }
-      } else if (navigator.share) {
-        try { await navigator.share({ text, url: link.url }); } catch (e) { /* закрыли окно */ }
-      } else {
-        try { await navigator.clipboard.writeText(link.url); toast('Ссылка скопирована'); } catch (e) { /* покажем ниже */ }
-      }
-      hint.textContent = `Ссылка действует 7 дней: ${link.url}`;
-    } else {
-      hint.textContent = `Пусть человек отправит боту: ${link.start}`;
-    }
-    hint.hidden = false;
-  } catch (e) { toast(e.message || 'Не удалось получить ссылку'); }
-};
-function openGroup(group) {
-  groupEditing = group || null;
-  groupPicked = new Set(group ? group.members.map(m => m.id) : []);
-  document.getElementById('groupTitle').textContent = group ? group.name : 'Новая группа';
-  document.getElementById('groupName').value = group ? group.name : '';
-  document.getElementById('groupDelete').hidden = !group;
-  renderGroupMembers();
-  peopleSheet.hidden = true;
+document.getElementById('groupDoneToggle').onclick = () => { groupDoneOpen = !groupDoneOpen; renderGroups(); };
+document.getElementById('groupBack').onclick = () => { openGroupId = null; renderGroups(); };
+document.getElementById('groupsNew').onclick = () => openGroupSheet(null);
+document.getElementById('groupSettingsBtn').onclick = () => { const g = groupById(openGroupId); if (g) openGroupSheet(g); };
+
+// Настройки группы: создание (название, галочка) и для созданной — участники, ссылка, удалить / выйти.
+const groupSheet = document.getElementById('groupSheet');
+let groupEditing = null;
+let groupTickAll = true;
+function openGroupSheet(g) {
+  groupEditing = g;
+  groupTickAll = g ? g.tick_all : true;
+  const owner = !g || g.owner;
+  document.getElementById('groupTitle').textContent = g ? g.name : 'Новая группа';
+  document.getElementById('groupName').value = g ? g.name : '';
+  document.getElementById('groupName').disabled = !owner;
+  document.getElementById('groupNameSection').hidden = !owner;
+  document.getElementById('groupTickSection').hidden = !owner;
+  document.getElementById('groupMembersSection').hidden = !g;
+  document.getElementById('groupLinkHint').hidden = true;
+  document.getElementById('groupDelete').hidden = !g;
+  document.getElementById('groupDeleteLabel').textContent = owner ? 'Удалить группу' : 'Выйти из группы';
+  document.getElementById('groupSave').hidden = !owner;
+  document.getElementById('groupSave').textContent = g ? 'Сохранить' : 'Создать группу';
+  renderGroupSheet();
   groupSheet.hidden = false;
-  document.getElementById('groupName').focus();
+  document.body.classList.add('no-scroll');
+  setBackgroundInert(true);
+  document.getElementById(owner ? 'groupName' : 'groupClose').focus();
 }
-function closeGroup() {
+function closeGroupSheet() {
   groupSheet.hidden = true;
-  peopleSheet.hidden = false;
-  renderPeople();
-  document.getElementById('peopleClose').focus();
+  document.body.classList.remove('no-scroll');
+  setBackgroundInert(false);
 }
-function renderGroupMembers() {
+function renderGroupSheet() {
+  document.querySelectorAll('#groupTick [data-tick]').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.tick === 'all') === groupTickAll)));
+  document.getElementById('groupTickHint').textContent = groupTickAll
+    ? 'Один отметил — задача закрыта у всех. Удобно для «Мы с Julie».'
+    : 'Каждый отмечает сам, у всех видно «1 из 3 готово». Удобно, когда дело у каждого своё.';
+  const g = groupEditing;
   const box = document.getElementById('groupMembers');
   box.innerHTML = '';
-  people.forEach(p => {
-    const row = document.createElement('button');
-    row.type = 'button';
+  if (!g) return;
+  g.members.forEach(m => {
+    const row = document.createElement('div');
     row.className = 'people-row';
-    row.setAttribute('role', 'checkbox');
-    row.setAttribute('aria-checked', String(groupPicked.has(p.id)));
-    row.dataset.focusKey = 'gm-' + p.id;
-    row.innerHTML = '<span class="step-circle"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="people-name"></span>';
-    row.querySelector('.people-name').textContent = p.name;
-    row.onclick = () => {
-      if (groupPicked.has(p.id)) groupPicked.delete(p.id); else groupPicked.add(p.id);
-      renderGroupMembers();
-      const again = box.querySelector(`[data-focus-key="gm-${p.id}"]`);
-      if (again) again.focus({ preventScroll: true });
-    };
+    row.innerHTML = '<span class="people-av" aria-hidden="true"></span><span class="people-name"><span></span><small></small></span>';
+    row.querySelector('.people-av').textContent = initials(m.name);
+    row.querySelector('.people-name span').textContent = m.name;
+    row.querySelector('.people-name small').textContent = m.owner ? 'создатель' : '';
+    if (g.owner && !m.owner) {
+      const del = iconButton('M7 7l10 10M17 7L7 17', `Убрать ${m.name} из группы`, async () => {
+        try { await apiJson(`/groups/${g.id}/members/${m.id}`, { method: 'DELETE' }); toast(`${m.name} больше не в группе`); }
+        catch (e) { toast(e.message || 'Не получилось'); }
+        await loadGroups();
+        groupEditing = groupById(g.id);
+        if (groupEditing) renderGroupSheet();
+        renderGroups();
+      });
+      row.appendChild(del);
+    }
     box.appendChild(row);
   });
 }
+document.querySelectorAll('#groupTick [data-tick]').forEach(b => { b.onclick = () => { groupTickAll = b.dataset.tick === 'all'; renderGroupSheet(); }; });
+document.getElementById('groupClose').onclick = closeGroupSheet;
 document.getElementById('groupSave').onclick = async () => {
   const name = document.getElementById('groupName').value.trim();
   if (!name) { toast('Назовите группу'); document.getElementById('groupName').focus(); return; }
-  if (groupPicked.size < 2) { toast('Выберите хотя бы двоих — для одного человека группа не нужна'); return; }
-  const body = JSON.stringify({ name, member_ids: [...groupPicked] });
   try {
-    if (groupEditing) await apiJson(`/groups/${groupEditing.id}`, { method: 'PATCH', headers: JSON_HEADERS, body });
-    else await apiJson('/groups', { method: 'POST', headers: JSON_HEADERS, body });
-    toast('Группа сохранена');
-    await loadPeople(true);
-    closeGroup();
+    const body = JSON.stringify({ name, tick_all: groupTickAll });
+    const g = groupEditing
+      ? await apiJson(`/groups/${groupEditing.id}`, { method: 'PATCH', headers: JSON_HEADERS, body })
+      : await apiJson('/groups', { method: 'POST', headers: JSON_HEADERS, body });
+    await loadGroups();
+    if (!groupEditing) {  // сразу на страницу новой группы и предложить ссылку
+      openGroupId = g.id;
+      groupEditing = groupById(g.id);
+      toast('Группа создана. Пригласите людей по ссылке');
+      openGroupSheet(groupEditing);
+    } else {
+      toast('Сохранено');
+      closeGroupSheet();
+    }
+    loadCategories();
+    renderGroups();
   } catch (e) { toast(e.message || 'Не удалось сохранить группу'); }
 };
-document.getElementById('groupDelete').onclick = async () => {
-  if (!groupEditing) return;
-  try {
-    await apiJson(`/groups/${groupEditing.id}`, { method: 'DELETE' });
-    toast('Группа удалена. Её задачи остались');
-    await loadPeople(true);
-    closeGroup();
-  } catch (e) { toast(e.message || 'Не удалось удалить группу'); }
-};
-document.getElementById('groupNew').onclick = () => openGroup(null);
-document.getElementById('peopleClose').onclick = closePeople;
-document.getElementById('groupClose').onclick = closeGroup;
-async function renderNewShare() {
-  const list = await loadPeople();
-  const box = document.getElementById('newShare');
-  box.innerHTML = '';
-  const options = [[null, 'Только я'], ...list.map(p => [{ user: p.id }, p.name]),
-    ...groups.map(g => [{ group: g.id }, `👥 ${g.name}`])];
-  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-  options.forEach(([value, label]) => {
-    const [btn, text] = choiceChipEl(label, same(newShareWith, value), 'solid', () => {
-      newShareWith = value;
-      if (value) { repeatState.new = { pattern: null, days: [] }; renderRepeat('new'); }
-      renderNewShare();
-    });
-    btn.appendChild(text);
-    box.appendChild(btn);
-  });
-  const who = newShareWith && newShareWith.user && list.find(p => p.id === newShareWith.user);
-  const grp = newShareWith && newShareWith.group && groups.find(g => g.id === newShareWith.group);
-  const hint = document.getElementById('newShareHint');
+document.getElementById('groupInvite').onclick = async () => {
+  const g = groupEditing;
+  if (!g) return;
+  const hint = document.getElementById('groupLinkHint');
+  const link = g.invite || {};
+  if (link.url) {
+    const text = `Вступай в группу «${g.name}» в JulYera — там наши общие задачи`;
+    if (inTelegram && tg && typeof tg.openTelegramLink === 'function') {
+      try { tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link.url)}&text=${encodeURIComponent(text)}`); } catch (e) { /* ниже */ }
+    } else if (navigator.share) {
+      try { await navigator.share({ text, url: link.url }); } catch (e) { /* закрыли окно */ }
+    } else {
+      try { await navigator.clipboard.writeText(link.url); toast('Ссылка скопирована'); } catch (e) { /* покажем ниже */ }
+    }
+    hint.textContent = `Ссылка на группу: ${link.url}`;
+  } else {
+    hint.textContent = `Пусть человек отправит боту: ${link.start}`;
+  }
   hint.hidden = false;
-  hint.textContent = who ? `${who.name} получит приглашение в боте. Задача будет в категории «С ${who.name}», галочка закроет её у обоих.`
-    : grp ? `Приглашение получат: ${grp.members.map(m => m.name).join(', ')}. Категория «${grp.name}», у каждого своя галочка.`
-    : list.length ? '' : 'Чтобы ставить задачи вместе, добавьте людей: Меню → Настройки → «Мои люди».';
-  hint.hidden = !hint.textContent;
-  document.getElementById('newRepeatSection').hidden = !!newShareWith;  // совместная задача пока без повтора
-}
-async function renderEditShare(task) {
+};
+document.getElementById('groupDelete').onclick = async () => {
+  const g = groupEditing;
+  if (!g) return;
+  try {
+    if (g.owner) { await apiJson(`/groups/${g.id}`, { method: 'DELETE' }); toast('Группа удалена. Её задачи остались у всех'); }
+    else { await apiJson(`/groups/${g.id}/leave`, { method: 'POST' }); toast('Вы вышли из группы'); }
+    openGroupId = null;
+    closeGroupSheet();
+    await loadGroups();
+    await loadTasks();
+    renderGroups();
+  } catch (e) { toast(e.message || 'Не получилось'); }
+};
+
+// В «Изменить»: у задачи группы — с кем она и как работает галочка.
+function renderEditGroup(task) {
   const section = document.getElementById('editShareSection');
-  await loadPeople();
-  const shareable = !task.gcal_imported && !task.money_recurring_id && task.status !== 'Done';
-  const sh = task.shared || { with: [], pending: [], each: false };
-  const isShared = sh.with.length || sh.pending.length;
-  section.hidden = !(isShared || (shareable && (people.length || groups.length)));
-  const box = document.getElementById('editShare');
-  const hint = document.getElementById('editShareHint');
-  box.innerHTML = '';
-  const lines = [];
-  if (sh.with.length) {
-    lines.push(sh.each
-      ? `👥 Групповая: ${sh.with.join(', ')}. Готово ${sh.done} из ${sh.total} — у каждого своя галочка.`
-      : `👥 Общая с ${sh.with.join(', ')}: название, срок, место и заметка меняются у обоих, галочка закрывает у обоих.`);
-    lines.push('Шаги и комментарии общие. Удалить — значит выйти из задачи.');
-  }
-  if (sh.pending.length) lines.push(`⏳ Ждём ответа: ${sh.pending.join(', ')}`);
-  const send = async (body, label) => {
-    if (task.is_recurring) { toast('Повторяющейся задачей пока нельзя поделиться — снимите повтор'); return; }
-    try {
-      await apiJson(`/tasks/${task.id}/share`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(body) });
-      toast(`Приглашение отправлено: ${label}`);
-      await loadTasks();
-      const fresh = findTask(task.id);
-      if (fresh && editingId === task.id) renderEditShare(fresh);
-    } catch (e) { toast(e.message || 'Не удалось отправить приглашение'); }
-  };
-  if (shareable && !isShared) {   // ещё ни с кем: один человек или группа
-    people.forEach(p => {
-      const [btn, text] = choiceChipEl(p.name, false, 'solid', () => send({ user_id: p.id }, p.name));
-      btn.appendChild(text);
-      box.appendChild(btn);
-    });
-    groups.forEach(g => {
-      const [btn, text] = choiceChipEl(`👥 ${g.name}`, false, 'solid', () => send({ group_id: g.id }, g.name));
-      btn.appendChild(text);
-      box.appendChild(btn);
-    });
-    lines.push('Пригласить: один человек — напрямую, несколько — группой.');
-  }
-  hint.hidden = !lines.length;
-  hint.textContent = lines.join(' ');
+  const sh = task.shared;
+  section.hidden = !sh;
+  if (!sh) return;
+  const parts = [];
+  parts.push(sh.group ? `👥 «${sh.group.name}»` : '👥 Общая задача');
+  if (sh.with.length) parts.push(`вместе с ${sh.with.join(', ')}`);
+  parts.push(sh.tick_all ? '— галочка закрывает у всех.' : `— у каждого своя галочка, готово ${sh.done} из ${sh.total}.`);
+  parts.push('Название, срок, место, заметка, шаги и комментарии общие. Удалить — значит выйти из задачи.');
+  document.getElementById('editShareHint').textContent = parts.join(' ');
 }
 
 function choiceChipEl(label, pressed, extraClass, onPick) {
@@ -8003,10 +8019,10 @@ function openEdit(id) {
   loadEditComments(id);
   document.getElementById('editStepInput').value = '';
   repeatState.edit = repeatFromTask(task);
-  document.getElementById('editRepeatSection').hidden = !!task.gcal_imported || !!task.shared_id;
+  document.getElementById('editRepeatSection').hidden = !!task.gcal_imported || !!task.shared_id || !!task.group_id;
   placeState.edit = placeField(document.getElementById('editPlace'), task.location, 'Место задачи');
   document.getElementById('editDeleteLabel').textContent = task.shared_id ? 'Выйти из задачи' : 'Удалить задачу';
-  renderEditShare(task);
+  renderEditGroup(task);
   renderRepeat('edit');
   renderEditChips();
   renderEditSteps();
@@ -8308,8 +8324,7 @@ document.addEventListener('keydown', (e) => {
   else if (!moneySheet.hidden) closeMoneyForm();
   else if (!currencySheet.hidden) closeCurrency();
   else if (!statementSheet.hidden) closeStatement();
-  else if (!groupSheet.hidden) closeGroup();
-  else if (!peopleSheet.hidden) closePeople();
+  else if (!groupSheet.hidden) closeGroupSheet();
   else if (!settingsSheet.hidden) closeSettings();
   else if (!calendarsSheet.hidden) closeCalendars();
   else if (!goalSheet.hidden) closeGoalForm();

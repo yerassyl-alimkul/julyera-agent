@@ -1,18 +1,14 @@
 """
-Совместные задачи (миграция 014, решение владельца 11 октября 2026): «задача на нас двоих».
+Общие задачи групп (миграция 014, решения владельца 11 октября 2026).
 
-Автор выбирает «С кем» → второму приходит приглашение в бот (кнопки «Принять / Отклонить», `sh:y|n:<id>`).
-Приняли — у второго появляется своя копия задачи. У всех копий shared_id = id главной копии (на ней лежат общие
-шаги и комментарии: subtasks_service и comments_service ищут их по главной копии). У каждого своя категория
-«С <имя>» (ставится сама), свой календарь, свои напоминания.
+Задача, созданная на странице группы (tasks.group_id), сразу появляется у всех участников: у каждого своя копия,
+у всех копий shared_id = id главной копии (на ней общие шаги и комментарии — subtasks_service и comments_service
+ищут их по главной копии). У каждого своя категория с названием группы, свой календарь и напоминания.
 
-Решения владельца: название, срок, «до», место, заметка, приоритет и статус меняются у всех копий; галочка
-закрывает задачу у всех (остальным приходит сообщение); удаление — выход из задачи: у остальных она остаётся
-(если осталась одна копия — становится обычной). Повтор у совместной задачи не поддерживается (422).
-Поделиться можно только со своими контактами (contacts_service). Один человек — напрямую; двое и больше — только
-группой: тогда у всех категория с названием группы и у каждого своя галочка (tasks.shared_each, «1 из 3 готово»).
-Все проверки по user_id: копию меняет только её владелец, ответить на приглашение — только тот, кому оно.
-В логи — только id.
+Название, срок, «до», место, заметка и приоритет меняются у всех копий. Галочка — по режиму группы (tick_all):
+закрывает у всех (остальным «✅ … — выполнено (имя)») или у каждого своя (остальным «готово N из M»).
+Удаление своей копии — выход из задачи: у остальных она остаётся; осталась одна копия — становится обычной.
+Повтор у задачи группы не поддерживается (422). Копию меняет только её владелец. В логи — только id.
 """
 import logging
 from datetime import datetime, timezone
@@ -26,7 +22,6 @@ from database import supabase
 logger = logging.getLogger(__name__)
 
 TASKS = "tasks"
-INVITES = "task_invites"
 SHARED_FIELDS = ("task", "deadline", "ends_at", "note", "location", "priority", "status")
 
 
@@ -38,19 +33,8 @@ def _name(user_id: str) -> str:
     return (users_service.get_by_id(user_id) or {}).get("name") or "Без имени"
 
 
-def partners(user_id: str) -> list[dict]:
-    """С кем можно поделиться задачей: только свои контакты (взаимное согласие, contacts_service)."""
-    import contacts_service
-    return contacts_service.contacts(user_id)
-
-
-def partner_category(user_id: str, partner_name: str) -> str:
-    """Категория «С <имя>» у пользователя (создаётся при первой совместной задаче)."""
-    return ensure_category(user_id, f"С {partner_name}")
-
-
 def ensure_category(user_id: str, name: str) -> str:
-    """Категория с таким названием у пользователя (создаётся, если её нет)."""
+    """Категория с таким названием у пользователя (создаётся свободным цветом палитры, если её нет)."""
     name = name.strip()[:30]
     found = categories_service._find_by_name(user_id, name)
     if found:
@@ -64,87 +48,88 @@ def ensure_category(user_id: str, name: str) -> str:
 
 
 def copies(task: dict) -> list[dict]:
-    """Все копии совместной задачи (включая эту). Обычная задача — только она сама."""
+    """Все копии общей задачи (включая эту). Обычная задача — только она сама."""
     if not task.get("shared_id"):
         return [task]
     return supabase.table(TASKS).select("*").eq("shared_id", task["shared_id"]).execute().data or [task]
 
 
-def canonical_id(task: dict) -> str:
-    return task.get("shared_id") or task["id"]
-
-
-def own_copy(canonical: str, user_id: str) -> Optional[dict]:
-    """Копия пользователя для главной копии canonical (или сама задача, если она его и не совместная)."""
-    rows = supabase.table(TASKS).select("*").eq("id", canonical).eq("user_id", user_id).execute().data
-    if rows:
-        return rows[0]
-    rows = supabase.table(TASKS).select("*").eq("shared_id", canonical).eq("user_id", user_id).execute().data
+def _group(task: dict) -> Optional[dict]:
+    if not task.get("group_id"):
+        return None
+    rows = supabase.table("task_groups").select("*").eq("id", task["group_id"]).execute().data
     return rows[0] if rows else None
 
 
-def invite(task_id: str, from_user: str, to_user: Optional[str] = None, group_id: Optional[str] = None) -> dict:
-    """Пригласить в свою задачу одного контакта (to_user) или группу (group_id).
-    Возвращает {"invite_ids", "status"}; ошибки — CategoryError(4xx)."""
-    import contacts_service
-    import task_service
-    task = task_service.get_task(task_id, from_user)
-    if not task:
-        raise CategoryError(404, "Задача не найдена", "not_found")
-    if task.get("status") == "Done":
-        raise CategoryError(422, "Задача уже выполнена", "done")
-    if task.get("is_recurring"):
-        raise CategoryError(422, "Повторяющейся задачей пока нельзя поделиться — снимите повтор", "recurring")
-    if task.get("money_recurring_id") or task.get("gcal_imported"):
-        raise CategoryError(422, "Этой задачей поделиться нельзя", "not_shareable")
-    others = {c["user_id"] for c in copies(task)} - {from_user}
-    pending = supabase.table(INVITES).select("*").eq("task_id", task_id).execute().data
-    waiting = {r["to_user"] for r in pending if r["status"] == "pending"}
-    if group_id:
-        group = contacts_service.get_group(group_id, from_user)
-        if not group:
-            raise CategoryError(404, "Группа не найдена", "no_group")
-        targets = [m["id"] for m in group["members"] if contacts_service.is_contact(from_user, m["id"])]
-        if len(targets) < 2:
-            raise CategoryError(422, "В группе нужно хотя бы двое ваших контактов", "too_few")
-        if others or waiting:
-            raise CategoryError(409, "Задача уже общая — группу можно выбрать только для новой", "already")
-        group_name = group["name"]
-        text = f"👥 {_name(from_user)} предлагает задачу группе «{group_name}»:\n{task['task']}{_when(task)}"
-    else:
-        if not to_user or to_user == from_user or not contacts_service.is_contact(from_user, to_user):
-            raise CategoryError(404, "Такого человека нет в ваших контактах", "no_partner")
-        if to_user in others:
-            raise CategoryError(409, "Задача уже общая с этим человеком", "already")
-        if task.get("shared_each") or (others | waiting) - {to_user}:
-            raise CategoryError(409, "Для троих и больше создайте группу и поделитесь задачей с ней", "use_group")
-        targets, group_name = [to_user], None
-        text = f"👥 {_name(from_user)} предлагает задачу на двоих:\n{task['task']}{_when(task)}"
-    cat = ensure_category(from_user, group_name) if group_name else partner_category(from_user, _name(to_user))
-    changes = {"category": cat, "updated_at": _now()}
-    if group_name:
-        changes["shared_each"] = True
-    supabase.table(TASKS).update(changes).eq("id", task_id).eq("user_id", from_user).execute()
+def _tick_all(task: dict) -> bool:
+    group = _group(task)
+    return bool(group.get("tick_all", True)) if group else True
+
+
+def prepare_group_task(data: dict, user_id: str) -> Optional[dict]:
+    """Перед созданием задачи с group_id: проверка участия, категория — название группы, без повтора."""
+    import groups_service
+    group_id = data.get("group_id")
+    if not group_id:
+        data.pop("group_id", None)
+        return None
+    group = groups_service.group_for_member(str(group_id), user_id)
+    if not group:
+        raise CategoryError(404, "Группа не найдена", "no_group")
+    if data.get("recurrence_pattern") or data.get("is_recurring"):
+        raise CategoryError(422, "Задачу группы пока нельзя сделать повторяющейся", "shared_recurring")
+    data["group_id"] = str(group_id)
+    data["category"] = ensure_category(user_id, group["name"])
+    return group
+
+
+def _copy_row(source: dict, user_id: str, group: dict, canonical: str) -> dict:
+    row = {"user_id": user_id, "task": source["task"], "category": ensure_category(user_id, group["name"]),
+           "source": "Группа", "deadline": source.get("deadline"), "ends_at": source.get("ends_at"),
+           "priority": source.get("priority") or "Mid", "status": "To Do", "note": source.get("note"),
+           "is_recurring": False, "tags": [], "shared_id": canonical, "group_id": group["id"]}
+    if source.get("location"):
+        row["location"] = source["location"]
+    return row
+
+
+def spread(task: dict, group: dict, actor_id: str) -> dict:
+    """Новая задача группы — копии остальным участникам (без приглашений) и сообщение в бот."""
+    import groups_service
     import notifier
-    ids = []
-    for target in targets:
-        rows = [r for r in pending if r["to_user"] == target]
-        if rows and rows[0]["status"] == "pending":
-            inv = rows[0]
-        elif rows:  # отклонил раньше — спрашиваем ещё раз
-            supabase.table(INVITES).update({"status": "pending", "answered_at": None, "created_at": _now(),
-                                            "group_name": group_name}).eq("id", rows[0]["id"]).execute()
-            inv = rows[0]
-        else:
-            row = {"task_id": task_id, "from_user": from_user, "to_user": target}
-            if group_name:
-                row["group_name"] = group_name
-            inv = supabase.table(INVITES).insert(row).execute().data[0]
-        ids.append(inv["id"])
-        notifier.notify_user(target, text, buttons=[[{"text": "✅ Принять", "callback_data": f"sh:y:{inv['id']}"},
-                                                     {"text": "✖️ Отклонить", "callback_data": f"sh:n:{inv['id']}"}]])
-    logger.info("Задача %s: приглашений %d", task_id, len(ids))
-    return {"invite_ids": ids, "invite_id": ids[0], "status": "pending"}
+    import task_service
+    others = [m for m in groups_service.member_ids(group["id"]) if m != actor_id]
+    if not others:
+        return task
+    canonical = task["id"]
+    supabase.table(TASKS).update({"shared_id": canonical}).eq("id", task["id"]).eq("user_id", actor_id).execute()
+    task = {**task, "shared_id": canonical}
+    when = _when(task)
+    for m in others:
+        copy = supabase.table(TASKS).insert(_copy_row(task, m, group, canonical)).execute().data[0]
+        task_service._sync_google_upsert(copy, m)
+        notifier.notify_user(m, f"👥 {group['name']}: новая задача от {_name(actor_id)}\n{task['task']}{when}")
+    logger.info("Задача группы %s: копий %d", task["id"], len(others))
+    return task
+
+
+def copy_open_tasks(group: dict, user_id: str) -> int:
+    """Новый участник получает открытые задачи группы (по одной копии на задачу)."""
+    import task_service
+    rows = supabase.table(TASKS).select("*").eq("group_id", group["id"]).execute().data
+    by_canon = {}
+    for r in rows:
+        if r.get("user_id") == user_id or r.get("status") == "Done":
+            continue
+        by_canon.setdefault(r.get("shared_id") or r["id"], r)
+    added = 0
+    for canonical, source in by_canon.items():
+        if not source.get("shared_id"):
+            supabase.table(TASKS).update({"shared_id": canonical}).eq("id", source["id"]).execute()
+        copy = supabase.table(TASKS).insert(_copy_row(source, user_id, group, canonical)).execute().data[0]
+        task_service._sync_google_upsert(copy, user_id)
+        added += 1
+    return added
 
 
 def _when(task: dict) -> str:
@@ -154,46 +139,6 @@ def _when(task: dict) -> str:
     days = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
     time = "" if d.strftime("%H:%M") == "23:59" else d.strftime(" · %H:%M")
     return f"\n{days[d.weekday()]}, {d.strftime('%d.%m')}{time}"
-
-
-def answer(invite_id: str, user_id: str, accept: bool) -> str:
-    """Ответ на приглашение (только тот, кому оно). Возвращает текст для сообщения в боте."""
-    import task_service
-    rows = supabase.table(INVITES).select("*").eq("id", invite_id).eq("to_user", user_id).execute().data
-    if not rows:
-        return "Приглашение не найдено — возможно, задачу уже удалили."
-    inv = rows[0]
-    claimed = supabase.table(INVITES).update({"status": "accepted" if accept else "declined", "answered_at": _now()}) \
-        .eq("id", invite_id).eq("to_user", user_id).eq("status", "pending").execute().data
-    if not claimed:
-        return "Вы уже ответили на это приглашение."
-    source = task_service.get_task(inv["task_id"], inv["from_user"])
-    if not source:
-        return "Эту задачу уже удалили."
-    import notifier
-    me = _name(user_id)
-    if not accept:
-        notifier.notify_user(inv["from_user"], f"Приглашение в задачу «{source['task']}» отклонено ({me}).")
-        return f"Хорошо, задача «{source['task']}» к вам не добавлена."
-    canonical = canonical_id(source)
-    if not source.get("shared_id"):
-        supabase.table(TASKS).update({"shared_id": canonical}).eq("id", source["id"]).eq("user_id", inv["from_user"]).execute()
-    category = ensure_category(user_id, inv["group_name"]) if inv.get("group_name") \
-        else partner_category(user_id, _name(inv["from_user"]))
-    row = {"user_id": user_id, "task": source["task"], "category": category,
-           "source": "Совместная", "deadline": source.get("deadline"), "ends_at": source.get("ends_at"),
-           "priority": source.get("priority") or "Mid", "status": "To Do", "note": source.get("note"),
-           "is_recurring": False, "tags": [], "shared_id": canonical}
-    if source.get("location"):
-        row["location"] = source["location"]
-    if source.get("shared_each"):
-        row["shared_each"] = True
-    copy = supabase.table(TASKS).insert(row).execute().data[0]
-    task_service._sync_google_upsert(copy, user_id)
-    notifier.notify_user(inv["from_user"], f"👥 {me} принимает задачу «{source['task']}»." if inv.get("group_name")
-                         else f"👥 Задача «{source['task']}» теперь общая с {me}.")
-    logger.info("Приглашение %s принято, копия %s", invite_id, copy["id"])
-    return f"👥 Задача «{source['task']}» добавлена вам — в категории «{copy['category']}»."
 
 
 def _cmp(field: str, value) -> str:
@@ -209,11 +154,11 @@ def propagate(task: dict, changes: dict, actor_id: str) -> None:
     shared = {k: v for k, v in changes.items() if k in SHARED_FIELDS}
     if not shared or not task.get("shared_id"):
         return
-    if task.get("shared_each"):  # группа: у каждого своя галочка — остальным только «готово N из M»
+    group = copies(task)
+    if not _tick_all(task):  # у каждого своя галочка — остальным только «готово N из M»
         status = shared.pop("status", None)
         if status == "Done" and task.get("status") != "Done":
-            group = copies(task)
-            done = sum(1 for c in group if c.get("status") == "Done")
+            done = sum(1 for c in group if c.get("status") == "Done" or c["id"] == task["id"])
             import notifier
             for c in group:
                 if c["user_id"] != actor_id:
@@ -221,7 +166,7 @@ def propagate(task: dict, changes: dict, actor_id: str) -> None:
         if not shared:
             return
     became_done = shared.get("status") == "Done"
-    for other in copies(task):
+    for other in group:
         if other["id"] == task["id"]:
             continue
         diff = {k: v for k, v in shared.items() if _cmp(k, other.get(k)) != _cmp(k, v)}
@@ -237,9 +182,9 @@ def propagate(task: dict, changes: dict, actor_id: str) -> None:
             notifier.notify_user(other["user_id"], f"✅ «{task['task']}» — выполнено ({_name(actor_id)}).")
 
 
-def leave(task: dict, user_id: str) -> None:
+def leave(task: dict, user_id: str, notify: bool = True) -> None:
     """Перед удалением копии: шаги и комментарии переезжают к оставшимся, остальным — сообщение.
-    Осталась одна копия — она становится обычной задачей."""
+    Осталась одна копия — она становится обычной задачей (в группе остаётся)."""
     if not task.get("shared_id"):
         return
     others = [c for c in copies(task) if c["id"] != task["id"]]
@@ -252,40 +197,36 @@ def leave(task: dict, user_id: str) -> None:
         supabase.table("task_comments").update({"task_id": new}).eq("task_id", canonical).execute()
         for c in others:
             supabase.table(TASKS).update({"shared_id": new}).eq("id", c["id"]).execute()
-        canonical = new
     if len(others) == 1:
-        supabase.table(TASKS).update({"shared_id": None, "shared_each": False}).eq("id", others[0]["id"]).execute()
-    import notifier
-    for c in others:
-        notifier.notify_user(c["user_id"], f"{_name(user_id)} больше не участвует в задаче «{task['task']}» — у вас она осталась.")
-    logger.info("Выход из совместной задачи %s", task["id"])
+        supabase.table(TASKS).update({"shared_id": None}).eq("id", others[0]["id"]).execute()
+    if notify:
+        import notifier
+        for c in others:
+            notifier.notify_user(c["user_id"], f"{_name(user_id)} больше не участвует в задаче «{task['task']}» — у вас она осталась.")
+    logger.info("Выход из общей задачи %s", task["id"])
 
 
 def info(user_id: str, tasks: list[dict]) -> dict:
-    """{task_id: {"with": [имена], "pending": [имена], "each": bool, "done": n, "total": m}} — для значка «👥»,
-    «ждёт …» и «1 из 3 готово» у групповой задачи."""
+    """{task_id: {"group": {id, name} | None, "with": [имена], "tick_all": bool, "done": n, "total": m}} —
+    для значка «👥 Семья» и «1 из 3 готово»."""
     out = {}
     canon = {t["shared_id"] for t in tasks if t.get("shared_id")}
-    names = {}
-    if canon:
-        rows = supabase.table(TASKS).select("id,user_id,shared_id,status").in_("shared_id", list(canon)).execute().data
-        for t in tasks:
-            if t.get("shared_id"):
-                group = [r for r in rows if r["shared_id"] == t["shared_id"]]
-                others = [r["user_id"] for r in group if r["user_id"] != user_id]
-                out[t["id"]] = {"with": [names.setdefault(u, _name(u)) for u in others], "pending": [],
-                                "each": bool(t.get("shared_each")), "total": len(group),
-                                "done": sum(1 for r in group if r.get("status") == "Done")}
+    group_ids = {t["group_id"] for t in tasks if t.get("group_id")}
     try:
-        pending = supabase.table(INVITES).select("task_id,to_user").eq("from_user", user_id).eq("status", "pending").execute().data
-    except Exception as exc:  # до миграции 014 таблицы нет
-        logger.warning("Приглашения недоступны: %s", type(exc).__name__)
-        pending = []
-    by_id = {t["id"]: t for t in tasks}
-    for p in pending:
-        if p["task_id"] not in by_id:
+        rows = supabase.table(TASKS).select("id,user_id,shared_id,status").in_("shared_id", list(canon)).execute().data if canon else []
+        groups = {g["id"]: g for g in supabase.table("task_groups").select("id,name,tick_all").in_("id", list(group_ids)).execute().data} \
+            if group_ids else {}
+    except Exception as exc:  # до миграции 014
+        logger.warning("Общие задачи недоступны: %s", type(exc).__name__)
+        return {}
+    names = {}
+    for t in tasks:
+        if not (t.get("shared_id") or t.get("group_id")):
             continue
-        entry = out.setdefault(p["task_id"], {"with": [], "pending": [], "each": bool(by_id[p["task_id"]].get("shared_each")),
-                                              "total": 1, "done": 0})
-        entry["pending"].append(names.setdefault(p["to_user"], _name(p["to_user"])))
+        same = [r for r in rows if t.get("shared_id") and r["shared_id"] == t["shared_id"]] or [t]
+        g = groups.get(t.get("group_id"))
+        out[t["id"]] = {"group": {"id": g["id"], "name": g["name"]} if g else None,
+                        "with": [names.setdefault(r["user_id"], _name(r["user_id"])) for r in same if r["user_id"] != user_id],
+                        "tick_all": bool(g.get("tick_all", True)) if g else True,
+                        "total": len(same), "done": sum(1 for r in same if r.get("status") == "Done")}
     return out

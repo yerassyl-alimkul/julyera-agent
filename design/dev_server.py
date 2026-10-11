@@ -53,23 +53,22 @@ users_service.link_chat(1001, uid)
 users_service.link_chat(1002, julie["id"])
 mama = users_service.create_user("Мама", 1003)
 users_service.link_chat(1003, mama["id"])
-for a, b in ((uid, julie["id"]), (uid, mama["id"])):  # контакты Yera (в жизни — по ссылке и «Принять»)
-    db.table("contacts").insert({"user_id": a, "contact_id": b}).execute()
-    db.table("contacts").insert({"user_id": b, "contact_id": a}).execute()
-import contacts_service  # noqa: E402
-contacts_service.bot_username = lambda: "JulYeraDevBot"
+import groups_service  # noqa: E402
+groups_service.bot_username = lambda: "JulYeraDevBot"
 import notifier  # noqa: E402
 notifier.send_telegram = lambda chat_id, text, with_app_button=False, buttons=None: print("BOT →", chat_id, text, buttons, flush=True) or True
-import shared_service  # noqa: E402
 
 
-def _dev_accept_all():
-    """Только тестовый сервер: Julie нажимает «Принять» во всех приглашениях (бота здесь нет)."""
-    rows = [r for r in db.tables.get("task_invites", []) if r["status"] == "pending"]
-    return [shared_service.answer(r["id"], r["to_user"], True) for r in rows]
+def _dev_join_all():
+    """Только тестовый сервер: Julie и Мама нажимают «Вступить» во всех группах (бота здесь нет)."""
+    out = []
+    for g in db.tables.get("task_groups", []):
+        for u in (julie, mama):
+            out.append(groups_service.join(g["invite_token"], u["id"]))
+    return out
 
 
-main.app.add_api_route("/dev/accept-all", _dev_accept_all, methods=["POST"])
+main.app.add_api_route("/dev/join-all", _dev_join_all, methods=["POST"])
 main.app.router.routes.insert(0, main.app.router.routes.pop())  # раньше статики на «/»
 import places_service  # noqa: E402
 places_service.search = lambda q, lang="ru": [

@@ -42,6 +42,7 @@ class TaskBase(BaseModel):
     status: Status = Status.todo
     note: Optional[str] = None
     location: Optional[str] = Field(None, max_length=200)  # место (адрес текстом), migration 014
+    group_id: Optional[UUID] = None  # задача группы: сразу у всех участников (migration 014); менять нельзя
     is_recurring: bool = False
     recurrence_pattern: Optional[RecurrencePattern] = None
     recurrence_days: Optional[List[int]] = None
@@ -62,6 +63,7 @@ class ParseRequest(BaseModel):
     default_date: Optional[str] = Field(
         None, description="YYYY-MM-DD: день, открытый в приложении; задачи без даты в тексте встают на него"
     )
+    group_id: Optional[UUID] = Field(None, description="задачи сразу в группу (страница группы)")
 
 
 class TaskUpdate(BaseModel):
@@ -92,7 +94,7 @@ class Task(TaskBase):
     files_count: int = 0     # из них с фото или PDF (значок 📎)
     money_recurring_id: Optional[UUID] = None  # задача повторяющегося платежа «по галочке» (migration 013)
     shared_id: Optional[UUID] = None           # совместная задача: id главной копии (migration 014)
-    shared: Optional[dict] = None              # {"with": [имена], "pending": [имена]} — с кем общая, кто ещё не ответил
+    shared: Optional[dict] = None              # {"group", "with", "tick_all", "done", "total"} — группа и «1 из 3»
 
     class Config:
         from_attributes = True
@@ -105,16 +107,10 @@ class CommentFile(BaseModel):
     data: str
 
 
-class ShareIn(BaseModel):
-    """POST /tasks/{id}/share: с кем поделиться — один контакт (user_id из GET /people) или группа (group_id)."""
-    user_id: Optional[UUID] = None
-    group_id: Optional[UUID] = None
-
-
 class GroupIn(BaseModel):
-    """POST /groups, PATCH /groups/{id}: название и участники (только свои контакты, от двух)."""
+    """POST /groups, PATCH /groups/{id}: название и режим галочки (tick_all: закрывает у всех / у каждого своя)."""
     name: Optional[str] = None
-    member_ids: Optional[List[UUID]] = None
+    tick_all: Optional[bool] = None
 
 
 class NotePhotoIn(BaseModel):
