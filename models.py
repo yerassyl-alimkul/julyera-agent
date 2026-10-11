@@ -88,6 +88,7 @@ class Task(TaskBase):
     updated_at: datetime
     comments_count: int = 0  # комментариев к задаче (значок 💬 в списке)
     files_count: int = 0     # из них с фото или PDF (значок 📎)
+    money_recurring_id: Optional[UUID] = None  # задача повторяющегося платежа «по галочке» (migration 013)
 
     class Config:
         from_attributes = True
@@ -98,6 +99,11 @@ class CommentFile(BaseModel):
     name: Optional[str] = None
     type: str
     data: str
+
+
+class NotePhotoIn(BaseModel):
+    """POST /notes/{id}/files: фото в base64 (сжимается на телефоне до 1600 px)."""
+    file: CommentFile
 
 
 class CommentCreate(BaseModel):
@@ -135,6 +141,7 @@ class Note(BaseModel):
     content: str
     created_at: datetime
     updated_at: datetime
+    files: list[dict] = []  # фото заметки: {id, type, url} (url — подписанная ссылка на час)
 
     class Config:
         from_attributes = True
@@ -192,6 +199,7 @@ class TransactionCreate(BaseModel):
     spent_on: Optional[str] = None  # без даты — сегодня в поясе пользователя
     note: Optional[str] = None
     repeat: Optional[str] = None  # «Повторять»: weekly | biweekly | monthly | yearly — заодно создаётся правило
+    as_task: Optional[bool] = None  # «Списывать после галочки» для правила (migration 013)
 
 
 class TransactionUpdate(BaseModel):
@@ -217,6 +225,7 @@ class RecurringCreate(BaseModel):
     anchor_date: Optional[str] = None                # дата уже записанной первой операции
     note: Optional[str] = None
     active: bool = True
+    as_task: bool = False  # «Списывать после галочки»: платёж висит задачей (migration 013)
 
 
 class RecurringUpdate(BaseModel):
@@ -229,6 +238,7 @@ class RecurringUpdate(BaseModel):
     next_run: Optional[str] = None  # дата следующего платежа, не раньше сегодня
     note: Optional[str] = None
     active: Optional[bool] = None
+    as_task: Optional[bool] = None
 
 
 class ApplePayIn(BaseModel):

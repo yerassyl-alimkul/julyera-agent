@@ -410,7 +410,8 @@ def create_transaction(user_id: str, data: dict, source: str = "app") -> dict:
     if repeat:
         rec = create_recurring(user_id, {
             "kind": kind, "amount": row["amount"], "currency": row["currency"], "category_id": row["category_id"],
-            "note": row["note"], "frequency": repeat, "anchor_date": row["spent_on"]})
+            "note": row["note"], "frequency": repeat, "anchor_date": row["spent_on"],
+            "as_task": bool(data.get("as_task"))})
         supabase.table(TX_TABLE).update({"recurring_id": rec["id"]}).eq("id", tx["id"]).eq("user_id", user_id).execute()
         tx = {**tx, "recurring_id": rec["id"]}
     if kind == "expense":
@@ -771,6 +772,7 @@ def _rec_out(row: dict) -> dict:
         "frequency": row.get("frequency") or "monthly",
         "anchor_date": str(row["anchor_date"])[:10] if row.get("anchor_date") else None,
         "next_run": str(row["next_run"])[:10], "active": row.get("active", True),
+        "as_task": bool(row.get("as_task")),
     }
 
 
@@ -864,9 +866,13 @@ def create_recurring(user_id: str, data: dict) -> dict:
         "next_run": next_run.isoformat(),
         "active": bool(data.get("active", True)),
     }
+    if data.get("as_task"):  # до миграции 013 колонки нет — пишем её только когда нужна
+        row["as_task"] = True
     rows = supabase.table(REC_TABLE).insert(row).execute().data
     if not rows:
         raise RuntimeError("Не удалось сохранить платёж")
+    if rows[0].get("as_task"):
+        ensure_payment_task(rows[0])
     return _rec_out(rows[0])
 
 
@@ -910,6 +916,14 @@ def update_recurring(rec_id: str, user_id: str, data: dict) -> Optional[dict]:
         while run < today:
             run = advance(run, frequency, dom)
         changes["next_run"] = run.isoformat()
+    if data.get("as_task") is not None and bool(data["as_task"]) != bool(current.get("as_task")):
+        changes["as_task"] = bool(data["as_task"])
+        if not changes["as_task"] and "next_run" not in changes:
+            # снова списывать само — неоплаченный срок в прошлом задним числом не создаём
+            run = date.fromisoformat(str(current["next_run"])[:10])
+            while run < today:
+                run = advance(run, frequency, dom)
+            changes["next_run"] = run.isoformat()
     if data.get("active") is not None:
         changes["active"] = bool(data["active"])
         if changes["active"] and not current.get("active", True) and "next_run" not in changes:
@@ -921,15 +935,139 @@ def update_recurring(rec_id: str, user_id: str, data: dict) -> Optional[dict]:
     if changes:
         supabase.table(REC_TABLE).update(changes).eq("id", rec_id).eq("user_id", user_id).execute()
     row = _get_rec_row(rec_id, user_id)
+    if row and (row.get("as_task") or current.get("as_task")):
+        if row.get("as_task") and row.get("active", True):
+            _refresh_payment_task(row)
+        else:
+            _drop_payment_tasks(rec_id, user_id)
     return _rec_out(row) if row else None
 
 
 def delete_recurring(rec_id: str, user_id: str) -> bool:
     """Останавливает повтор навсегда; уже созданные им операции остаются (recurring_id станет null)."""
-    if not _get_rec_row(rec_id, user_id):
+    row = _get_rec_row(rec_id, user_id)
+    if not row:
         return False
+    if row.get("as_task"):
+        _drop_payment_tasks(rec_id, user_id)  # неоплаченная задача уходит вместе с платежом
     supabase.table(REC_TABLE).delete().eq("id", rec_id).eq("user_id", user_id).execute()
     return True
+
+
+# ---------------------------------------------------------------- платёж «по галочке» (миграция 013)
+# money_recurring.as_task: вместо операции в срок — задача «💳 Жильё · 500 €» на next_run (23:59, «без времени»).
+# Галочка (task_service.update_task → pay_from_task) записывает операцию сегодняшним днём и ставит задачу на
+# следующий срок; удаление открытой задачи (skip_payment) — пропуск этого срока. Открытая задача у платежа одна
+# (уникальный индекс tasks_money_recurring_open_idx); next_run двигается условным обновлением, поэтому две
+# одновременные галочки не запишут операцию дважды.
+
+CURRENCY_SIGNS = {"EUR": "€", "KZT": "₸", "USD": "$", "AZN": "₼", "TRY": "₺"}
+
+
+def _payment_title(rec: dict) -> str:
+    name = rec.get("note") or (get_category(rec["category_id"], rec["user_id"]) or {}).get("name") or "Платёж"
+    amount = fmt(rec["amount"])
+    amount = amount[:-3] if amount.endswith(".00") else amount.replace(".", ",")
+    return f"💳 {name} · {amount} {CURRENCY_SIGNS.get(rec['currency'], rec['currency'])}"
+
+
+def _open_payment_tasks(rec_id: str, user_id: str) -> list[dict]:
+    return supabase.table("tasks").select("*").eq("user_id", user_id).eq("money_recurring_id", rec_id) \
+        .neq("status", "Done").execute().data
+
+
+def ensure_payment_task(rec: dict) -> Optional[dict]:
+    """Открытая задача на ближайший срок платежа (если её ещё нет)."""
+    if not rec.get("as_task") or not rec.get("active", True):
+        return None
+    user_id = rec["user_id"]
+    if _open_payment_tasks(rec["id"], user_id):
+        return None
+    import categories_service
+    import task_service
+    row = {"user_id": user_id, "task": _payment_title(rec), "category": categories_service.fallback_name(user_id),
+           "source": "Кошелёк", "deadline": f"{str(rec['next_run'])[:10]}T23:59:00", "priority": "Mid",
+           "status": "To Do", "is_recurring": False, "tags": [], "money_recurring_id": rec["id"],
+           "money_due": str(rec["next_run"])[:10]}
+    try:
+        task = supabase.table("tasks").insert(row).execute().data[0]
+    except Exception as exc:
+        if _is_duplicate(exc):  # задачу уже поставил параллельный запрос
+            return None
+        raise
+    logger.info("Платёж %s: задача %s", rec["id"], task["id"])
+    return task_service._sync_google_upsert(task, user_id)
+
+
+def _refresh_payment_task(rec: dict) -> None:
+    """Поменяли сумму, название или срок платежа — открытая задача следом (или ставится, если её нет)."""
+    import task_service
+    tasks = _open_payment_tasks(rec["id"], rec["user_id"])
+    if not tasks:
+        ensure_payment_task(rec)
+        return
+    changes = {"task": _payment_title(rec), "deadline": f"{str(rec['next_run'])[:10]}T23:59:00",
+               "money_due": str(rec["next_run"])[:10]}
+    for t in tasks:
+        if t["task"] != changes["task"] or str(t.get("deadline") or "")[:16] != changes["deadline"][:16]:
+            changes_t = {**changes, "ends_at": None, "updated_at": datetime.now(timezone.utc).isoformat()}
+            row = supabase.table("tasks").update(changes_t).eq("id", t["id"]).eq("user_id", rec["user_id"]).execute().data
+            if row:
+                task_service._sync_google_upsert(row[0], rec["user_id"])
+
+
+def _drop_payment_tasks(rec_id: str, user_id: str) -> None:
+    import task_service
+    for t in _open_payment_tasks(rec_id, user_id):
+        task_service.delete_task(t["id"], user_id, payment_hook=False)
+
+
+def _advance_claim(rec: dict, due_value) -> Optional[dict]:
+    """Срок платежа due (срок задачи) → следующий, только если платёж всё ещё ждёт именно его.
+    None — этот срок уже оплачен или пропущен (повторная или одновременная галочка)."""
+    if not due_value or str(due_value)[:10] != str(rec["next_run"])[:10]:
+        return None
+    due = date.fromisoformat(str(rec["next_run"])[:10])
+    nxt = advance(due, rec.get("frequency") or "monthly", rec["day_of_month"])
+    claimed = supabase.table(REC_TABLE).update({"next_run": nxt.isoformat()}).eq("id", rec["id"]) \
+        .eq("user_id", rec["user_id"]).eq("next_run", str(rec["next_run"])[:10]).execute().data
+    return {**rec, "next_run": nxt.isoformat(), "_due": due} if claimed else None
+
+
+def pay_from_task(task: dict, user_id: str) -> Optional[dict]:
+    """Галочка на задаче платежа: операция сегодняшним днём, задача на следующий срок. Возвращает операцию."""
+    rec = _get_rec_row(task.get("money_recurring_id") or "", user_id)
+    if not rec:
+        return None
+    moved = _advance_claim(rec, task.get("money_due"))
+    if not moved:
+        return None
+    row = {"user_id": user_id, "kind": rec["kind"], "amount": str(rec["amount"]), "currency": rec["currency"],
+           "category_id": rec["category_id"], "note": rec.get("note"), "spent_on": today_for(user_id).isoformat(),
+           "source": "recurring", "recurring_id": rec["id"]}
+    try:
+        tx = supabase.table(TX_TABLE).insert(row).execute().data[0]
+    except Exception as exc:
+        if not _is_duplicate(exc):  # сегодня уже оплачен другой срок — операция пишется датой срока
+            raise
+        tx = supabase.table(TX_TABLE).insert({**row, "spent_on": moved["_due"].isoformat()}).execute().data[0]
+    logger.info("Платёж %s оплачен галочкой: операция %s", rec["id"], tx["id"])
+    if rec["kind"] == "expense":
+        check_limit_alerts(user_id, rec["category_id"], tx["spent_on"])
+    moved.pop("_due")
+    ensure_payment_task(moved)
+    return _tx_out(tx)
+
+
+def skip_payment(task: dict, user_id: str) -> None:
+    """Удалили неоплаченную задачу платежа — этот срок пропущен, ставится следующий."""
+    rec = _get_rec_row(task.get("money_recurring_id") or "", user_id)
+    if not rec or not rec.get("as_task"):
+        return
+    moved = _advance_claim(rec, task.get("money_due"))
+    if moved:
+        moved.pop("_due")
+        ensure_payment_task(moved)
 
 
 def run_recurring(today_of=None, utc_today: Optional[date] = None) -> list[tuple[str, str]]:
@@ -948,6 +1086,9 @@ def run_recurring(today_of=None, utc_today: Optional[date] = None) -> list[tuple
             if user_id not in today_cache:
                 today_cache[user_id] = today_of(user_id)
             today = today_cache[user_id]
+            if rec.get("as_task"):  # списывается галочкой на задаче, сам не создаётся
+                ensure_payment_task(rec)
+                continue
             frequency = rec.get("frequency") or "monthly"
             run_day = date.fromisoformat(str(rec["next_run"])[:10])
             created = 0

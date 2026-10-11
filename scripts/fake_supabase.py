@@ -45,6 +45,7 @@ DEFAULTS = {
     "digest_log": lambda: {"sent_at": _now()},
     "pre_reminder_log": lambda: {"sent_at": _now()},
     "notes": lambda: {"id": str(uuid.uuid4()), "created_at": _now(), "updated_at": _now()},
+    "note_files": lambda: {"id": str(uuid.uuid4()), "created_at": _now()},
     "subtasks": lambda: {"id": str(uuid.uuid4()), "is_done": False, "created_at": _now()},
     "telegram_chats": lambda: {"created_at": _now()},
     "categories": lambda: {"id": str(uuid.uuid4()), "sort_order": 0, "created_at": _now()},
@@ -99,6 +100,10 @@ class Query:
 
     def eq(self, column, value):
         self.filters.append(lambda row: row.get(column) == value)
+        return self
+
+    def neq(self, column, value):
+        self.filters.append(lambda row: row.get(column) != value)
         return self
 
     def is_(self, column, value):  # только is null, как в коде
@@ -167,6 +172,11 @@ class Query:
                 if other is not row and other.get("recurring_id") == row["recurring_id"] \
                         and other["spent_on"] == row["spent_on"]:
                     raise FakeError('duplicate key value violates unique constraint "money_transactions_recurring_once_idx"', "23505")
+        if self.table == "tasks" and row.get("money_recurring_id") and row.get("status") != "Done":
+            for other in self._rows():  # tasks_money_recurring_open_idx: одна открытая задача у платежа
+                if other is not row and other.get("money_recurring_id") == row["money_recurring_id"] \
+                        and other.get("status") != "Done":
+                    raise FakeError('duplicate key value violates unique constraint "tasks_money_recurring_open_idx"', "23505")
         if self.table == "categories":  # unique index categories (user_id, lower(name))
             for other in self._rows():
                 if other is not row and other["user_id"] == row["user_id"] and other["name"].lower() == row["name"].lower():
@@ -258,11 +268,17 @@ class Query:
                 for x in self.db.tables.get("money_transactions", []):
                     if x.get("recurring_id") in ids:
                         x["recurring_id"] = None
+                for x in self.db.tables.get("tasks", []):  # tasks.money_recurring_id ... on delete set null
+                    if x.get("money_recurring_id") in ids:
+                        x["money_recurring_id"] = None
             self.db.tables[self.table] = [r for r in rows if not self._match(r)]
             if self.table == "tasks":  # on delete cascade для подзадач и комментариев
                 ids = {r["id"] for r in gone}
                 self.db.tables["subtasks"] = [s for s in self.db.tables.get("subtasks", []) if s["task_id"] not in ids]
                 self.db.tables["task_comments"] = [c for c in self.db.tables.get("task_comments", []) if c["task_id"] not in ids]
+            if self.table == "notes":  # note_files.note_id ... on delete cascade
+                ids = {r["id"] for r in gone}
+                self.db.tables["note_files"] = [f for f in self.db.tables.get("note_files", []) if f["note_id"] not in ids]
             if self.table == "money_goals":  # money_goal_moves.goal_id ... on delete cascade
                 ids = {r["id"] for r in gone}
                 self.db.tables["money_goal_moves"] = [m for m in self.db.tables.get("money_goal_moves", [])

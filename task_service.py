@@ -9,6 +9,7 @@
 from datetime import date, datetime, timedelta
 from typing import Optional
 
+import logging
 import categories_service
 import google_calendar_service as gcal
 import users_service
@@ -17,6 +18,7 @@ from database import supabase
 from groq_client import parse_text_to_tasks
 from models import Status, TaskCreate, TaskUpdate
 
+logger = logging.getLogger(__name__)
 TABLE = "tasks"
 NULLABLE_FIELDS = {"deadline", "ends_at", "note", "source", "recurrence_pattern", "recurrence_days"}
 # Повторения одного события Google Calendar связаны: эти поля, изменённые у одного, меняются у всех незакрытых.
@@ -294,6 +296,12 @@ def update_task(task_id: str, payload: TaskUpdate, user_id: str) -> Optional[dic
 
     # Повторяющиеся задачи: закрыли — создаём следующую у того же пользователя
     became_done = update_data.get("status") == Status.done.value
+    if became_done and current.get("money_recurring_id") and current.get("status") != Status.done.value:
+        try:  # задача платежа «по галочке»: операция в кошелёк и задача на следующий срок (migration 013)
+            import money_service
+            money_service.pay_from_task(current, user_id)
+        except Exception as exc:
+            logger.warning("Платёж по задаче %s не записан: %s", task_id, type(exc).__name__)
     if became_done and current.get("is_recurring"):
         next_deadline = _next_deadline(
             current.get("deadline") and datetime.fromisoformat(current["deadline"]),
@@ -348,7 +356,8 @@ def _update_series(user_id: str, series_id: str, task_id: str, shared: dict) -> 
             supabase.table(TABLE).update(data).eq("id", row["id"]).eq("user_id", user_id).execute()
 
 
-def delete_task(task_id: str, user_id: str) -> bool:
+def delete_task(task_id: str, user_id: str, payment_hook: bool = True) -> bool:
+    """payment_hook=False — задачу платежа убирает сам кошелёк (платёж удалён, на паузе, снова списывается сам)."""
     task = get_task(task_id, user_id)
     if not task:
         return False
@@ -356,4 +365,10 @@ def delete_task(task_id: str, user_id: str) -> bool:
     import comments_service  # файлы комментариев — из хранилища; строки уйдут каскадом вместе с задачей
     comments_service.delete_task_files(task_id, user_id)
     result = supabase.table(TABLE).delete().eq("id", task_id).eq("user_id", user_id).execute()
+    if result.data and payment_hook and task.get("money_recurring_id") and task.get("status") != Status.done.value:
+        try:  # удалили неоплаченный платёж — этот срок пропущен, ставится следующий
+            import money_service
+            money_service.skip_payment(task, user_id)
+        except Exception as exc:
+            logger.warning("Платёж задачи %s не сдвинут: %s", task_id, type(exc).__name__)
     return bool(result.data)

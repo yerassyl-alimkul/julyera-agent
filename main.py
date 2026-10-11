@@ -77,6 +77,7 @@ from models import (
     MoneyCategoryOrder,
     MoneyCategoryUpdate,
     MoneyParseRequest,
+    NotePhotoIn,
     RecurringCreate,
     RecurringUpdate,
     TransactionCreate,
@@ -860,6 +861,22 @@ def delete_note(note_id: UUID, user: dict = Depends(current_user)):
     deleted = notes_service.delete_note(str(note_id), user["id"])
     if not deleted:
         raise HTTPException(status_code=404, detail="Заметка не найдена")
+    return None
+
+
+@app.post("/notes/{note_id}/files", status_code=201)
+def add_note_photo(note_id: UUID, payload: NotePhotoIn, user: dict = Depends(current_user)):
+    data, ftype = comments_service.decode_file(payload.file.data, payload.file.type)
+    photo = notes_service.add_photo(str(note_id), user["id"], data, ftype)
+    if not photo:
+        raise HTTPException(status_code=404, detail="Заметка не найдена")
+    return photo
+
+
+@app.delete("/note-files/{file_id}", status_code=204)
+def delete_note_photo(file_id: UUID, user: dict = Depends(current_user)):
+    if not notes_service.delete_photo(str(file_id), user["id"]):
+        raise HTTPException(status_code=404, detail="Фото не найдено")
     return None
 
 

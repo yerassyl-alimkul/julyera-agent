@@ -532,7 +532,13 @@ applyTheme();
     text-align: left;
     cursor: pointer;
   }
-  .compact-time { flex: 0 0 42px; font-size: 13px; font-weight: 600; }
+  .compact-time { flex: 0 0 auto; min-width: 42px; font-size: 13px; font-weight: 600; }
+  .compact-row:has(.row-check) { padding: 4px 16px 4px 4px; gap: 0; cursor: default; }
+  .compact-body { flex: 1; min-width: 0; min-height: var(--touch); padding: 4px 0 4px 6px; display: flex; align-items: center;
+    gap: var(--gap-l); border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .compact-row.done .check-circle { background: var(--ink); }
+  .compact-row.done .check-circle svg { stroke: var(--on-ink); }
+  .compact-row.done .compact-title { text-decoration: line-through; color: var(--ink-meta); }
   .compact-title {
     flex: 1;
     min-width: 0;
@@ -627,6 +633,29 @@ applyTheme();
     outline: none;
   }
   .note-edit-textarea:focus { border-color: var(--ink); }
+  .swipe-track > .note-card { flex: 0 0 calc(100% - 140px); min-width: 0; } /* без этого короткая заметка сжималась и кнопки свайпа торчали */
+  .note-body { display: flex; flex-direction: column; gap: 2px; }
+  .note-body .comment-text { font-size: 16px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .note-check { display: flex; align-items: center; gap: var(--gap-m); min-height: var(--touch); padding: 2px 0; border: 0;
+    background: transparent; color: var(--ink); font: inherit; font-size: 16px; line-height: 1.35; text-align: left; cursor: pointer; }
+  .note-check .step-circle { flex: 0 0 auto; }
+  .note-check[aria-checked="true"] .step-circle { background: var(--ink); }
+  .note-check[aria-checked="true"] .step-circle svg { stroke: var(--on-ink); }
+  .note-check-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .note-check[aria-checked="true"] .note-check-text { text-decoration: line-through; color: var(--ink-muted); }
+  .note-photos { display: flex; flex-wrap: wrap; gap: var(--gap-s); }
+  .note-photos:empty { display: none; }
+  .note-photo { position: relative; width: 72px; height: 72px; padding: 0; border: 0; border-radius: var(--radius-compact);
+    overflow: hidden; background: var(--line); cursor: pointer; }
+  .note-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .note-photo-open { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
+  .note-photo-del { position: absolute; top: 0; right: 0; width: var(--touch); height: var(--touch); padding: 0; border: 0;
+    background: transparent; cursor: pointer; display: flex; align-items: flex-start; justify-content: flex-end; }
+  .note-photo-del span { margin: 4px; width: 22px; height: 22px; border-radius: 50%; background: var(--ink); color: var(--on-ink);
+    display: flex; align-items: center; justify-content: center; font-size: 15px; line-height: 1; }
+  .note-tools { display: flex; align-items: center; gap: var(--gap-s); flex-wrap: wrap; }
+  .note-composer .note-row { flex-wrap: wrap; row-gap: var(--gap-s); }
+  .note-composer #noteAddBtn { margin-left: auto; padding: 0 16px; }
 
   /* ---------- Toast: уведомление над нижней панелью (макет Deleted) ---------- */
   .toast {
@@ -721,6 +750,21 @@ applyTheme();
   .day-head-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   .day-head .t-h1 { margin: 0; }
   .day-sub { font-size: 15px; color: var(--ink-muted); }
+  .tools-wrap { position: relative; }
+  .tools-btn { display: flex; align-items: center; gap: 2px; padding: 0 10px 0 16px; }
+  .tools-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round;
+    stroke-linejoin: round; transition: transform var(--dur-fast) ease-out; }
+  .tools-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+  .tools-menu { position: absolute; top: calc(100% + var(--gap-s)); right: 0; z-index: 40; min-width: 210px; padding: 6px;
+    display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--radius-compact);
+    background: var(--surface); box-shadow: 0 12px 32px rgba(0, 0, 0, .18); }
+  .tools-menu[hidden] { display: none; }
+  .tools-item { display: flex; align-items: center; gap: var(--gap-m); min-height: var(--touch); padding: 0 12px; border: 0;
+    border-radius: var(--radius-btn); background: transparent; color: var(--ink); font: inherit; font-size: 15px;
+    font-weight: 500; text-align: left; cursor: pointer; white-space: nowrap; }
+  .tools-item:hover, .tools-item:focus-visible { background: var(--bg); }
+  .tools-item svg { flex: 0 0 20px; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8;
+    stroke-linecap: round; stroke-linejoin: round; }
   .pill-btn {
     flex: 0 0 auto;
     height: var(--touch);
@@ -1137,7 +1181,6 @@ applyTheme();
   .money-bar-fill { display: block; height: 100%; border-radius: var(--radius-pill); background: var(--chip-color, var(--accent)); }
   .money-cur-label { margin: var(--gap-l) 0 var(--gap-s); font-size: 13px; font-weight: 600; color: var(--ink-muted); }
   .money-trend svg { display: block; width: 100%; height: auto; }
-  .an-trend { margin-top: var(--gap-section); padding-top: var(--gap-section); border-top: 1px solid var(--line); }
   .trend-expense { fill: var(--ink); }
   .trend-income { fill: var(--accent); opacity: 0.55; }
   .trend-label { fill: var(--ink-muted); font-size: 11px; font-family: var(--font-text); }
@@ -1259,8 +1302,7 @@ applyTheme();
   .field-row .field-time { flex: 1; min-width: 0; }
   /* Дата · с · до: дата — на всю ширину, ниже два времени (три поля в строку на телефоне обрезаются) */
   .field-row.dt-range { flex-wrap: wrap; }
-  .field-row.dt-range .field-date { flex: 1 1 100%; }
-  .field-row.dt-range .field-time { flex: 1 1 0; }
+  .field-row.dt-range .field-date, .field-row.dt-range .field-time { flex: 1 1 40%; } /* по две в ряд: даты, ниже время */
   /* iPhone рисует поля даты и времени шире контейнера — без этого форма уезжает вбок */
   .field-date, .field-time { min-width: 0; max-width: 100%; -webkit-appearance: none; appearance: none; }
 
@@ -1737,6 +1779,15 @@ applyTheme();
     </button>
     <div class="topbar-group">
       <button class="tb-btn" id="layoutBtn" aria-label="Все задачи"></button>
+      <div class="tools-wrap" id="moneyMenuWrap" hidden>
+        <button class="pill-btn tools-btn" id="moneyMenuBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="moneyMenu">Ещё<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>
+        <div class="tools-menu" id="moneyMenu" role="menu" hidden>
+          <button class="tools-item" id="moneyCategoriesBtn" role="menuitem" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12V5a1 1 0 0 1 1-1h7l8 8-8 8-8-8z"/><circle cx="8.5" cy="8.5" r="1.5"/></svg>Категории</button>
+          <button class="tools-item" id="moneyCurrencyBtn" role="menuitem" type="button">Валюты</button>
+          <button class="tools-item" id="moneyAnalyticsBtn" role="menuitem" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9h9a9 9 0 1 1-9-9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg>Аналитика</button>
+          <button class="tools-item" id="moneyStatementBtn" role="menuitem" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h7"/></svg>Выписка</button>
+        </div>
+      </div>
       <button class="tb-btn" id="searchBtn" aria-label="Поиск"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button>
       <button class="tb-btn" id="filtersBtn" aria-label="Фильтры по категории и приоритету">
         <svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
@@ -1814,6 +1865,7 @@ applyTheme();
       <div class="segmented page-switch" id="walletSwitch" role="group" aria-label="Раздел кошелька">
         <button type="button" data-wtab="expense" aria-pressed="true">Расходы</button>
         <button type="button" data-wtab="income" aria-pressed="false">Доходы</button>
+        <button type="button" data-wtab="trend" aria-pressed="false">Динамика</button>
         <button type="button" data-wtab="goals" aria-pressed="false">Цели</button>
       </div>
       <div class="money-head" id="moneyHead">
@@ -1825,10 +1877,6 @@ applyTheme();
       </div>
       <div class="money-tools" id="moneyTools">
         <button class="pill-btn" id="moneyCurrent" hidden>Текущий</button>
-        <button class="pill-btn" id="moneyCategoriesBtn">Категории</button>
-        <button class="pill-btn" id="moneyCurrencyBtn">Валюта</button>
-        <button class="pill-btn" id="moneyAnalyticsBtn">Аналитика</button>
-        <button class="pill-btn" id="moneyStatementBtn">Выписка</button>
       </div>
 
       <div id="moneyKindView">
@@ -1860,6 +1908,21 @@ applyTheme();
         <div class="goal-list" id="goalsList"></div>
       </div>
 
+      <div id="moneyTrendView" hidden>
+        <div class="segmented" id="trendCurrency" role="group" aria-label="Валюта" style="margin-top: var(--gap-section);"></div>
+        <div class="money-cards" id="trendBalance"></div>
+        <p class="money-rate" id="trendRate" hidden></p>
+        <section class="money-block" id="trendBarsBlock" aria-labelledby="moneyTrendTitle">
+          <h2 class="money-h2" id="moneyTrendTitle">Доходы и расходы за 6 месяцев</h2>
+          <div class="trend-legend" aria-hidden="true"><span><i class="i"></i>доходы</span><span><i class="e"></i>расходы</span></div>
+          <div class="money-trend" id="moneyTrend"></div>
+        </section>
+        <section class="money-block" id="pieBlock" aria-labelledby="pieTitle">
+          <h2 class="money-h2" id="pieTitle">Расходы по категориям</h2>
+          <div id="moneyPie"></div>
+        </section>
+      </div>
+
     </section>
 
     <section id="notesView" style="display: none;" aria-labelledby="notesTitle">
@@ -1874,9 +1937,16 @@ applyTheme();
           <label class="sr-only" for="noteInput">Новая заметка</label>
           <textarea id="noteInput" placeholder="Запиши мысль, идею или напоминание для себя…"></textarea>
           <div class="note-row">
-            <button class="tb-btn" id="noteMicBtn" aria-label="Наговорить заметку голосом"><svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+            <div class="note-tools">
+              <button class="tb-btn" id="noteMicBtn" aria-label="Наговорить заметку голосом"><svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+              <button class="tb-btn" id="noteListBtn" type="button" aria-label="Пункт списка с галочкой"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg></button>
+              <button class="tb-btn" id="notePhotoBtn" type="button" aria-label="Прикрепить фото"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 8"/></svg></button>
+              <button class="tb-btn" id="noteLinkBtn" type="button" aria-label="Вставить ссылку из буфера"><svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></button>
+            </div>
             <button class="btn-small" id="noteAddBtn">Сохранить</button>
           </div>
+          <div class="note-photos" id="notePhotosNew"></div>
+          <input type="file" id="noteFile" accept="image/*" multiple hidden>
         </div>
         <div class="notes-list" id="notesList" style="padding-top: 0;"></div>
       </div>
@@ -1932,11 +2002,12 @@ applyTheme();
           <button class="link-btn" id="newClearDeadline" type="button">Без даты</button>
         </div>
         <div class="field-row dt-range">
-          <input class="field field-date" id="newDate" type="date" aria-label="Дата дедлайна">
+          <input class="field field-date" id="newDate" type="date" aria-label="Дата: с">
+          <input class="field field-date" id="newEndDate" type="date" aria-label="Дата: по (необязательно, для задачи на несколько дней)">
           <input class="field field-time" id="newTime" type="time" aria-label="Время начала">
           <input class="field field-time" id="newEndTime" type="time" aria-label="Время окончания (необязательно)">
         </div>
-        <p class="form-hint repeat-hint">Время: с · до (необязательно)</p>
+        <p class="form-hint repeat-hint">Дата: с · по, время: с · до. «По» и «до» — по желанию</p>
       </section>
       <section class="form-section" id="newRepeatSection">
         <h3 class="form-label" id="newRepeatLabel">Повторять</h3>
@@ -2054,6 +2125,11 @@ applyTheme();
         </div>
         <div class="chip-group" id="moneyFreq" role="group" aria-label="Как часто" hidden></div>
         <p class="form-hint" id="moneyRepeatHint" hidden></p>
+        <div class="repeat-head" id="moneyAsTaskRow" hidden>
+          <span id="moneyAsTaskLabel">Записывать после галочки</span>
+          <button type="button" class="switch" id="moneyAsTask" role="switch" aria-checked="false" aria-labelledby="moneyAsTaskLabel" aria-describedby="moneyAsTaskHint"></button>
+        </div>
+        <p class="form-hint" id="moneyAsTaskHint" hidden></p>
         <button class="link-btn" id="moneyRuleLink" type="button" hidden style="align-self: flex-start; margin: 0 0 10px;">Настроить повтор</button>
       </section>
       <section class="form-section">
@@ -2091,21 +2167,6 @@ applyTheme();
     </div>
     <p class="money-rate" id="anRange"></p>
     <div id="anBody"></div>
-    <!-- Бывшая вкладка «Динамика»: баланс, 6 месяцев, круговая диаграмма — всегда по месяцу, открытому в кошельке -->
-      <div id="moneyTrendView" class="an-trend">
-        <div class="segmented" id="trendCurrency" role="group" aria-label="Валюта" style="margin-top: var(--gap-section);"></div>
-        <div class="money-cards" id="trendBalance"></div>
-        <p class="money-rate" id="trendRate" hidden></p>
-        <section class="money-block" id="trendBarsBlock" aria-labelledby="moneyTrendTitle">
-          <h2 class="money-h2" id="moneyTrendTitle">Доходы и расходы за 6 месяцев</h2>
-          <div class="trend-legend" aria-hidden="true"><span><i class="i"></i>доходы</span><span><i class="e"></i>расходы</span></div>
-          <div class="money-trend" id="moneyTrend"></div>
-        </section>
-        <section class="money-block" id="pieBlock" aria-labelledby="pieTitle">
-          <h2 class="money-h2" id="pieTitle">Расходы по категориям</h2>
-          <div id="moneyPie"></div>
-        </section>
-      </div>
   </div>
 </div>
 
@@ -2306,11 +2367,12 @@ applyTheme();
           <button class="link-btn" id="editClearDeadline" type="button">Без даты</button>
         </div>
         <div class="field-row dt-range">
-          <input class="field field-date" id="editDate" type="date" aria-label="Дата дедлайна">
+          <input class="field field-date" id="editDate" type="date" aria-label="Дата: с">
+          <input class="field field-date" id="editEndDate" type="date" aria-label="Дата: по (необязательно, для задачи на несколько дней)">
           <input class="field field-time" id="editTime" type="time" aria-label="Время начала">
           <input class="field field-time" id="editEndTime" type="time" aria-label="Время окончания (необязательно)">
         </div>
-        <p class="form-hint repeat-hint">Время: с · до (необязательно)</p>
+        <p class="form-hint repeat-hint">Дата: с · по, время: с · до. «По» и «до» — по желанию</p>
       </section>
       <section class="form-section" id="editRepeatSection">
         <h3 class="form-label" id="editRepeatLabel">Повторять</h3>
@@ -2583,6 +2645,9 @@ let calMonth = new Date().getMonth(); // 0-based
 let calSelectedDate = null; // 'YYYY-MM-DD' | null
 let allNotes = [];
 let editingNoteId = null;
+let noteDraft = null;          // текст открытой правки: переживает перерисовку после загрузки фото
+let notePhotoTarget = null;    // id заметки, к которой добавляется фото (null — новая заметка)
+let newNotePhotos = [];        // фото новой заметки до сохранения: { type, data, preview }
 let allTasks = [];
 let allSubtasks = []; // все подзадачи разом, группируем по task_id на клиенте
 
@@ -2626,6 +2691,8 @@ function renderChips() {
   document.getElementById('menuBtn').hidden = archive;
   document.getElementById('backBtn').hidden = !archive;
   document.getElementById('filtersBtn').hidden = !((currentPage === 'list' && !archive) || currentPage === 'calendar');
+  document.getElementById('moneyMenuWrap').hidden = currentPage !== 'money' || archive;
+  if (currentPage !== 'money') closeMoneyMenu();
   const tasksSwitch = document.getElementById('tasksSwitch');
   tasksSwitch.hidden = !((currentPage === 'list' && !archive) || currentPage === 'calendar');
   tasksSwitch.querySelectorAll('[data-sub]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.sub === currentPage)));
@@ -2913,24 +2980,48 @@ function moveButtonsEl(task) {
   return box;
 }
 
-// «до» из формы: только при дате и позже начала (сервер проверяет так же). undefined — ошибка (уже показана).
+// «по» и «до» из формы: конец задачи (ends_at). Только при дате начала и позже начала (сервер проверяет так же).
+// «по» без времени — до конца того дня (23:59). undefined — ошибка (уже показана).
 function endsFromForm(prefix) {
   const date = document.getElementById(prefix + 'Date').value;
   const start = document.getElementById(prefix + 'Time').value || '23:59';
+  const endDate = document.getElementById(prefix + 'EndDate').value;
   const end = document.getElementById(prefix + 'EndTime').value;
-  if (!end) return null;
-  if (!date) { toast('Чтобы указать «до», поставьте дату'); return undefined; }
-  if (end <= start) { toast('Время «до» должно быть позже начала'); return undefined; }
-  return `${date}T${end}:00`;
+  if (!end && !endDate) return null;
+  if (!date) { toast('Чтобы указать «по» или «до», поставьте дату'); return undefined; }
+  if (endDate && endDate < date) { toast('Дата «по» должна быть не раньше начала'); return undefined; }
+  const day = endDate || date;
+  const time = end || '23:59';
+  if (day === date && time <= start) { toast('Время «до» должно быть позже начала'); return undefined; }
+  return `${day}T${time}:00`;
 }
 
-// «09:00–10:30», если у задачи есть «до» (ends_at, тот же день); иначе просто время начала.
+// Дни задачи: от дня начала до дня конца (задача на несколько дней видна на каждом), не больше 62 дней.
+function taskDayKeys(task) {
+  const first = dateKey(task.deadline);
+  if (!first) return [];
+  const last = task.ends_at ? dateKey(task.ends_at) : first;
+  const keys = [first];
+  if (!last || last <= first) return keys;
+  const d = keyToDate(first);
+  for (let i = 1; i < 62; i++) {
+    const key = localDateKey(new Date(d.getFullYear(), d.getMonth(), d.getDate() + i));
+    if (key > last) break;
+    keys.push(key);
+  }
+  return keys;
+}
+
+// «09:00–10:30», если у задачи есть «до» в тот же день; «11–14 окт», если она на несколько дней; иначе время начала.
 function timeRange(task) {
   const start = timeOf(task.deadline);
   if (!task.ends_at) return start;
   const a = parseNaiveDeadline(task.deadline), b = parseNaiveDeadline(task.ends_at);
-  const sameDay = a && b && a.toDateString() === b.toDateString();
-  return sameDay ? `${start}–${timeOf(task.ends_at)}` : start;
+  if (!a || !b) return start;
+  if (a.toDateString() === b.toDateString()) return `${start}–${timeOf(task.ends_at)}`;
+  return a.getMonth() === b.getMonth()
+    ? `${a.getDate()}–${b.getDate()} ${MONTH_SHORT[b.getMonth()]}`
+    : `${a.getDate()} ${MONTH_SHORT[a.getMonth()]} – ${b.getDate()} ${MONTH_SHORT[b.getMonth()]}`;
 }
 
 function timeOf(deadline) {
@@ -2948,9 +3039,9 @@ function groupActiveTasks() {
   const groups = { overdue: [], nodate: [], byDay: {} };
   allTasks.filter(t => t.status !== 'Done').forEach(t => {
     if (!t.deadline) { groups.nodate.push(t); return; }
-    const key = dateKey(t.deadline);
-    if (key < today) groups.overdue.push(t);
-    else (groups.byDay[key] = groups.byDay[key] || []).push(t);
+    const keys = taskDayKeys(t);  // задача на несколько дней — на каждом своём дне, просрочена после последнего
+    if (keys[keys.length - 1] < today) { groups.overdue.push(t); return; }
+    keys.filter(key => key >= today).forEach(key => { (groups.byDay[key] = groups.byDay[key] || []).push(t); });
   });
   groups.overdue.sort(byDeadline);
   Object.values(groups.byDay).forEach(list => list.sort(byDeadline));
@@ -3549,8 +3640,7 @@ function renderCalendar() {
   // Как и на главной, считаются только не выполненные задачи с дедлайном.
   const byDate = {};
   allTasks.filter(t => t.status !== 'Done' && t.deadline).forEach(t => {
-    const key = dateKey(t.deadline);
-    if (key) (byDate[key] = byDate[key] || []).push(t);
+    taskDayKeys(t).forEach(key => { (byDate[key] = byDate[key] || []).push(t); });
   });
   Object.values(byDate).forEach(list => list.sort(byDeadline));
 
@@ -3608,20 +3698,30 @@ function renderCalendar() {
     list.appendChild(empty);
     return;
   }
+  // Кружок — «Готово» (как в списке), остальная строка — «Изменить».
   dayTasks.forEach(task => {
-    const row = document.createElement('button');
+    const row = document.createElement('div');
     row.className = 'compact-row';
     paintRow(row, task.category);
-    row.setAttribute('aria-label', `${timeOf(task.deadline)}, ${task.task}, ${task.category}. Изменить`);
+    const check = document.createElement('button');
+    check.className = 'row-check';
+    check.dataset.focusKey = 'cal-check-' + task.id;
+    check.setAttribute('aria-label', 'Отметить выполненной: ' + task.task);
+    check.innerHTML = '<span class="check-circle"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>';
+    check.onclick = () => completeTask(task.id, row, check);
+    const body = document.createElement('button');
+    body.className = 'compact-body';
+    body.setAttribute('aria-label', `${timeRange(task)}, ${task.task}, ${task.category}. Изменить`);
     const time = document.createElement('span');
     time.className = 'compact-time';
     time.textContent = timeRange(task);
     const title = document.createElement('span');
     title.className = 'compact-title';
     title.textContent = task.task;
-    row.append(time, title, priorityBarsEl(task.priority));
-    row.dataset.focusKey = 'cal-task-' + task.id;
-    row.onclick = () => openEdit(task.id);
+    body.append(time, title, priorityBarsEl(task.priority));
+    body.dataset.focusKey = 'cal-task-' + task.id;
+    body.onclick = () => openEdit(task.id);
+    row.append(check, body);
     list.appendChild(row);
   });
 }
@@ -3682,12 +3782,25 @@ function noteCardEl(note) {
     el.classList.add('editing');
     const textarea = document.createElement('textarea');
     textarea.className = 'note-edit-textarea';
-    textarea.value = note.content;
+    textarea.value = noteDraft !== null ? noteDraft : note.content;
     textarea.setAttribute('aria-label', 'Изменить заметку');
+    textarea.oninput = () => { noteDraft = textarea.value; };
+    textarea.style.height = `${Math.min(320, 34 + textarea.value.split('\n').length * 23)}px`;
     textarea.onkeydown = (e) => {
-      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveNoteEdit(note.id, textarea.value);
-      if (e.key === 'Escape') { e.stopPropagation(); cancelNoteEdit(note.id); }
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { saveNoteEdit(note.id, textarea.value); return; }
+      if (e.key === 'Escape') { e.stopPropagation(); cancelNoteEdit(note.id); return; }
+      continueNoteList(e);
     };
+    const tools = document.createElement('div');
+    tools.className = 'note-tools';
+    tools.innerHTML = document.querySelector('#noteListBtn').outerHTML.replace('id="noteListBtn"', '')
+      + document.querySelector('#notePhotoBtn').outerHTML.replace('id="notePhotoBtn"', '')
+      + document.querySelector('#noteLinkBtn').outerHTML.replace('id="noteLinkBtn"', '');
+    const [listBtn, photoBtn, linkBtn] = tools.querySelectorAll('button');
+    listBtn.onclick = () => toggleNoteListLine(textarea);
+    linkBtn.onclick = () => insertNoteLink(textarea);
+    photoBtn.onclick = () => { notePhotoTarget = note.id; document.getElementById('noteFile').click(); };
+    const photos = notePhotosEl(note, true);
 
     const actions = document.createElement('div');
     actions.className = 'note-row start';
@@ -3704,7 +3817,7 @@ function noteCardEl(note) {
     remove.textContent = 'Удалить';
     remove.onclick = () => { editingNoteId = null; deleteNote(note.id); };
     actions.append(save, cancel, remove);
-    el.append(textarea, actions);
+    el.append(textarea, tools, photos, actions);
     return el;
   }
 
@@ -3718,21 +3831,26 @@ function noteCardEl(note) {
   sr.className = 'sr-only';
   sr.textContent = 'Изменить заметку: ';
   const content = document.createElement('div');
-  content.className = 'note-content';
-  content.textContent = note.content;
+  content.className = 'note-body';
+  fillNoteBody(content, note);
   const meta = document.createElement('div');
   meta.className = 'note-meta';
   meta.textContent = fmtNoteDate(note.updated_at || note.created_at);
-  view.append(sr, content, meta);
+  view.append(sr, content, notePhotosEl(note, false), meta);
   const startEdit = () => {
     editingNoteId = note.id;
+    noteDraft = null;
     notePreview = null;
     renderNotes();
     const area = document.querySelector('#notesList .note-edit-textarea');
     if (area) { area.focus(); area.setSelectionRange(area.value.length, area.value.length); }
   };
-  view.onclick = () => { if (Date.now() >= suppressRowClickUntil) startEdit(); };
+  view.onclick = (e) => {
+    if (e.target.closest('a, .note-check, .note-photo')) return; // ссылка, галочка и фото — свои действия
+    if (Date.now() >= suppressRowClickUntil) startEdit();
+  };
   view.onkeydown = (e) => {
+    if (e.target !== view) return;
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEdit(); }
   };
   el.appendChild(view);
@@ -3835,6 +3953,7 @@ async function addPickedNoteTasks() {
 
 function cancelNoteEdit(id) {
   editingNoteId = null;
+  noteDraft = null;
   renderNotes();
   const card = document.querySelector(`[data-focus-key="note-${id}"]`);
   if (card) card.focus({ preventScroll: true });
@@ -3855,7 +3974,7 @@ function renderNotes() {
       const card = noteCardEl(n);
       const plain = editingNoteId !== n.id && !(notePreview && notePreview.noteId === n.id);
       container.appendChild(plain ? swipeWrapEl(card, 'note-' + n.id, {
-        edit: () => { editingNoteId = n.id; notePreview = null; renderNotes(); },
+        edit: () => { editingNoteId = n.id; noteDraft = null; notePreview = null; renderNotes(); },
         del: () => deleteNote(n.id), noun: 'заметку' }) : card);
     });
   }
@@ -3872,6 +3991,7 @@ async function saveNoteEdit(id, content) {
     });
     if (!res.ok) throw new Error('bad status');
     editingNoteId = null;
+    noteDraft = null;
     toast('Сохранено');
     await loadNotes();
     const card = document.querySelector(`[data-focus-key="note-${id}"]`);
@@ -3917,7 +4037,7 @@ function undoDeleteNote(id) {
 async function submitNote() {
   const input = document.getElementById('noteInput');
   const btn = document.getElementById('noteAddBtn');
-  const content = input.value.trim();
+  const content = input.value.trim() || (newNotePhotos.length ? 'Фото' : '');
   if (!content) return;
 
   btn.disabled = true;
@@ -3928,7 +4048,16 @@ async function submitNote() {
       body: JSON.stringify({ content }),
     });
     if (!res.ok) throw new Error('bad status');
+    const created = await res.json();
     input.value = '';
+    const photos = newNotePhotos;
+    newNotePhotos = [];
+    renderNewNotePhotos();
+    let failed = 0;
+    for (const ph of photos) {
+      try { await uploadNotePhoto(created.id, ph); } catch (e) { failed++; }
+    }
+    if (failed) toast(`Не удалось прикрепить фото: ${failed}`);
     await loadNotes();
   } catch (e) {
     toast('Не удалось сохранить заметку');
@@ -3939,8 +4068,200 @@ async function submitNote() {
 
 document.getElementById('noteAddBtn').onclick = submitNote;
 document.getElementById('noteInput').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitNote();
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { submitNote(); return; }
+  continueNoteList(e);
 });
+document.getElementById('noteListBtn').onclick = () => toggleNoteListLine(document.getElementById('noteInput'));
+document.getElementById('noteLinkBtn').onclick = () => insertNoteLink(document.getElementById('noteInput'));
+document.getElementById('notePhotoBtn').onclick = () => { notePhotoTarget = null; document.getElementById('noteFile').click(); };
+document.getElementById('noteFile').onchange = async (e) => {
+  const files = [...e.target.files].filter(f => f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name));
+  e.target.value = '';
+  const target = notePhotoTarget;
+  for (const file of files) {
+    let ph;
+    try { ph = await prepareFile(file); } catch (err) { toast(err.message || 'Не удалось открыть фото'); continue; }
+    if (target) {
+      try { await uploadNotePhoto(target, ph); } catch (err) { toast(err.message || 'Не удалось прикрепить фото'); }
+    } else {
+      newNotePhotos.push(ph);
+    }
+  }
+  if (target) await loadNotes(); else renderNewNotePhotos();
+};
+
+// ---------- Заметки: список с галочками, ссылки, фото ----------
+// Пункт списка — строка «- [ ] текст» / «- [x] текст» прямо в тексте заметки: галочка = правка текста (PATCH).
+const NOTE_CHECK_RE = /^(\s*)[-*•]\s*\[( |x|X|х|Х)\]\s?(.*)$/;
+let noteSaveChain = Promise.resolve();
+
+function fillNoteBody(box, note) {
+  let buf = [];
+  const flush = () => {
+    const text = buf.join('\n').replace(/^\n+|\n+$/g, '');
+    buf = [];
+    if (text.trim()) box.appendChild(linkifiedEl(text));
+  };
+  note.content.split('\n').forEach((line, i) => {
+    const m = line.match(NOTE_CHECK_RE);
+    if (!m) { buf.push(line); return; }
+    flush();
+    const done = m[2] !== ' ';
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'note-check';
+    row.setAttribute('role', 'checkbox');
+    row.setAttribute('aria-checked', String(done));
+    row.dataset.focusKey = `note-check-${note.id}-${i}`;
+    row.innerHTML = '<span class="step-circle"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="note-check-text"></span>';
+    row.querySelector('.note-check-text').append(...linkifiedEl(m[3]).childNodes);
+    row.onclick = (e) => { if (e.target.closest('a')) return; toggleNoteCheck(note.id, i); };
+    box.appendChild(row);
+  });
+  flush();
+}
+
+function toggleNoteCheck(noteId, lineIndex) {
+  const note = allNotes.find(n => n.id === noteId);
+  if (!note) return;
+  const lines = note.content.split('\n');
+  const m = (lines[lineIndex] || '').match(NOTE_CHECK_RE);
+  if (!m) return;
+  lines[lineIndex] = `${m[1]}- [${m[2] === ' ' ? 'x' : ' '}] ${m[3]}`;
+  note.content = lines.join('\n');
+  renderNotes();
+  const again = document.querySelector(`[data-focus-key="note-check-${noteId}-${lineIndex}"]`);
+  if (again) again.focus({ preventScroll: true });
+  const content = note.content;
+  noteSaveChain = noteSaveChain.then(async () => {   // галочки подряд уходят по очереди, последняя побеждает
+    try {
+      await apiJson(`/notes/${noteId}`, { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify({ content }) });
+    } catch (e) {
+      toast('Галочка не сохранилась — нет связи');
+      await loadNotes();
+    }
+  });
+}
+
+function notePhotosEl(note, editing) {
+  const box = document.createElement('div');
+  box.className = 'note-photos';
+  (note.files || []).forEach((f, i) => {
+    const b = document.createElement('div');
+    b.className = 'note-photo';
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'note-photo-open';
+    open.setAttribute('aria-label', `Открыть фото ${i + 1}`);
+    open.dataset.focusKey = `note-photo-${f.id}`;
+    const img = document.createElement('img');
+    img.alt = '';
+    img.loading = 'lazy';
+    if (f.url) img.src = f.url;
+    open.appendChild(img);
+    open.onclick = () => { if (f.url) openExternal(f.url); };
+    b.appendChild(open);
+    if (editing) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'note-photo-del';
+      del.setAttribute('aria-label', `Удалить фото ${i + 1}`);
+      del.innerHTML = '<span aria-hidden="true">×</span>';
+      del.onclick = () => deleteNotePhoto(note, f.id);
+      b.appendChild(del);
+    }
+    box.appendChild(b);
+  });
+  return box;
+}
+
+function renderNewNotePhotos() {
+  const box = document.getElementById('notePhotosNew');
+  box.innerHTML = '';
+  newNotePhotos.forEach((ph, i) => {
+    const b = document.createElement('div');
+    b.className = 'note-photo';
+    const img = document.createElement('img');
+    img.alt = 'Фото к новой заметке';
+    img.src = ph.preview;
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'note-photo-del';
+    del.setAttribute('aria-label', `Убрать фото ${i + 1}`);
+    del.innerHTML = '<span aria-hidden="true">×</span>';
+    del.onclick = () => { newNotePhotos.splice(i, 1); renderNewNotePhotos(); };
+    b.append(img, del);
+    box.appendChild(b);
+  });
+}
+
+async function uploadNotePhoto(noteId, ph) {
+  await apiJson(`/notes/${noteId}/files`, { method: 'POST', headers: JSON_HEADERS,
+    body: JSON.stringify({ file: { type: ph.type, data: ph.data, name: ph.name } }) });
+}
+
+async function deleteNotePhoto(note, fileId) {
+  note.files = (note.files || []).filter(f => f.id !== fileId);
+  renderNotes();
+  try {
+    await apiJson(`/note-files/${fileId}`, { method: 'DELETE' });
+  } catch (e) {
+    toast('Не удалось удалить фото');
+    await loadNotes();
+  }
+}
+
+function setAreaValue(area, value, caret) {
+  area.value = value;
+  area.focus();
+  area.setSelectionRange(caret, caret);
+  area.dispatchEvent(new Event('input'));
+}
+
+// Кнопка «Список»: строка с курсором становится пунктом с галочкой (или обратно текстом).
+function toggleNoteListLine(area) {
+  const v = area.value;
+  const pos = area.selectionStart;
+  const start = v.lastIndexOf('\n', pos - 1) + 1;
+  let end = v.indexOf('\n', pos);
+  if (end < 0) end = v.length;
+  const line = v.slice(start, end);
+  const m = line.match(NOTE_CHECK_RE);
+  const next = m ? m[1] + m[3] : '- [ ] ' + line.replace(/^\s*[-*•]\s+/, '');
+  setAreaValue(area, v.slice(0, start) + next + v.slice(end), start + next.length);
+}
+
+// Enter в пункте списка — новый пункт; Enter в пустом пункте — конец списка.
+function continueNoteList(e) {
+  if (e.key !== 'Enter' || e.shiftKey || e.metaKey || e.ctrlKey || e.isComposing) return;
+  const area = e.target;
+  const v = area.value;
+  const pos = area.selectionStart;
+  if (pos !== area.selectionEnd) return;
+  const start = v.lastIndexOf('\n', pos - 1) + 1;
+  const m = v.slice(start, pos).match(NOTE_CHECK_RE);
+  if (!m) return;
+  e.preventDefault();
+  if (!m[3].trim()) { setAreaValue(area, v.slice(0, start) + v.slice(pos), start); return; }
+  const ins = '\n' + m[1] + '- [ ] ';
+  setAreaValue(area, v.slice(0, pos) + ins + v.slice(pos), pos + ins.length);
+}
+
+// Кнопка «Ссылка»: вставляет ссылку из буфера обмена отдельной строкой (в тексте ссылки и так нажимаются).
+async function insertNoteLink(area) {
+  let text = '';
+  try { if (navigator.clipboard && navigator.clipboard.readText) text = (await navigator.clipboard.readText()).trim(); } catch (e) { text = ''; }
+  if (!/^(https?:\/\/|www\.)\S+$/i.test(text)) {
+    toast('Скопируйте ссылку и нажмите ещё раз — или вставьте её прямо в текст');
+    area.focus();
+    return;
+  }
+  const v = area.value;
+  const pos = area.selectionStart;
+  const before = v.slice(0, pos);
+  const ins = (before && !before.endsWith('\n') ? '\n' : '') + text + '\n';
+  setAreaValue(area, before + ins + v.slice(pos), pos + ins.length);
+}
 
 document.getElementById('calPrev').onclick = () => shiftCalendarMonth(-1);
 document.getElementById('calToday').onclick = () => {
@@ -4450,7 +4771,7 @@ async function submitManual() {
     }
     const created = await res.json();
     await postNewTaskComment([created]);
-    ['newText', 'newDate', 'newTime', 'newEndTime', 'composerInput'].forEach(id => { document.getElementById(id).value = ''; });
+    ['newText', 'newDate', 'newEndDate', 'newTime', 'newEndTime', 'composerInput'].forEach(id => { document.getElementById(id).value = ''; });
     repeatState.new = { pattern: null, days: [] };
     renderRepeat('new');
     newChoice.priority = 'Mid';
@@ -4952,7 +5273,7 @@ function closeCategories() {
   setBackgroundInert(false);
   if (currentPage === 'money') loadMoney();
   else renderCurrentPage();
-  document.getElementById(currentPage === 'money' ? 'moneyCategoriesBtn' : 'menuBtn').focus();
+  document.getElementById(currentPage === 'money' ? 'moneyMenuBtn' : 'menuBtn').focus();
 }
 document.querySelectorAll('[data-cat-scope]').forEach(btn => {
   btn.onclick = () => {
@@ -5065,6 +5386,33 @@ document.getElementById('setMoneyCats').onclick = fromSettings(() => openCategor
 document.getElementById('setCurrencies').onclick = fromSettings(openCurrency);
 document.getElementById('setStatement').onclick = fromSettings(openStatement);
 document.getElementById('moneyStatementBtn').onclick = openStatement;
+
+// «Ещё» в верхней строке кошелька: Категории, Валюты, Аналитика, Выписка выпадающим списком.
+function closeMoneyMenu(focusBtn) {
+  const menu = document.getElementById('moneyMenu');
+  if (menu.hidden) return;
+  menu.hidden = true;
+  document.getElementById('moneyMenuBtn').setAttribute('aria-expanded', 'false');
+  if (focusBtn) document.getElementById('moneyMenuBtn').focus();
+}
+document.getElementById('moneyMenuBtn').onclick = () => {
+  const menu = document.getElementById('moneyMenu');
+  if (!menu.hidden) { closeMoneyMenu(); return; }
+  menu.hidden = false;
+  document.getElementById('moneyMenuBtn').setAttribute('aria-expanded', 'true');
+  menu.querySelector('.tools-item').focus({ preventScroll: true });
+};
+document.getElementById('moneyMenu').addEventListener('click', (e) => { if (e.target.closest('.tools-item')) closeMoneyMenu(); }, true);
+document.getElementById('moneyMenu').addEventListener('keydown', (e) => {
+  const items = [...document.querySelectorAll('#moneyMenu .tools-item')];
+  const i = items.indexOf(document.activeElement);
+  if (e.key === 'Escape') { e.stopPropagation(); closeMoneyMenu(true); }
+  else if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+});
+document.addEventListener('pointerdown', (e) => {
+  if (!e.target.closest('#moneyMenuWrap')) closeMoneyMenu();
+}, true);
 document.getElementById('setBackup').onclick = async () => {
   try {
     await apiJson('/backup/send', { method: 'POST' });
@@ -5082,7 +5430,7 @@ document.getElementById('catNewName').onkeydown = (e) => { if (e.key === 'Enter'
 const MONEY_PAGE = 200;
 const WALLET_TAB_STORAGE = 'task_agent_wallet_tab';
 let moneyTab = 'expense';       // 'expense' | 'income' | 'trend'
-try { const t = localStorage.getItem(WALLET_TAB_STORAGE); if (['expense', 'income', 'goals'].includes(t)) moneyTab = t; } catch (e) { /* нет памяти */ }
+try { const t = localStorage.getItem(WALLET_TAB_STORAGE); if (['expense', 'income', 'trend', 'goals'].includes(t)) moneyTab = t; } catch (e) { /* нет памяти */ }
 let moneyMonth = null;          // 'YYYY-MM'; null — текущий
 let moneySummary = null;
 let moneyTrendData = null;
@@ -5173,7 +5521,8 @@ async function loadMoney(more) {
   const jobs = {};
   if (kindTab) {
     const { from, to } = monthBounds(key);
-    const params = new URLSearchParams({ from, to, kind: moneyTab, limit: String(MONEY_PAGE), offset: String(more ? moneyTx.length : 0) });
+    // История — траты и доходы вместе в обеих вкладках (решение владельца 11 октября 2026)
+    const params = new URLSearchParams({ from, to, limit: String(MONEY_PAGE), offset: String(more ? moneyTx.length : 0) });
     if (moneyFilterCat) params.set('category_id', moneyFilterCat);
     jobs.tx = apiJson(`/money/transactions?${params}`);
   }
@@ -5219,20 +5568,23 @@ function renderMoney() {
   document.querySelectorAll('#walletSwitch [data-wtab]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.wtab === moneyTab)));
   document.getElementById('moneyMonthLabel').textContent = monthTitle(key);
   document.getElementById('moneyCurrent').hidden = key === currentMonthKey();
-  document.getElementById('moneyCurrencyBtn').textContent = `Валюты: ${userCurrencies().map(c => CURRENCY_SYMBOLS[c] || c).join(' · ')}`;
+  document.getElementById('moneyCurrencyBtn').innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M14.5 9.5a2.5 2 0 0 0-2.5-1.5c-1.5 0-2.5.8-2.5 2s1 1.7 2.5 2 2.5.8 2.5 2-1 2-2.5 2a2.5 2 0 0 1-2.5-1.5M12 6.5V8M12 16v1.5"/></svg>'
+    + `Валюты: ${userCurrencies().map(c => CURRENCY_SYMBOLS[c] || c).join(' · ')}`;
   document.getElementById('moneyNext').disabled = key >= currentMonthKey();
   const trend = moneyTab === 'trend';
   const goals = moneyTab === 'goals';
   document.getElementById('moneyKindView').hidden = trend || goals;
+  document.getElementById('moneyTrendView').hidden = !trend;
   document.getElementById('moneyGoalsView').hidden = !goals;
   document.getElementById('moneyHead').hidden = goals;   // у целей нет месяцев
-  document.getElementById('moneyTools').hidden = goals;
+  document.getElementById('moneyTools').hidden = goals || key === currentMonthKey();
   document.getElementById('fabBtn').setAttribute('aria-label',
     goals ? 'Новая цель' : (moneyTab === 'income' ? 'Добавить доход' : 'Добавить трату'));
   if (goals) { renderGoals(); return; }
   if (!moneyLoaded) return;
   const summary = moneySummary && moneySummary.month === key ? moneySummary : { currencies: [] };
-  if (!trend) renderKindView(summary);
+  if (trend) renderTrendView(summary);
+  else renderKindView(summary);
 }
 
 // ---------- Цели накопления (GET/POST/PATCH/DELETE /money/goals, /money/goals/{id}/moves) ----------
@@ -5651,7 +6003,7 @@ function renderRecurringBlock() {
     const meta = document.createElement('div');
     meta.className = 'money-row-meta';
     const how = freqText(rec.frequency, rec.next_run, rec.day_of_month);
-    meta.textContent = rec.active ? `${how[0].toUpperCase()}${how.slice(1)} · следующий ${dayLabel(rec.next_run)}` : 'На паузе';
+    meta.textContent = rec.active ? `${how[0].toUpperCase()}${how.slice(1)} · следующий ${dayLabel(rec.next_run)}${rec.as_task ? ' · по галочке' : ''}` : 'На паузе';
     body.append(title, meta);
     body.onclick = () => openMoneyForm(rec, 'rec');
     body.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openMoneyForm(rec, 'rec'); } };
@@ -5739,23 +6091,23 @@ function renderMoneyList(summary) {
     const empty = document.createElement('div');
     empty.className = 'empty-dashed';
     empty.textContent = moneyFilterCat ? 'В этой категории операций нет'
-      : (income ? 'Доходов в этом месяце нет. Нажмите «+», чтобы добавить'
-        : 'Пока нет трат. Напишите боту «кофе 3 евро» или нажмите «+»');
+      : 'Операций в этом месяце нет. Напишите боту «кофе 3 евро» или нажмите «+»';
     list.appendChild(empty);
   }
   // Суммы дня — из /money/summary (сервер), только без фильтра по категории; в основной валюте, если она есть.
+  // В истории траты и доходы вместе: «−70 € · +1 200 €».
   const daySums = {};
+  const push = (day, text) => { (daySums[day] = daySums[day] || []).push(text); };
   if (!moneyFilterCat && summary.main) {
     const m = summary.main;
     m.days.forEach(d => {
-      const value = income ? d.income : d.expense;
-      const approx = income ? d.approx_income : d.approx_expense;
-      if (Number(value)) daySums[d.day] = [(approx ? '≈ ' : '') + moneyFmt(value, m.currency, income ? '+' : '−')];
+      if (Number(d.expense)) push(d.day, (d.approx_expense ? '≈ ' : '') + moneyFmt(d.expense, m.currency, '−'));
+      if (Number(d.income)) push(d.day, (d.approx_income ? '≈ ' : '') + moneyFmt(d.income, m.currency, '+'));
     });
   } else if (!moneyFilterCat) {
     summary.currencies.forEach(cur => cur.days.forEach(d => {
-      const value = income ? d.income : d.expense;
-      if (Number(value)) (daySums[d.day] = daySums[d.day] || []).push(moneyFmt(value, cur.currency, income ? '+' : '−'));
+      if (Number(d.expense)) push(d.day, moneyFmt(d.expense, cur.currency, '−'));
+      if (Number(d.income)) push(d.day, moneyFmt(d.income, cur.currency, '+'));
     }));
   }
   let lastDay = null;
@@ -6126,22 +6478,13 @@ function openAnalytics() {
   setBackgroundInert(true);
   document.getElementById('analyticsClose').focus();
   loadAnalytics();
-  loadAnalyticsTrend();
 }
 
-// Ниже аналитики — графики бывшей «Динамики» (GET /money/trend и итоги открытого в кошельке месяца).
-async function loadAnalyticsTrend() {
-  const key = moneyMonth || currentMonthKey();
-  const [summary, trend] = await Promise.allSettled([apiJson(`/money/summary?month=${key}`), apiJson('/money/trend?months=6')]);
-  if (trend.status === 'fulfilled') moneyTrendData = trend.value;
-  const sum = summary.status === 'fulfilled' ? summary.value : (moneySummary && moneySummary.month === key ? moneySummary : { currencies: [] });
-  if (!analyticsSheet.hidden) renderTrendView(sum);
-}
 function closeAnalytics() {
   analyticsSheet.hidden = true;
   document.body.classList.remove('no-scroll');
   setBackgroundInert(false);
-  document.getElementById('moneyAnalyticsBtn').focus();
+  document.getElementById('moneyMenuBtn').focus();
 }
 document.getElementById('moneyAnalyticsBtn').onclick = openAnalytics;
 document.getElementById('analyticsClose').onclick = closeAnalytics;
@@ -6193,7 +6536,7 @@ function closeCurrency() {
   document.body.classList.remove('no-scroll');
   setBackgroundInert(false);
   renderMoney();
-  document.getElementById('moneyCurrencyBtn').focus();
+  document.getElementById('moneyMenuBtn').focus();
 }
 document.getElementById('moneyCurrencyBtn').onclick = openCurrency;
 document.getElementById('currencyClose').onclick = closeCurrency;
@@ -6277,6 +6620,15 @@ function renderMoneyForm() {
     hint.hidden = !rec;
     hint.textContent = 'Повтор будет остановлен. Уже созданные операции останутся.';
   }
+  // «Записывать после галочки» (migration 013): платёж висит задачей «💳 …», операция — только по галочке.
+  const asTaskOn = f.repeat && !linked;
+  document.getElementById('moneyAsTaskRow').hidden = !asTaskOn;
+  document.getElementById('moneyAsTask').setAttribute('aria-checked', String(!!f.asTask));
+  const asHint = document.getElementById('moneyAsTaskHint');
+  asHint.hidden = !asTaskOn;
+  asHint.textContent = f.asTask
+    ? `В срок появится задача «💳 …» в «Задачах». Отметите её — ${expense ? 'трата' : 'доход'} запишется в кошелёк, а задача встанет на следующий срок.`
+    : `${expense ? 'Трата' : 'Доход'} записывается сам в день платежа.`;
 }
 
 async function openMoneyForm(item, mode, opts) {
@@ -6292,6 +6644,7 @@ async function openMoneyForm(item, mode, opts) {
     repeat: rec ? true : !!opts.repeat,
     frequency: rec ? (item.frequency || 'monthly') : 'monthly',
     recurringId: !rec && item ? (item.recurring_id || null) : null,
+    asTask: rec ? !!item.as_task : false,
   };
   moneyReturnFocus = document.activeElement;
   document.getElementById('moneyDescribeSection').hidden = !!item || rec;
@@ -6347,25 +6700,26 @@ async function saveMoneyForm() {
         message = 'Повтор остановлен. Созданные операции остались';
       } else {
         await apiJson(`/money/recurring/${f.id}`, { method: 'PATCH', headers: JSON_HEADERS,
-          body: JSON.stringify({ ...base, frequency: f.frequency, next_run: date }) });
+          body: JSON.stringify({ ...base, frequency: f.frequency, next_run: date, as_task: !!f.asTask }) });
         message = 'Сохранено';
       }
     } else if (!f.id) {
       await apiJson('/money/transactions', { method: 'POST', headers: JSON_HEADERS,
-        body: JSON.stringify({ ...base, spent_on: date, repeat: f.repeat ? f.frequency : null }) });
+        body: JSON.stringify({ ...base, spent_on: date, repeat: f.repeat ? f.frequency : null, as_task: f.repeat && !!f.asTask }) });
       message = f.repeat ? 'Добавлено и будет повторяться' : (f.kind === 'income' ? 'Доход добавлен' : 'Трата добавлена');
     } else {
       await apiJson(`/money/transactions/${f.id}`, { method: 'PATCH', headers: JSON_HEADERS,
         body: JSON.stringify({ ...base, spent_on: date }) });
       if (f.repeat && !f.recurringId) {
         await apiJson('/money/recurring', { method: 'POST', headers: JSON_HEADERS,
-          body: JSON.stringify({ ...base, frequency: f.frequency, anchor_date: date }) });
+          body: JSON.stringify({ ...base, frequency: f.frequency, anchor_date: date, as_task: !!f.asTask }) });
         message = 'Сохранено и будет повторяться';
       } else {
         message = 'Сохранено';
       }
     }
     rememberChoice(f);
+    if (f.repeat && f.asTask) loadTasks();  // задача «💳 …» сразу видна в «Задачах»
     toast(message);
     const kind = f.kind;
     closeMoneyForm();
@@ -6480,6 +6834,7 @@ document.getElementById('moneyKindIncome').onclick = () => {
   moneyForm.kind = 'income'; moneyForm.category_id = rememberedCategory('income'); renderMoneyForm();
 };
 document.getElementById('moneyRepeat').onclick = () => { moneyForm.repeat = !moneyForm.repeat; renderMoneyForm(); };
+document.getElementById('moneyAsTask').onclick = () => { moneyForm.asTask = !moneyForm.asTask; renderMoneyForm(); };
 document.getElementById('moneyDate').addEventListener('change', () => { if (moneyForm) renderMoneyForm(); });
 document.getElementById('moneyRuleLink').onclick = async () => {
   const id = moneyForm.recurringId;
@@ -6662,6 +7017,7 @@ document.getElementById('newModeAi').onclick = () => setNewTaskMode('ai', true);
 document.getElementById('newModeManual').onclick = () => setNewTaskMode('manual', true);
 document.getElementById('newClearDeadline').onclick = () => {
   document.getElementById('newEndTime').value = '';
+  document.getElementById('newEndDate').value = '';
   document.getElementById('newDate').value = '';
   document.getElementById('newTime').value = '';
 };
@@ -7002,7 +7358,9 @@ function openEdit(id) {
   document.getElementById('editText').value = task.task;
   document.getElementById('editDate').value = task.deadline ? task.deadline.slice(0, 10) : '';
   document.getElementById('editTime').value = task.deadline ? task.deadline.slice(11, 16) : '';
-  document.getElementById('editEndTime').value = task.ends_at ? task.ends_at.slice(11, 16) : '';
+  document.getElementById('editEndTime').value = task.ends_at && task.ends_at.slice(11, 16) !== '23:59' ? task.ends_at.slice(11, 16) : '';
+  document.getElementById('editEndDate').value = task.ends_at && task.deadline && task.ends_at.slice(0, 10) !== task.deadline.slice(0, 10)
+    ? task.ends_at.slice(0, 10) : '';
   resetAttach('edit');
   document.getElementById('editComment').value = '';
   loadEditComments(id);
@@ -7280,6 +7638,7 @@ document.getElementById('editClose').onclick = closeEdit;
 document.getElementById('editSave').onclick = submitEdit;
 document.getElementById('editClearDeadline').onclick = () => {
   document.getElementById('editEndTime').value = '';
+  document.getElementById('editEndDate').value = '';
   document.getElementById('editDate').value = '';
   document.getElementById('editTime').value = '';
 };
