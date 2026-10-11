@@ -722,7 +722,12 @@ applyTheme();
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: calc(12px + var(--app-inset-top)) var(--gutter) 0;
+    padding: calc(12px + var(--app-inset-top)) var(--gutter) 8px;
+    /* закреплена на всех страницах: при прокрутке кнопки остаются сверху (11 октября 2026) */
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: var(--bg);
   }
   .topbar-group { display: flex; gap: var(--gap-s); }
   .tb-btn {
@@ -1204,12 +1209,13 @@ applyTheme();
   .people-list { display: flex; flex-direction: column; gap: var(--gap-s); }
   .newtask-group { margin: 0 0 var(--gap-m); padding: 10px 14px; border-radius: var(--radius-compact); background: var(--surface);
     border: 1px solid var(--line); font-size: 15px; font-weight: 600; }
-  .group-page-head { display: flex; align-items: center; gap: var(--gap-s); padding-top: 20px; }
-  .group-page-title { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .group-members { display: flex; align-items: center; gap: var(--gap-s); padding: var(--gap-m) 0; font-size: 14px; color: var(--ink-muted); }
-  .group-members .people-av { flex: 0 0 28px; width: 28px; height: 28px; font-size: 12px; margin-right: -12px;
-    border: 2px solid var(--bg); }
-  .group-members .people-av:last-of-type { margin-right: 4px; }
+  .group-page-title { overflow-wrap: anywhere; }
+  .group-members { display: flex; align-items: center; gap: var(--gap-m); padding: var(--gap-s) 0 var(--gap-l);
+    font-size: 14px; color: var(--ink-muted); }
+  .av-stack { display: flex; flex: 0 0 auto; }
+  .av-stack .people-av { flex: 0 0 28px; width: 28px; height: 28px; font-size: 12px; border: 2px solid var(--bg); }
+  .av-stack .people-av + .people-av { margin-left: -8px; }
+  .group-members-text { flex: 1; min-width: 0; line-height: 1.35; }
   .group-task-list { display: flex; flex-direction: column; gap: var(--gap-s); }
   #groupDoneToggle { align-self: flex-start; margin: var(--gap-l) 0 var(--gap-s); }
   .people-row { display: flex; align-items: center; gap: var(--gap-m); min-height: 52px; padding: 4px 4px 4px 12px;
@@ -1365,6 +1371,11 @@ applyTheme();
   /* Дата · с · до: дата — на всю ширину, ниже два времени (три поля в строку на телефоне обрезаются) */
   .field-row.dt-range { flex-wrap: wrap; }
   .field-row.dt-range .field-date, .field-row.dt-range .field-time { flex: 1 1 40%; } /* по две в ряд: даты, ниже время */
+  /* Дата · по · время · до: подпись над каждым полем — на iPhone пустое поле даты ничего не показывает */
+  .dt-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--gap-s); }
+  .dt-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .dt-cell > span { font-size: 12px; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dt-cell .field { width: 100%; }
   /* iPhone рисует поля даты и времени шире контейнера — без этого форма уезжает вбок */
   .field-date, .field-time { min-width: 0; max-width: 100%; -webkit-appearance: none; appearance: none; }
   /* На iPhone любое поле даты/времени шире контейнера и сдвигает всю форму (форма траты, 11 октября 2026) */
@@ -1853,6 +1864,7 @@ applyTheme();
           <button class="tools-item" id="moneyStatementBtn" role="menuitem" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h7"/></svg>Выписка</button>
         </div>
       </div>
+      <button class="tb-btn" id="groupSettingsBtn" aria-label="Настройки группы" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
       <button class="tb-btn" id="searchBtn" aria-label="Поиск"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button>
       <button class="tb-btn" id="filtersBtn" aria-label="Фильтры по категории и приоритету">
         <svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
@@ -2048,10 +2060,10 @@ applyTheme();
         <p class="form-hint repeat-hint" style="margin-top: var(--gap-m);">Создайте группу и отправьте ссылку: человек откроет её в боте и нажмёт «Вступить». Задачи, добавленные на странице группы, сразу появляются у всех.</p>
       </div>
       <div id="groupPageView" hidden>
-        <div class="group-page-head">
-          <button class="tb-btn" id="groupBack" aria-label="Назад к группам"><svg viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></svg></button>
-          <h1 class="t-h1 group-page-title" id="groupPageTitle"></h1>
-          <button class="tb-btn" id="groupSettingsBtn" aria-label="Настройки группы"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.6"/><path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4L18 18M6 18l1.6-1.6M16.4 7.6L18 6"/></svg></button>
+        <div class="day-head">
+          <div class="day-head-text">
+            <h1 class="t-h1 group-page-title" id="groupPageTitle"></h1>
+          </div>
         </div>
         <div class="group-members" id="groupPageMembers"></div>
         <div class="group-task-list" id="groupTasks"></div>
@@ -2111,13 +2123,13 @@ applyTheme();
           <h3 class="form-label">Дедлайн</h3>
           <button class="link-btn" id="newClearDeadline" type="button">Без даты</button>
         </div>
-        <div class="field-row dt-range">
-          <input class="field field-date" id="newDate" type="date" aria-label="Дата: с">
-          <input class="field field-date" id="newEndDate" type="date" aria-label="Дата: по (необязательно, для задачи на несколько дней)">
-          <input class="field field-time" id="newTime" type="time" aria-label="Время начала">
-          <input class="field field-time" id="newEndTime" type="time" aria-label="Время окончания (необязательно)">
+        <div class="dt-grid">
+          <label class="dt-cell"><span>Дата</span><input class="field field-date" id="newDate" type="date" aria-label="Дата"></label>
+          <label class="dt-cell"><span>По (день)</span><input class="field field-date" id="newEndDate" type="date" aria-label="По какой день (необязательно)"></label>
+          <label class="dt-cell"><span>Время</span><input class="field field-time" id="newTime" type="time" aria-label="Время"></label>
+          <label class="dt-cell"><span>До (время)</span><input class="field field-time" id="newEndTime" type="time" aria-label="До какого времени (необязательно)"></label>
         </div>
-        <p class="form-hint repeat-hint">Дата: с · по, время: с · до. «По» и «до» — по желанию</p>
+        <p class="form-hint repeat-hint">«По» — если задача на несколько дней, «до» — время окончания. Оба по желанию</p>
       </section>
       <section class="form-section">
         <h3 class="form-label">Место</h3>
@@ -2515,13 +2527,13 @@ applyTheme();
           <h3 class="form-label">Дедлайн</h3>
           <button class="link-btn" id="editClearDeadline" type="button">Без даты</button>
         </div>
-        <div class="field-row dt-range">
-          <input class="field field-date" id="editDate" type="date" aria-label="Дата: с">
-          <input class="field field-date" id="editEndDate" type="date" aria-label="Дата: по (необязательно, для задачи на несколько дней)">
-          <input class="field field-time" id="editTime" type="time" aria-label="Время начала">
-          <input class="field field-time" id="editEndTime" type="time" aria-label="Время окончания (необязательно)">
+        <div class="dt-grid">
+          <label class="dt-cell"><span>Дата</span><input class="field field-date" id="editDate" type="date" aria-label="Дата"></label>
+          <label class="dt-cell"><span>По (день)</span><input class="field field-date" id="editEndDate" type="date" aria-label="По какой день (необязательно)"></label>
+          <label class="dt-cell"><span>Время</span><input class="field field-time" id="editTime" type="time" aria-label="Время"></label>
+          <label class="dt-cell"><span>До (время)</span><input class="field field-time" id="editEndTime" type="time" aria-label="До какого времени (необязательно)"></label>
         </div>
-        <p class="form-hint repeat-hint">Дата: с · по, время: с · до. «По» и «до» — по желанию</p>
+        <p class="form-hint repeat-hint">«По» — если задача на несколько дней, «до» — время окончания. Оба по желанию</p>
       </section>
       <section class="form-section">
         <h3 class="form-label">Место</h3>
@@ -2848,8 +2860,11 @@ function toast(msg, actionLabel, actionFn) {
 function renderChips() {
   const archive = currentPage === 'list' && viewMode === 'archive';
   document.getElementById('filterDot').hidden = !(activeCategory || activePriority);
-  document.getElementById('menuBtn').hidden = archive;
-  document.getElementById('backBtn').hidden = !archive;
+  const inGroup = currentPage === 'groups' && !!openGroupId;  // страница группы: «назад» к списку групп вместо меню
+  document.getElementById('menuBtn').hidden = archive || inGroup;
+  document.getElementById('backBtn').hidden = !(archive || inGroup);
+  document.getElementById('backBtn').setAttribute('aria-label', inGroup ? 'Назад к группам' : 'Назад к задачам');
+  document.getElementById('groupSettingsBtn').hidden = !inGroup;
   document.getElementById('filtersBtn').hidden = !((currentPage === 'list' && !archive) || currentPage === 'calendar');
   document.getElementById('moneyMenuWrap').hidden = currentPage !== 'money' || archive;
   if (currentPage !== 'money') closeMoneyMenu();
@@ -3774,6 +3789,7 @@ function renderArchive() {
 }
 
 document.getElementById('backBtn').onclick = () => {
+  if (currentPage === 'groups') { openGroupId = null; renderChips(); renderGroups(); document.getElementById('menuBtn').focus(); return; }
   viewMode = 'active';
   switchPage('list');
   document.getElementById('menuBtn').focus();
@@ -7623,6 +7639,8 @@ async function showGroups() {
 }
 function renderGroups() {
   if (currentPage !== 'groups' || !groups) return;
+  if (openGroupId && !groupById(openGroupId)) openGroupId = null;
+  renderChips();  // «назад» и настройки группы в верхней строке
   const page = openGroupId && groupById(openGroupId);
   document.getElementById('groupsListView').hidden = !!page;
   document.getElementById('groupPageView').hidden = !page;
@@ -7646,7 +7664,7 @@ function renderGroups() {
     row.querySelector('.people-name span').textContent = g.name;
     row.querySelector('.people-name small').textContent =
       `${g.members.length > 1 ? g.members.map(m => m.name).join(', ') : 'пока только вы'} · ${pluralTasks(open)}`;
-    row.onclick = () => { openGroupId = g.id; groupDoneOpen = false; renderGroups(); window.scrollTo(0, 0); };
+    row.onclick = () => { openGroupId = g.id; groupDoneOpen = false; renderChips(); renderGroups(); window.scrollTo(0, 0); };
     list.appendChild(row);
   });
 }
@@ -7654,14 +7672,18 @@ function renderGroupPage(g) {
   document.getElementById('groupPageTitle').textContent = g.name;
   const mem = document.getElementById('groupPageMembers');
   mem.innerHTML = '';
+  const stack = document.createElement('span');
+  stack.className = 'av-stack';
+  stack.setAttribute('aria-hidden', 'true');
   g.members.slice(0, 5).forEach(m => {
     const av = document.createElement('span');
     av.className = 'people-av';
     av.textContent = initials(m.name);
-    av.title = m.name;
-    mem.appendChild(av);
+    stack.appendChild(av);
   });
+  mem.appendChild(stack);
   const label = document.createElement('span');
+  label.className = 'group-members-text';
   label.textContent = g.members.length > 1
     ? `${g.members.map(m => m.name).join(', ')} · ${g.tick_all ? 'галочка у всех' : 'у каждого своя галочка'}`
     : 'Пока только вы — пригласите людей в настройках группы';
@@ -7696,7 +7718,6 @@ function renderGroupPage(g) {
   });
 }
 document.getElementById('groupDoneToggle').onclick = () => { groupDoneOpen = !groupDoneOpen; renderGroups(); };
-document.getElementById('groupBack').onclick = () => { openGroupId = null; renderGroups(); };
 document.getElementById('groupsNew').onclick = () => openGroupSheet(null);
 document.getElementById('groupSettingsBtn').onclick = () => { const g = groupById(openGroupId); if (g) openGroupSheet(g); };
 
