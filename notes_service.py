@@ -36,7 +36,7 @@ def _files_by_note(user_id: str) -> dict:
 
 
 def create_note(payload: NoteCreate, user_id: str) -> dict:
-    data = payload.model_dump(mode="json")
+    data = payload.model_dump(mode="json", exclude_none=True)  # место пишем, только если оно есть
     data["user_id"] = user_id  # владельца ставит сервер, не клиент
     result = supabase.table(TABLE).insert(data).execute()
     if not result.data:
@@ -59,7 +59,11 @@ def update_note(note_id: str, payload: NoteUpdate, user_id: str) -> dict | None:
     current = get_note(note_id, user_id)
     if not current:
         return None
-    data = payload.model_dump(mode="json")
+    data = payload.model_dump(mode="json", exclude_unset=True)
+    if "content" in data and data["content"] is None:
+        data.pop("content")
+    if "location" in data:
+        data["location"] = (data["location"] or "").strip() or None
     data["updated_at"] = datetime.utcnow().isoformat()
     result = supabase.table(TABLE).update(data).eq("id", note_id).eq("user_id", user_id).execute()
     if not result.data:

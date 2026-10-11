@@ -633,7 +633,11 @@ applyTheme();
     outline: none;
   }
   .note-edit-textarea:focus { border-color: var(--ink); }
-  .swipe-track > .note-card { flex: 0 0 calc(100% - 140px); min-width: 0; } /* без этого короткая заметка сжималась и кнопки свайпа торчали */
+  .swipe-track > .note-card { flex: 0 0 calc(100% - 140px); min-width: 0; }
+  .swipe-track > .rec-row { flex: 0 0 calc(100% - 140px); min-width: 0; }
+  .rec-row .row-check { margin: -6px 0 -6px -10px; }
+  .rec-row.done .check-circle { background: var(--ink); }
+  .rec-row.done .check-circle svg { stroke: var(--on-ink); } /* без этого короткая заметка сжималась и кнопки свайпа торчали */
   .note-body { display: flex; flex-direction: column; gap: 2px; }
   .note-body .comment-text { font-size: 16px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
   .note-check { display: flex; align-items: center; gap: var(--gap-m); min-height: var(--touch); padding: 2px 0; border: 0;
@@ -1196,6 +1200,41 @@ applyTheme();
   .pie-legend b { margin-left: auto; padding-left: var(--gap-s); font-weight: 600; white-space: nowrap; }
   .money-list-head { display: flex; align-items: center; justify-content: space-between; gap: var(--gap-s); }
   .money-list-head .money-h2 { margin: 0; }
+  .money-list-tools { display: flex; align-items: center; gap: 4px; }
+  /* Поле «Место»: подсказки адреса (OpenStreetMap), карта и «Открыть в Google Maps» */
+  .place-input { position: relative; }
+  .place-input svg { position: absolute; left: 14px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%);
+    fill: none; stroke: var(--ink-muted); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+  .place-input .field { padding-left: 40px; }
+  .place-list { display: flex; flex-direction: column; margin-top: 4px; border: 1px solid var(--line); border-radius: var(--radius-compact);
+    background: var(--surface); overflow: hidden; }
+  .place-item { display: flex; flex-direction: column; gap: 2px; min-height: var(--touch); padding: 8px 14px; border: 0;
+    border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+  .place-item:last-child { border-bottom: 0; }
+  .place-item b { font-size: 15px; font-weight: 600; }
+  .place-item small { font-size: 12px; color: var(--ink-muted); overflow-wrap: anywhere; }
+  .place-preview { display: flex; flex-direction: column; gap: var(--gap-s); margin-top: var(--gap-s); }
+  .place-map { width: 100%; height: 150px; border: 0; border-radius: var(--radius-compact); background: var(--line); }
+  .place-actions { display: flex; flex-wrap: wrap; gap: var(--gap-s); }
+  .place-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 36px; padding: 6px 12px;
+    border: 1px solid var(--line); border-radius: var(--radius-pill); background: transparent; color: var(--ink);
+    font: inherit; font-size: 13px; font-weight: 500; text-align: left; cursor: pointer; }
+  .place-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .place-chip svg { flex: 0 0 16px; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8;
+    stroke-linecap: round; stroke-linejoin: round; }
+  .note-place { align-self: flex-start; }
+  .range-btn { display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; font-size: 13px; }
+  .range-btn svg, .range-clear svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8;
+    stroke-linecap: round; stroke-linejoin: round; }
+  .range-btn[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+  .range-box { display: flex; flex-direction: column; gap: var(--gap-s); padding-top: var(--gap-m); }
+  .money-net { margin: var(--gap-m) 0 0; padding: 14px 18px; border: 1px solid var(--line); border-radius: var(--radius-card);
+    background: var(--surface); }
+  .money-net-label { font-size: 13px; font-weight: 600; color: var(--ink-muted); }
+  .money-net-value { display: block; padding-top: 2px; font-family: var(--font-display); font-size: 24px; font-weight: 600;
+    color: var(--accent-text); overflow-wrap: anywhere; }
+  .money-net-value.neg { color: var(--danger); }
+  .money-net-parts { padding-top: 4px; font-size: 13px; color: var(--ink-muted); }
   .money-list { display: flex; flex-direction: column; gap: var(--gap-s); padding-top: var(--gap-l); }
   .money-day { display: flex; justify-content: space-between; gap: var(--gap-s); padding: var(--gap-m) 4px 2px; font-size: 13px; color: var(--ink-muted); }
   .money-day b { font-weight: 600; color: var(--ink); }
@@ -1305,6 +1344,9 @@ applyTheme();
   .field-row.dt-range .field-date, .field-row.dt-range .field-time { flex: 1 1 40%; } /* по две в ряд: даты, ниже время */
   /* iPhone рисует поля даты и времени шире контейнера — без этого форма уезжает вбок */
   .field-date, .field-time { min-width: 0; max-width: 100%; -webkit-appearance: none; appearance: none; }
+  /* На iPhone любое поле даты/времени шире контейнера и сдвигает всю форму (форма траты, 11 октября 2026) */
+  input[type="date"], input[type="time"] { min-width: 0; max-width: 100%; -webkit-appearance: none; appearance: none; }
+  input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 
   /* FilterChip (выбор категории и приоритета) */
   .chip-group { display: flex; flex-wrap: wrap; gap: var(--gap-s); }
@@ -1862,6 +1904,7 @@ applyTheme();
     </section>
 
     <section id="moneyView" style="display: none;" aria-labelledby="moneyMonthLabel">
+      <div class="money-net" id="moneyNet" hidden></div>
       <div class="segmented page-switch" id="walletSwitch" role="group" aria-label="Раздел кошелька">
         <button type="button" data-wtab="expense" aria-pressed="true">Расходы</button>
         <button type="button" data-wtab="income" aria-pressed="false">Доходы</button>
@@ -1896,8 +1939,23 @@ applyTheme();
         <section class="money-block" aria-labelledby="moneyListTitle">
           <div class="money-list-head">
             <h2 class="money-h2" id="moneyListTitle">Операции</h2>
-            <button class="link-btn" id="moneyFilterClear" type="button" hidden>Показать все</button>
+            <div class="money-list-tools">
+              <button class="link-btn" id="moneyFilterClear" type="button" hidden>Показать все</button>
+              <button class="pill-btn range-btn" id="moneyRangeBtn" type="button" aria-expanded="false" aria-controls="moneyRangeBox"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/></svg><span id="moneyRangeLabel">Даты</span></button>
+              <button class="tb-btn range-clear" id="moneyRangeClear" type="button" aria-label="Сбросить даты" hidden><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></svg></button>
+            </div>
           </div>
+          <div class="range-box" id="moneyRangeBox" hidden>
+            <div class="field-row">
+              <input class="field field-date" id="moneyRangeFrom" type="date" aria-label="Операции с">
+              <input class="field field-date" id="moneyRangeTo" type="date" aria-label="Операции по">
+            </div>
+            <div class="note-row start">
+              <button class="btn-small" id="moneyRangeApply" type="button">Показать</button>
+              <button class="btn-plain" id="moneyRangeCancel" type="button">Отмена</button>
+            </div>
+          </div>
+          <p class="money-rate" id="moneyRangeTotals" hidden></p>
           <div class="money-list" id="moneyList"></div>
         </section>
       </div>
@@ -1941,10 +1999,12 @@ applyTheme();
               <button class="tb-btn" id="noteMicBtn" aria-label="Наговорить заметку голосом"><svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
               <button class="tb-btn" id="noteListBtn" type="button" aria-label="Пункт списка с галочкой"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg></button>
               <button class="tb-btn" id="notePhotoBtn" type="button" aria-label="Прикрепить фото"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 8"/></svg></button>
+              <button class="tb-btn" id="notePlaceBtn" type="button" aria-label="Добавить место" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg></button>
               <button class="tb-btn" id="noteLinkBtn" type="button" aria-label="Вставить ссылку из буфера"><svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></button>
             </div>
             <button class="btn-small" id="noteAddBtn">Сохранить</button>
           </div>
+          <div id="notePlaceNew" hidden></div>
           <div class="note-photos" id="notePhotosNew"></div>
           <input type="file" id="noteFile" accept="image/*" multiple hidden>
         </div>
@@ -2008,6 +2068,15 @@ applyTheme();
           <input class="field field-time" id="newEndTime" type="time" aria-label="Время окончания (необязательно)">
         </div>
         <p class="form-hint repeat-hint">Дата: с · по, время: с · до. «По» и «до» — по желанию</p>
+      </section>
+      <section class="form-section">
+        <h3 class="form-label">Место</h3>
+        <div id="newPlace"></div>
+      </section>
+      <section class="form-section" id="newShareSection">
+        <h3 class="form-label" id="newShareLabel">С кем</h3>
+        <div class="chip-group" id="newShare" role="group" aria-labelledby="newShareLabel"></div>
+        <p class="form-hint repeat-hint" id="newShareHint" hidden></p>
       </section>
       <section class="form-section" id="newRepeatSection">
         <h3 class="form-label" id="newRepeatLabel">Повторять</h3>
@@ -2374,6 +2443,15 @@ applyTheme();
         </div>
         <p class="form-hint repeat-hint">Дата: с · по, время: с · до. «По» и «до» — по желанию</p>
       </section>
+      <section class="form-section">
+        <h3 class="form-label">Место</h3>
+        <div id="editPlace"></div>
+      </section>
+      <section class="form-section" id="editShareSection" hidden>
+        <h3 class="form-label" id="editShareLabel">Совместная задача</h3>
+        <div class="chip-group" id="editShare" role="group" aria-labelledby="editShareLabel"></div>
+        <p class="form-hint repeat-hint" id="editShareHint" hidden></p>
+      </section>
       <section class="form-section" id="editRepeatSection">
         <h3 class="form-label" id="editRepeatLabel">Повторять</h3>
         <div class="chip-group" id="editRepeat" role="group" aria-labelledby="editRepeatLabel"></div>
@@ -2405,7 +2483,7 @@ applyTheme();
       </section>
       <button class="btn-danger" id="editDelete" type="button">
         <svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/></svg>
-        Удалить задачу
+        <span id="editDeleteLabel">Удалить задачу</span>
       </button>
     </div>
   </div>
@@ -2646,6 +2724,9 @@ let calSelectedDate = null; // 'YYYY-MM-DD' | null
 let allNotes = [];
 let editingNoteId = null;
 let noteDraft = null;          // текст открытой правки: переживает перерисовку после загрузки фото
+let notePlaceEditField = null; // поле «Место» в открытой правке заметки
+let noteEditPlace = undefined; // место открытой правки до сохранения (переживает перерисовку)
+let notePlaceNewField = null;  // поле «Место» новой заметки
 let notePhotoTarget = null;    // id заметки, к которой добавляется фото (null — новая заметка)
 let newNotePhotos = [];        // фото новой заметки до сохранения: { type, data, preview }
 let allTasks = [];
@@ -3182,6 +3263,12 @@ function taskRowEl(task, mode) {
     time.textContent = timeRange(task);
   }
   const rest = [task.category];
+  if (task.shared && task.shared.with.length) {   // категория «С Julie» и так говорит, с кем — значок вместо повтора
+    if (task.shared.with.some(n => task.category === `С ${n}`)) rest[0] = `👥 ${task.category}`;
+    else rest.push(`👥 с ${task.shared.with.join(', ')}`);
+  }
+  else if (task.shared && task.shared.pending.length) rest.push(`⏳ ждёт ${task.shared.pending.join(', ')}`);
+  if (task.location) rest.push(`📍 ${placeShort(task.location)}`);
   if (steps.length) rest.push(stepsText(steps.filter(s => s.is_done).length, steps.length));
   if (task.comments_count) rest.push(`💬 ${task.comments_count}`);
   if (task.files_count) rest.push(`📎 ${task.files_count}`);
@@ -3795,8 +3882,14 @@ function noteCardEl(note) {
     tools.className = 'note-tools';
     tools.innerHTML = document.querySelector('#noteListBtn').outerHTML.replace('id="noteListBtn"', '')
       + document.querySelector('#notePhotoBtn').outerHTML.replace('id="notePhotoBtn"', '')
+      + document.querySelector('#notePlaceBtn').outerHTML.replace('id="notePlaceBtn"', '')
       + document.querySelector('#noteLinkBtn').outerHTML.replace('id="noteLinkBtn"', '');
-    const [listBtn, photoBtn, linkBtn] = tools.querySelectorAll('button');
+    const [listBtn, photoBtn, placeBtn, linkBtn] = tools.querySelectorAll('button');
+    const placeBox = document.createElement('div');
+    const placeVal = noteEditPlace !== undefined ? noteEditPlace : note.location;
+    placeBox.hidden = !placeVal;
+    notePlaceEditField = placeField(placeBox, placeVal, 'Место заметки');
+    placeBtn.onclick = () => { placeBox.hidden = !placeBox.hidden; if (!placeBox.hidden) placeBox.querySelector('input').focus(); };
     listBtn.onclick = () => toggleNoteListLine(textarea);
     linkBtn.onclick = () => insertNoteLink(textarea);
     photoBtn.onclick = () => { notePhotoTarget = note.id; document.getElementById('noteFile').click(); };
@@ -3817,7 +3910,7 @@ function noteCardEl(note) {
     remove.textContent = 'Удалить';
     remove.onclick = () => { editingNoteId = null; deleteNote(note.id); };
     actions.append(save, cancel, remove);
-    el.append(textarea, tools, photos, actions);
+    el.append(textarea, tools, placeBox, photos, actions);
     return el;
   }
 
@@ -3836,17 +3929,32 @@ function noteCardEl(note) {
   const meta = document.createElement('div');
   meta.className = 'note-meta';
   meta.textContent = fmtNoteDate(note.updated_at || note.created_at);
-  view.append(sr, content, notePhotosEl(note, false), meta);
+  view.append(sr, content, notePhotosEl(note, false));
+  if (note.location) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'place-chip note-place';
+    chip.dataset.focusKey = 'note-place-' + note.id;
+    chip.setAttribute('aria-label', `Открыть в Google Maps: ${note.location}`);
+    chip.innerHTML = PIN_ICON;
+    const t = document.createElement('span');
+    t.textContent = placeShort(note.location);
+    chip.appendChild(t);
+    chip.onclick = () => openExternal(mapsUrl(note.location));
+    view.appendChild(chip);
+  }
+  view.append(meta);
   const startEdit = () => {
     editingNoteId = note.id;
     noteDraft = null;
+    noteEditPlace = undefined;
     notePreview = null;
     renderNotes();
     const area = document.querySelector('#notesList .note-edit-textarea');
     if (area) { area.focus(); area.setSelectionRange(area.value.length, area.value.length); }
   };
   view.onclick = (e) => {
-    if (e.target.closest('a, .note-check, .note-photo')) return; // ссылка, галочка и фото — свои действия
+    if (e.target.closest('a, .note-check, .note-photo, .note-place')) return; // ссылка, галочка, фото и место — свои действия
     if (Date.now() >= suppressRowClickUntil) startEdit();
   };
   view.onkeydown = (e) => {
@@ -3954,6 +4062,7 @@ async function addPickedNoteTasks() {
 function cancelNoteEdit(id) {
   editingNoteId = null;
   noteDraft = null;
+  noteEditPlace = undefined;
   renderNotes();
   const card = document.querySelector(`[data-focus-key="note-${id}"]`);
   if (card) card.focus({ preventScroll: true });
@@ -3974,24 +4083,25 @@ function renderNotes() {
       const card = noteCardEl(n);
       const plain = editingNoteId !== n.id && !(notePreview && notePreview.noteId === n.id);
       container.appendChild(plain ? swipeWrapEl(card, 'note-' + n.id, {
-        edit: () => { editingNoteId = n.id; noteDraft = null; notePreview = null; renderNotes(); },
+        edit: () => { editingNoteId = n.id; noteDraft = null; noteEditPlace = undefined; notePreview = null; renderNotes(); },
         del: () => deleteNote(n.id), noun: 'заметку' }) : card);
     });
   }
 }
 
 async function saveNoteEdit(id, content) {
-  const trimmed = content.trim();
+  const trimmed = cleanNoteText(content);
   if (!trimmed) { toast('Заметка не может быть пустой'); return; }
   try {
     const res = await api(`/notes/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: trimmed }),
+      body: JSON.stringify({ content: trimmed, location: notePlaceEditField ? notePlaceEditField.value : null }),
     });
     if (!res.ok) throw new Error('bad status');
     editingNoteId = null;
     noteDraft = null;
+    noteEditPlace = undefined;
     toast('Сохранено');
     await loadNotes();
     const card = document.querySelector(`[data-focus-key="note-${id}"]`);
@@ -4037,19 +4147,23 @@ function undoDeleteNote(id) {
 async function submitNote() {
   const input = document.getElementById('noteInput');
   const btn = document.getElementById('noteAddBtn');
-  const content = input.value.trim() || (newNotePhotos.length ? 'Фото' : '');
+  const content = cleanNoteText(input.value) || (newNotePhotos.length ? 'Фото' : '');
   if (!content) return;
 
   btn.disabled = true;
   try {
+    const place = notePlaceNewField && !document.getElementById('notePlaceNew').hidden ? notePlaceNewField.value : null;
     const res = await api(`/notes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify(place ? { content, location: place } : { content }),
     });
     if (!res.ok) throw new Error('bad status');
     const created = await res.json();
     input.value = '';
+    document.getElementById('notePlaceNew').hidden = true;
+    document.getElementById('notePlaceBtn').setAttribute('aria-expanded', 'false');
+    notePlaceNewField = null;
     const photos = newNotePhotos;
     newNotePhotos = [];
     renderNewNotePhotos();
@@ -4073,6 +4187,13 @@ document.getElementById('noteInput').addEventListener('keydown', (e) => {
 });
 document.getElementById('noteListBtn').onclick = () => toggleNoteListLine(document.getElementById('noteInput'));
 document.getElementById('noteLinkBtn').onclick = () => insertNoteLink(document.getElementById('noteInput'));
+document.getElementById('notePlaceBtn').onclick = () => {
+  const box = document.getElementById('notePlaceNew');
+  if (!notePlaceNewField) notePlaceNewField = placeField(box, '', 'Место новой заметки');
+  box.hidden = !box.hidden;
+  document.getElementById('notePlaceBtn').setAttribute('aria-expanded', String(!box.hidden));
+  if (!box.hidden) box.querySelector('input').focus();
+};
 document.getElementById('notePhotoBtn').onclick = () => { notePhotoTarget = null; document.getElementById('noteFile').click(); };
 document.getElementById('noteFile').onchange = async (e) => {
   const files = [...e.target.files].filter(f => f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name));
@@ -4087,12 +4208,25 @@ document.getElementById('noteFile').onchange = async (e) => {
       newNotePhotos.push(ph);
     }
   }
-  if (target) await loadNotes(); else renderNewNotePhotos();
+  if (target) { if (notePlaceEditField) noteEditPlace = notePlaceEditField.value; await loadNotes(); } else renderNewNotePhotos();
 };
 
 // ---------- Заметки: список с галочками, ссылки, фото ----------
-// Пункт списка — строка «- [ ] текст» / «- [x] текст» прямо в тексте заметки: галочка = правка текста (PATCH).
-const NOTE_CHECK_RE = /^(\s*)[-*•]\s*\[( |x|X|х|Х)\]\s?(.*)$/;
+// Пункт списка — строка «☐ текст» / «☑ текст» прямо в тексте заметки (старые «- [ ]» / «- [x]» тоже понимаем):
+// галочка = правка текста (PATCH). Пустые пункты не показываются и не сохраняются.
+const NOTE_CHECK_RE = /^(\s*)(?:[-*•]\s*\[( |x|X|х|Х)\]|([☐☑]))\s?(.*)$/;
+const NOTE_BOX = '☐ ', NOTE_BOX_DONE = '☑ ';
+function noteItem(line) {   // { indent, done, text } или null
+  const m = line.match(NOTE_CHECK_RE);
+  if (!m) return null;
+  return { indent: m[1], done: m[3] ? m[3] === '☑' : m[2] !== ' ', text: m[4] };
+}
+// Перед сохранением: пустые пункты убираем, старые скобки — в значки.
+function cleanNoteText(text) {
+  return text.split('\n').filter(line => { const it = noteItem(line); return !it || it.text.trim(); })
+    .map(line => { const it = noteItem(line); return it ? it.indent + (it.done ? NOTE_BOX_DONE : NOTE_BOX) + it.text : line; })
+    .join('\n').trim();
+}
 let noteSaveChain = Promise.resolve();
 
 function fillNoteBody(box, note) {
@@ -4103,10 +4237,11 @@ function fillNoteBody(box, note) {
     if (text.trim()) box.appendChild(linkifiedEl(text));
   };
   note.content.split('\n').forEach((line, i) => {
-    const m = line.match(NOTE_CHECK_RE);
-    if (!m) { buf.push(line); return; }
+    const it = noteItem(line);
+    if (!it) { buf.push(line); return; }
     flush();
-    const done = m[2] !== ' ';
+    if (!it.text.trim()) return;  // пустой пункт не показываем
+    const done = it.done;
     const row = document.createElement('button');
     row.type = 'button';
     row.className = 'note-check';
@@ -4114,7 +4249,7 @@ function fillNoteBody(box, note) {
     row.setAttribute('aria-checked', String(done));
     row.dataset.focusKey = `note-check-${note.id}-${i}`;
     row.innerHTML = '<span class="step-circle"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="note-check-text"></span>';
-    row.querySelector('.note-check-text').append(...linkifiedEl(m[3]).childNodes);
+    row.querySelector('.note-check-text').append(...linkifiedEl(it.text).childNodes);
     row.onclick = (e) => { if (e.target.closest('a')) return; toggleNoteCheck(note.id, i); };
     box.appendChild(row);
   });
@@ -4125,9 +4260,9 @@ function toggleNoteCheck(noteId, lineIndex) {
   const note = allNotes.find(n => n.id === noteId);
   if (!note) return;
   const lines = note.content.split('\n');
-  const m = (lines[lineIndex] || '').match(NOTE_CHECK_RE);
-  if (!m) return;
-  lines[lineIndex] = `${m[1]}- [${m[2] === ' ' ? 'x' : ' '}] ${m[3]}`;
+  const it = noteItem(lines[lineIndex] || '');
+  if (!it) return;
+  lines[lineIndex] = it.indent + (it.done ? NOTE_BOX : NOTE_BOX_DONE) + it.text;
   note.content = lines.join('\n');
   renderNotes();
   const again = document.querySelector(`[data-focus-key="note-check-${noteId}-${lineIndex}"]`);
@@ -4226,8 +4361,8 @@ function toggleNoteListLine(area) {
   let end = v.indexOf('\n', pos);
   if (end < 0) end = v.length;
   const line = v.slice(start, end);
-  const m = line.match(NOTE_CHECK_RE);
-  const next = m ? m[1] + m[3] : '- [ ] ' + line.replace(/^\s*[-*•]\s+/, '');
+  const it = noteItem(line);
+  const next = it ? it.indent + it.text : NOTE_BOX + line.replace(/^\s*[-*•]\s+/, '');
   setAreaValue(area, v.slice(0, start) + next + v.slice(end), start + next.length);
 }
 
@@ -4239,11 +4374,11 @@ function continueNoteList(e) {
   const pos = area.selectionStart;
   if (pos !== area.selectionEnd) return;
   const start = v.lastIndexOf('\n', pos - 1) + 1;
-  const m = v.slice(start, pos).match(NOTE_CHECK_RE);
-  if (!m) return;
+  const it = noteItem(v.slice(start, pos));
+  if (!it) return;
   e.preventDefault();
-  if (!m[3].trim()) { setAreaValue(area, v.slice(0, start) + v.slice(pos), start); return; }
-  const ins = '\n' + m[1] + '- [ ] ';
+  if (!it.text.trim()) { setAreaValue(area, v.slice(0, start) + v.slice(pos), start); return; }
+  const ins = '\n' + it.indent + NOTE_BOX;
   setAreaValue(area, v.slice(0, pos) + ins + v.slice(pos), pos + ins.length);
 }
 
@@ -4753,6 +4888,7 @@ async function submitManual() {
   const endsAt = endsFromForm('new');
   if (endsAt === undefined) return;
   payload.ends_at = endsAt;
+  if (placeState.new && placeState.new.value) payload.location = placeState.new.value;
   if (repeatState.new.pattern === 'days' && !repeatState.new.days.length) { toast('Выберите хотя бы один день недели'); return; }
   btn.disabled = true;
   btn.textContent = 'Сохраняю…';
@@ -4771,6 +4907,16 @@ async function submitManual() {
     }
     const created = await res.json();
     await postNewTaskComment([created]);
+    if (newShareWith) {
+      const who = (people || []).find(p => p.id === newShareWith);
+      try {
+        await apiJson(`/tasks/${created.id}/share`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ user_id: newShareWith }) });
+        toast(`Задача добавлена. Приглашение отправлено: ${who ? who.name : ''}`);
+      } catch (e) { toast(e.message || 'Задача добавлена, но приглашение не отправилось'); }
+      newShareWith = null;
+      loadTasks();
+    }
+    placeState.new = placeField(document.getElementById('newPlace'), '', 'Место задачи');
     ['newText', 'newDate', 'newEndDate', 'newTime', 'newEndTime', 'composerInput'].forEach(id => { document.getElementById(id).value = ''; });
     repeatState.new = { pattern: null, days: [] };
     renderRepeat('new');
@@ -5521,13 +5667,15 @@ async function loadMoney(more) {
   const jobs = {};
   if (kindTab) {
     const { from, to } = monthBounds(key);
-    // История — траты и доходы вместе в обеих вкладках (решение владельца 11 октября 2026)
-    const params = new URLSearchParams({ from, to, limit: String(MONEY_PAGE), offset: String(more ? moneyTx.length : 0) });
+    // История — траты и доходы вместе в обеих вкладках (решение владельца 11 октября 2026); «Даты» — свой период
+    const range = moneyRange || { from, to };
+    const params = new URLSearchParams({ from: range.from, to: range.to, limit: String(MONEY_PAGE), offset: String(more ? moneyTx.length : 0) });
     if (moneyFilterCat) params.set('category_id', moneyFilterCat);
     jobs.tx = apiJson(`/money/transactions?${params}`);
   }
   if (!more) {
     jobs.summary = apiJson(`/money/summary?month=${key}`);
+    if (moneyRange && kindTab) jobs.range = apiJson(`/money/analytics?from=${moneyRange.from}&to=${moneyRange.to}`);
     if (kindTab) jobs.rec = apiJson(`/money/recurring?kind=${moneyTab}`);
     else jobs.trend = apiJson('/money/trend?months=6');
     if (!moneyCategories.length || moneyDirty) jobs.cats = loadMoneyCategories();
@@ -5545,6 +5693,7 @@ async function loadMoney(more) {
   if (got.summary && got.summary.status === 'fulfilled') moneySummary = got.summary.value;
   if (got.rec && got.rec.status === 'fulfilled') moneyRecurring = got.rec.value;
   if (got.trend && got.trend.status === 'fulfilled') moneyTrendData = got.trend.value;
+  moneyRangeTotals = got.range && got.range.status === 'fulfilled' ? got.range.value : null;
   if (!more) moneyDirty = false;
   const failed = settled.find(r => r.status === 'rejected');
   if (failed && !(failed.reason && failed.reason.status)) toast('Нет связи с сервером, показаны не все данные');
@@ -5580,12 +5729,85 @@ function renderMoney() {
   document.getElementById('moneyTools').hidden = goals || key === currentMonthKey();
   document.getElementById('fabBtn').setAttribute('aria-label',
     goals ? 'Новая цель' : (moneyTab === 'income' ? 'Добавить доход' : 'Добавить трату'));
+  document.getElementById('moneyNet').hidden = goals || !moneyLoaded;
   if (goals) { renderGoals(); return; }
   if (!moneyLoaded) return;
   const summary = moneySummary && moneySummary.month === key ? moneySummary : { currencies: [] };
+  renderMoneyNet(summary, key);
+  renderMoneyRange();
   if (trend) renderTrendView(summary);
   else renderKindView(summary);
 }
+
+// Итог месяца над вкладками: доходы − расходы (в основной валюте, если есть курс; иначе по валютам). Считает сервер.
+function renderMoneyNet(summary, key) {
+  const box = document.getElementById('moneyNet');
+  box.innerHTML = '';
+  const label = document.createElement('div');
+  label.className = 'money-net-label';
+  label.textContent = `${MONTH_NAMES_RU[Number(key.slice(5, 7)) - 1]} · остаток`;
+  box.appendChild(label);
+  const lines = summary.main
+    ? [{ ...summary.main, approx: summary.main.parts && ['income', 'expense'].some(k => (summary.main.parts[k] || []).some(p => p.currency !== summary.main.currency)) }]
+    : summary.currencies.map(c => ({ ...c, approx: false }));
+  if (!lines.length) lines.push({ currency: (moneyMe && moneyMe.default_currency) || 'EUR', income: '0', expense: '0', balance: '0' });
+  lines.forEach(l => {
+    const value = document.createElement('b');
+    const neg = String(l.balance).startsWith('-');
+    value.className = 'money-net-value' + (neg ? ' neg' : '');
+    value.textContent = (l.approx ? '≈ ' : '') + moneyFmt(String(l.balance).replace('-', ''), l.currency, neg ? '−' : '+');
+    const parts = document.createElement('div');
+    parts.className = 'money-net-parts';
+    parts.textContent = `${moneyFmt(l.income, l.currency, '+')} доходы · ${moneyFmt(l.expense, l.currency, '−')} расходы`;
+    box.append(value, parts);
+  });
+}
+
+// «Даты» в операциях: свой период вместо месяца (список и суммы за период — с сервера).
+let moneyRange = null;        // { from, to } или null — месяц
+let moneyRangeTotals = null;  // ответ /money/analytics за период
+function rangeText(r) {
+  const a = ymd(r.from), b = ymd(r.to);
+  if (r.from === r.to) return `${a.d} ${MONTH_SHORT[a.m - 1]}`;
+  return a.m === b.m && a.y === b.y ? `${a.d}–${b.d} ${MONTH_SHORT[b.m - 1]}` : `${a.d} ${MONTH_SHORT[a.m - 1]} – ${b.d} ${MONTH_SHORT[b.m - 1]}`;
+}
+function renderMoneyRange() {
+  const btn = document.getElementById('moneyRangeBtn');
+  btn.setAttribute('aria-pressed', String(!!moneyRange));
+  document.getElementById('moneyRangeLabel').textContent = moneyRange ? rangeText(moneyRange) : 'Даты';
+  document.getElementById('moneyRangeClear').hidden = !moneyRange;
+  const totals = document.getElementById('moneyRangeTotals');
+  const t = moneyRange && moneyRangeTotals;
+  totals.hidden = !t;
+  if (t) totals.textContent = `За период: ${t.expense_approx ? '≈ ' : ''}${moneyFmt(t.expense, t.currency, '−')} · ${t.income_approx ? '≈ ' : ''}${moneyFmt(t.income, t.currency, '+')}`;
+}
+document.getElementById('moneyRangeBtn').onclick = () => {
+  const box = document.getElementById('moneyRangeBox');
+  box.hidden = !box.hidden;
+  document.getElementById('moneyRangeBtn').setAttribute('aria-expanded', String(!box.hidden));
+  if (!box.hidden) {
+    const key = moneyMonth || currentMonthKey();
+    const r = moneyRange || { from: monthBounds(key).from, to: key === currentMonthKey() ? todayKey() : monthBounds(key).to };
+    document.getElementById('moneyRangeFrom').value = r.from;
+    document.getElementById('moneyRangeTo').value = r.to;
+    document.getElementById('moneyRangeFrom').focus();
+  }
+};
+document.getElementById('moneyRangeCancel').onclick = () => {
+  document.getElementById('moneyRangeBox').hidden = true;
+  document.getElementById('moneyRangeBtn').setAttribute('aria-expanded', 'false');
+};
+document.getElementById('moneyRangeApply').onclick = () => {
+  const from = document.getElementById('moneyRangeFrom').value, to = document.getElementById('moneyRangeTo').value;
+  if (!from || !to) { toast('Укажите обе даты'); return; }
+  if (to < from) { toast('Дата «по» должна быть не раньше «с»'); return; }
+  moneyRange = { from, to };
+  document.getElementById('moneyRangeBox').hidden = true;
+  document.getElementById('moneyRangeBtn').setAttribute('aria-expanded', 'false');
+  moneyTx = [];
+  loadMoney();
+};
+document.getElementById('moneyRangeClear').onclick = () => { moneyRange = null; moneyRangeTotals = null; moneyTx = []; loadMoney(); };
 
 // ---------- Цели накопления (GET/POST/PATCH/DELETE /money/goals, /money/goals/{id}/moves) ----------
 // Отложенное — не расход. Суммы приходят строками, показ — moneyFmt; «Отложено всего» считает сервер.
@@ -5985,13 +6207,18 @@ function renderRecurringBlock() {
       : 'Аренда, подписки — включите «Повторять» при добавлении траты, и операции будут появляться сами';
     list.appendChild(empty);
   }
-  moneyRecurring.forEach(rec => {
+  // Галочка — оплачено (POST /money/recurring/{id}/pay: операция сегодня, срок — следующий); свайп — изменить / удалить.
+  moneyRecurring.filter(r => !pendingRecDeletions[r.id]).forEach(rec => {
     const cat = moneyCat(rec.category_id) || { name: '?' };
     const row = document.createElement('div');
     row.className = 'rec-row' + (rec.active ? '' : ' inactive');
-    const dot = document.createElement('span');
-    dot.className = 'cat-dot';
-    if (cat.color) dot.style.setProperty('--chip-color', cat.color);
+    const check = document.createElement('button');
+    check.type = 'button';
+    check.className = 'row-check';
+    check.dataset.focusKey = 'rec-check-' + rec.id;
+    check.setAttribute('aria-label', `Оплачено: ${rec.note || cat.name}`);
+    check.innerHTML = '<span class="check-circle"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>';
+    check.onclick = () => payRecurring(rec, row, check);
     const body = document.createElement('div');
     body.className = 'money-row-body';
     body.tabIndex = 0;
@@ -6003,31 +6230,55 @@ function renderRecurringBlock() {
     const meta = document.createElement('div');
     meta.className = 'money-row-meta';
     const how = freqText(rec.frequency, rec.next_run, rec.day_of_month);
-    meta.textContent = rec.active ? `${how[0].toUpperCase()}${how.slice(1)} · следующий ${dayLabel(rec.next_run)}${rec.as_task ? ' · по галочке' : ''}` : 'На паузе';
+    meta.textContent = `${how[0].toUpperCase()}${how.slice(1)} · следующий ${dayLabel(rec.next_run)}${rec.as_task ? ' · по галочке' : ''}${rec.active ? '' : ' · на паузе'}`;
     body.append(title, meta);
-    body.onclick = () => openMoneyForm(rec, 'rec');
-    body.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openMoneyForm(rec, 'rec'); } };
-    const sw = document.createElement('button');
-    sw.type = 'button';
-    sw.className = 'switch';
-    sw.setAttribute('role', 'switch');
-    sw.setAttribute('aria-checked', String(rec.active));
-    sw.setAttribute('aria-label', `Платёж активен: ${rec.note || cat.name}`);
-    sw.dataset.focusKey = 'rec-sw-' + rec.id;
-    sw.onclick = async () => {
-      try {
-        await apiJson(`/money/recurring/${rec.id}`, { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify({ active: !rec.active }) });
-        toast(rec.active ? 'Платёж на паузе' : 'Платёж снова активен');
-      } catch (e) { toast(e.message || 'Не удалось сохранить'); }
-      loadMoney();
-    };
-    row.append(dot, body, sw);
-    list.appendChild(row);
+    const open = () => { if (Date.now() >= suppressRowClickUntil) openMoneyForm(rec, 'rec'); };
+    body.onclick = open;
+    body.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } };
+    const dot = document.createElement('span');
+    dot.className = 'cat-dot';
+    if (cat.color) dot.style.setProperty('--chip-color', cat.color);
+    row.append(check, dot, body);
+    list.appendChild(swipeWrapEl(row, 'rec-' + rec.id, {
+      edit: () => openMoneyForm(rec, 'rec'), del: () => deleteRecurring(rec), noun: 'платёж' }));
   });
   if (focusKey) {
     const again = list.querySelector(`[data-focus-key="${focusKey}"]`);
     if (again) again.focus({ preventScroll: true });
   }
+}
+
+let pendingRecDeletions = {};  // id -> timeoutId: удаление платежа с отменой 5 с
+
+async function payRecurring(rec, row, check) {
+  if (check.disabled) return;
+  check.disabled = true;
+  row.classList.add('done');
+  try {
+    const next = await apiJson(`/money/recurring/${rec.id}/pay`, { method: 'POST' });
+    toast(`Записано: ${rec.note || (moneyCat(rec.category_id) || {}).name || 'платёж'} · ${moneyFmt(rec.amount, rec.currency)}. Следующий — ${dayLabel(next.next_run)}`);
+    moneyDirty = true;
+    if (rec.as_task) loadTasks();
+  } catch (e) {
+    toast(e.message || 'Не удалось записать оплату');
+  }
+  loadMoney();
+}
+
+function deleteRecurring(rec) {
+  const timeoutId = setTimeout(async () => {
+    delete pendingRecDeletions[rec.id];
+    try { await apiJson(`/money/recurring/${rec.id}`, { method: 'DELETE' }); if (rec.as_task) loadTasks(); }
+    catch (e) { toast(e.message || 'Не удалось удалить платёж'); }
+    loadMoney();
+  }, 5000);
+  pendingRecDeletions[rec.id] = timeoutId;
+  renderRecurringBlock();
+  toast('Повтор остановлен. Созданные операции останутся', 'Отменить', () => {
+    clearTimeout(pendingRecDeletions[rec.id]);
+    delete pendingRecDeletions[rec.id];
+    renderRecurringBlock();
+  });
 }
 
 function moneyRowEl(tx) {
@@ -7006,6 +7257,8 @@ function openNewTask() {
   newTaskDefaultDay = pickedTaskDay();
   renderNewTaskDay();
   if (newTaskDefaultDay) document.getElementById('newDate').value = newTaskDefaultDay;  // «Вручную» — сразу эта дата
+  if (!placeState.new) placeState.new = placeField(document.getElementById('newPlace'), '', 'Место задачи');
+  renderNewShare();
   setNewTaskMode(newTaskMode, false);
   newTaskSheet.hidden = false;
   newTaskSheet.scrollTop = 0;
@@ -7178,6 +7431,152 @@ let editingId = null;
 let editChoice = { category: null, priority: null };
 let editReturnFocus = null;
 let editReturnKey = null; // если список перерисовался, ищем ту же кнопку по data-focus-key
+
+// ---------- Место (migration 014): адрес текстом, подсказки GET /places (OpenStreetMap), карта Google без ключа ----------
+const PIN_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>';
+function mapsUrl(place) { return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`; }
+function placeShort(place) { return String(place || '').split(',')[0].trim(); }
+// Строит поле в box; возвращает { value } (текущий адрес или null).
+function placeField(box, initial, label) {
+  box.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'place-input';
+  const input = document.createElement('input');
+  input.className = 'field';
+  input.type = 'text';
+  input.maxLength = 200;
+  input.autocomplete = 'off';
+  input.placeholder = 'Адрес или название места';
+  input.setAttribute('aria-label', label || 'Место');
+  input.value = initial || '';
+  wrap.innerHTML = PIN_ICON;
+  wrap.appendChild(input);
+  const list = document.createElement('div');
+  list.className = 'place-list';
+  list.setAttribute('role', 'listbox');
+  list.hidden = true;
+  const preview = document.createElement('div');
+  preview.className = 'place-preview';
+  const map = document.createElement('iframe');
+  map.className = 'place-map';
+  map.title = 'Карта места';
+  map.loading = 'lazy';
+  map.referrerPolicy = 'no-referrer-when-downgrade';
+  const actions = document.createElement('div');
+  actions.className = 'place-actions';
+  const open = document.createElement('button');
+  open.type = 'button';
+  open.className = 'place-chip';
+  open.innerHTML = '<span>Открыть в Google Maps</span>';
+  open.onclick = () => { if (input.value.trim()) openExternal(mapsUrl(input.value.trim())); };
+  const clear = document.createElement('button');
+  clear.type = 'button';
+  clear.className = 'place-chip';
+  clear.innerHTML = '<span>Убрать место</span>';
+  clear.onclick = () => { input.value = ''; list.hidden = true; showPreview(); input.focus(); };
+  actions.append(open, clear);
+  preview.append(map, actions);
+  box.append(wrap, list, preview);
+  let timer = null, seq = 0, shown = null;
+  function showPreview() {
+    const v = input.value.trim();
+    preview.hidden = !v;
+    if (v && v !== shown) { map.src = `https://maps.google.com/maps?q=${encodeURIComponent(v)}&z=15&output=embed`; shown = v; }
+  }
+  input.oninput = () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (q.length < 3) { list.hidden = true; return; }
+    timer = setTimeout(async () => {
+      const mine = ++seq;
+      let items = [];
+      try { items = await apiJson(`/places?q=${encodeURIComponent(q)}`); } catch (e) { items = []; }
+      if (mine !== seq) return;
+      list.innerHTML = '';
+      items.forEach((it, i) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'place-item';
+        b.setAttribute('role', 'option');
+        b.dataset.focusKey = 'place-' + i;
+        const n = document.createElement('b');
+        n.textContent = it.name;
+        const a = document.createElement('small');
+        a.textContent = it.address;
+        b.append(n, a);
+        b.onmousedown = (e) => e.preventDefault();  // не терять фокус поля до выбора
+        b.onclick = () => { input.value = it.address || it.name; list.hidden = true; showPreview(); };
+        list.appendChild(b);
+      });
+      list.hidden = !items.length;
+    }, 600);
+  };
+  input.onblur = () => setTimeout(() => { list.hidden = true; showPreview(); }, 200);
+  input.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); list.hidden = true; showPreview(); } };
+  showPreview();
+  return { get value() { return input.value.trim() || null; } };
+}
+const placeState = { new: null, edit: null };
+
+// ---------- Совместные задачи (migration 014): «С кем» в новой задаче, приглашение из «Изменить» ----------
+let people = null;          // GET /people: [{id, name}]
+let newShareWith = null;    // id человека или null — только я
+async function loadPeople() {
+  if (people) return people;
+  try { people = await apiJson('/people'); } catch (e) { people = []; }
+  return people;
+}
+async function renderNewShare() {
+  const list = await loadPeople();
+  const section = document.getElementById('newShareSection');
+  section.hidden = !list.length;
+  const box = document.getElementById('newShare');
+  box.innerHTML = '';
+  [[null, 'Только я'], ...list.map(p => [p.id, `С ${p.name}`])].forEach(([id, label]) => {
+    const [btn, text] = choiceChipEl(label, newShareWith === id, 'solid', () => {
+      newShareWith = id;
+      if (id) { repeatState.new = { pattern: null, days: [] }; renderRepeat('new'); }
+      renderNewShare();
+    });
+    btn.appendChild(text);
+    box.appendChild(btn);
+  });
+  const who = list.find(p => p.id === newShareWith);
+  const hint = document.getElementById('newShareHint');
+  hint.hidden = !who;
+  hint.textContent = who ? `${who.name} получит приглашение в боте. Задача будет в категории «С ${who.name}», галочка закроет её у обоих.` : '';
+  document.getElementById('newRepeatSection').hidden = !!who;  // совместная задача пока без повтора
+}
+async function renderEditShare(task) {
+  const section = document.getElementById('editShareSection');
+  const list = await loadPeople();
+  const shareable = !task.gcal_imported && !task.money_recurring_id && task.status !== 'Done';
+  section.hidden = !list.length || !(shareable || task.shared);
+  const box = document.getElementById('editShare');
+  const hint = document.getElementById('editShareHint');
+  box.innerHTML = '';
+  const sh = task.shared || { with: [], pending: [] };
+  const lines = [];
+  if (sh.with.length) lines.push(`👥 Общая с ${sh.with.join(', ')}: название, срок, место и заметка меняются у всех, шаги и комментарии общие. Удалить — значит выйти из задачи.`);
+  if (sh.pending.length) lines.push(`⏳ Ждём ответа: ${sh.pending.join(', ')}`);
+  list.filter(p => !sh.with.includes(p.name) && !sh.pending.includes(p.name)).forEach(p => {
+    if (!shareable) return;
+    const [btn, text] = choiceChipEl(`Поделиться с ${p.name}`, false, 'solid', async () => {
+      if (task.is_recurring) { toast('Повторяющейся задачей пока нельзя поделиться — снимите повтор'); return; }
+      try {
+        await apiJson(`/tasks/${task.id}/share`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ user_id: p.id }) });
+        toast(`Приглашение отправлено: ${p.name}`);
+        await loadTasks();
+        const fresh = findTask(task.id);
+        if (fresh && editingId === task.id) renderEditShare(fresh);
+      } catch (e) { toast(e.message || 'Не удалось отправить приглашение'); }
+    });
+    btn.appendChild(text);
+    box.appendChild(btn);
+  });
+  hint.hidden = !lines.length;
+  hint.textContent = lines.join(' ');
+}
 
 function choiceChipEl(label, pressed, extraClass, onPick) {
   const btn = document.createElement('button');
@@ -7366,7 +7765,10 @@ function openEdit(id) {
   loadEditComments(id);
   document.getElementById('editStepInput').value = '';
   repeatState.edit = repeatFromTask(task);
-  document.getElementById('editRepeatSection').hidden = !!task.gcal_imported;
+  document.getElementById('editRepeatSection').hidden = !!task.gcal_imported || !!task.shared_id;
+  placeState.edit = placeField(document.getElementById('editPlace'), task.location, 'Место задачи');
+  document.getElementById('editDeleteLabel').textContent = task.shared_id ? 'Выйти из задачи' : 'Удалить задачу';
+  renderEditShare(task);
   renderRepeat('edit');
   renderEditChips();
   renderEditSteps();
@@ -7544,8 +7946,10 @@ function commentEl(c) {
   const meta = document.createElement('div');
   meta.className = 'comment-meta';
   const when = c.created_at ? new Date(c.created_at) : null;  // настоящий момент времени (timestamptz), не дедлайн
-  meta.textContent = when ? `${when.getDate()} ${MONTH_GENITIVE[when.getMonth()]}, ${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}` : '';
+  meta.textContent = (c.mine === false && c.author ? `${c.author} · ` : '')
+    + (when ? `${when.getDate()} ${MONTH_GENITIVE[when.getMonth()]}, ${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}` : '');
   body.appendChild(meta);
+  if (c.mine === false) { item.appendChild(body); return item; }  // чужой комментарий в совместной задаче удаляет только автор
   const del = iconButton('M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12', 'Удалить комментарий', async () => {
     try { await apiJson(`/comments/${c.id}`, { method: 'DELETE' }); toast('Комментарий удалён'); }
     catch (e) { toast(e.message || 'Не удалось удалить'); }
@@ -7619,10 +8023,11 @@ async function submitEdit() {
   const endsAt = endsFromForm('edit');
   if (endsAt === undefined) return;
   fields.ends = endsAt;
+  fields.extra = { location: placeState.edit ? placeState.edit.value : null };
   const task = findTask(editingId);
   if (task && !task.gcal_imported) {
     if (repeatState.edit.pattern === 'days' && !repeatState.edit.days.length) { toast('Выберите хотя бы один день недели'); return; }
-    fields.extra = repeatPayload('edit');
+    fields.extra = { ...fields.extra, ...repeatPayload('edit') };
   }
   btn.disabled = true;
   const ok = await saveEdit(editingId, fields);

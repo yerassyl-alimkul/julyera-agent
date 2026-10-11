@@ -50,6 +50,8 @@ import goals_service
 import calendar_sync
 import categories_service
 import comments_service
+import places_service
+import shared_service
 import digest_service
 import money_service
 import notes_service
@@ -78,6 +80,7 @@ from models import (
     MoneyCategoryUpdate,
     MoneyParseRequest,
     NotePhotoIn,
+    ShareIn,
     RecurringCreate,
     RecurringUpdate,
     TransactionCreate,
@@ -299,11 +302,34 @@ def list_tasks(
         priority=priority.value if priority else None,
         deadline_before=deadline_before,
     )
-    counts = comments_service.counts(user["id"])
+    counts = comments_service.counts(user["id"], tasks)
+    shared = shared_service.info(user["id"], tasks)
     for t in tasks:
         c = counts.get(t["id"], {})
         t["comments_count"], t["files_count"] = c.get("comments", 0), c.get("files", 0)
+        t["shared"] = shared.get(t["id"])
     return tasks
+
+
+@app.get("/people")
+def list_people(user: dict = Depends(current_user)):
+    """С кем можно поделиться задачей (остальные допущенные пользователи)."""
+    return shared_service.partners(user["id"])
+
+
+@app.post("/tasks/{task_id}/share")
+def share_task(task_id: UUID, payload: ShareIn, user: dict = Depends(current_user)):
+    """Пригласить в свою задачу: второму приходит приглашение в бот, задача появится у него после «Принять»."""
+    return shared_service.invite(str(task_id), user["id"], str(payload.user_id))
+
+
+@app.get("/places")
+def search_places(q: str = Query("", max_length=120), user: dict = Depends(current_user)):
+    """Подсказки адреса для поля «Место» (OpenStreetMap). 502 — сервис поиска не ответил."""
+    try:
+        return places_service.search(q)
+    except Exception:
+        raise HTTPException(status_code=502, detail="Поиск адреса сейчас недоступен, впишите адрес вручную")
 
 
 @app.get("/tasks/{task_id}", response_model=Task)
@@ -593,6 +619,15 @@ def create_money_recurring(payload: RecurringCreate, user: dict = Depends(curren
 @app.patch("/money/recurring/{rec_id}")
 def update_money_recurring(rec_id: UUID, payload: RecurringUpdate, user: dict = Depends(current_user)):
     rec = money_service.update_recurring(str(rec_id), user["id"], payload.model_dump(exclude_unset=True))
+    if not rec:
+        raise HTTPException(status_code=404, detail="Платёж не найден")
+    return rec
+
+
+@app.post("/money/recurring/{rec_id}/pay")
+def pay_money_recurring(rec_id: UUID, user: dict = Depends(current_user)):
+    """Галочка у повторяющегося платежа: оплата записана сегодня, срок — следующий."""
+    rec = money_service.pay_now(str(rec_id), user["id"])
     if not rec:
         raise HTTPException(status_code=404, detail="Платёж не найден")
     return rec

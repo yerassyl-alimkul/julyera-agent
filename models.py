@@ -41,6 +41,7 @@ class TaskBase(BaseModel):
     priority: Priority = Priority.mid
     status: Status = Status.todo
     note: Optional[str] = None
+    location: Optional[str] = Field(None, max_length=200)  # место (адрес текстом), migration 014
     is_recurring: bool = False
     recurrence_pattern: Optional[RecurrencePattern] = None
     recurrence_days: Optional[List[int]] = None
@@ -74,6 +75,7 @@ class TaskUpdate(BaseModel):
     priority: Optional[Priority] = None
     status: Optional[Status] = None
     note: Optional[str] = None
+    location: Optional[str] = Field(None, max_length=200)
     is_recurring: Optional[bool] = None
     recurrence_pattern: Optional[RecurrencePattern] = None
     recurrence_days: Optional[List[int]] = None
@@ -89,6 +91,8 @@ class Task(TaskBase):
     comments_count: int = 0  # комментариев к задаче (значок 💬 в списке)
     files_count: int = 0     # из них с фото или PDF (значок 📎)
     money_recurring_id: Optional[UUID] = None  # задача повторяющегося платежа «по галочке» (migration 013)
+    shared_id: Optional[UUID] = None           # совместная задача: id главной копии (migration 014)
+    shared: Optional[dict] = None              # {"with": [имена], "pending": [имена]} — с кем общая, кто ещё не ответил
 
     class Config:
         from_attributes = True
@@ -99,6 +103,11 @@ class CommentFile(BaseModel):
     name: Optional[str] = None
     type: str
     data: str
+
+
+class ShareIn(BaseModel):
+    """POST /tasks/{id}/share: с кем поделиться задачей (id из GET /people)."""
+    user_id: UUID
 
 
 class NotePhotoIn(BaseModel):
@@ -130,10 +139,12 @@ class CategoryOrder(BaseModel):
 
 class NoteCreate(BaseModel):
     content: str = Field(..., min_length=1)
+    location: Optional[str] = Field(None, max_length=200)
 
 
 class NoteUpdate(BaseModel):
-    content: str = Field(..., min_length=1)
+    content: Optional[str] = Field(None, min_length=1)
+    location: Optional[str] = Field(None, max_length=200)  # "" или null — убрать место
 
 
 class Note(BaseModel):
@@ -141,6 +152,7 @@ class Note(BaseModel):
     content: str
     created_at: datetime
     updated_at: datetime
+    location: Optional[str] = None
     files: list[dict] = []  # фото заметки: {id, type, url} (url — подписанная ссылка на час)
 
     class Config:

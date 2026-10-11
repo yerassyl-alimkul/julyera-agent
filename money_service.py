@@ -1034,6 +1034,22 @@ def _advance_claim(rec: dict, due_value) -> Optional[dict]:
     return {**rec, "next_run": nxt.isoformat(), "_due": due} if claimed else None
 
 
+def _record_payment(rec: dict, moved: dict, user_id: str) -> dict:
+    """Операция по платежу сегодняшним днём (если сегодня у правила уже есть операция — датой срока)."""
+    row = {"user_id": user_id, "kind": rec["kind"], "amount": str(rec["amount"]), "currency": rec["currency"],
+           "category_id": rec["category_id"], "note": rec.get("note"), "spent_on": today_for(user_id).isoformat(),
+           "source": "recurring", "recurring_id": rec["id"]}
+    try:
+        tx = supabase.table(TX_TABLE).insert(row).execute().data[0]
+    except Exception as exc:
+        if not _is_duplicate(exc):
+            raise
+        tx = supabase.table(TX_TABLE).insert({**row, "spent_on": moved["_due"].isoformat()}).execute().data[0]
+    if rec["kind"] == "expense":
+        check_limit_alerts(user_id, rec["category_id"], tx["spent_on"])
+    return tx
+
+
 def pay_from_task(task: dict, user_id: str) -> Optional[dict]:
     """Галочка на задаче платежа: операция сегодняшним днём, задача на следующий срок. Возвращает операцию."""
     rec = _get_rec_row(task.get("money_recurring_id") or "", user_id)
@@ -1042,21 +1058,36 @@ def pay_from_task(task: dict, user_id: str) -> Optional[dict]:
     moved = _advance_claim(rec, task.get("money_due"))
     if not moved:
         return None
-    row = {"user_id": user_id, "kind": rec["kind"], "amount": str(rec["amount"]), "currency": rec["currency"],
-           "category_id": rec["category_id"], "note": rec.get("note"), "spent_on": today_for(user_id).isoformat(),
-           "source": "recurring", "recurring_id": rec["id"]}
-    try:
-        tx = supabase.table(TX_TABLE).insert(row).execute().data[0]
-    except Exception as exc:
-        if not _is_duplicate(exc):  # сегодня уже оплачен другой срок — операция пишется датой срока
-            raise
-        tx = supabase.table(TX_TABLE).insert({**row, "spent_on": moved["_due"].isoformat()}).execute().data[0]
+    tx = _record_payment(rec, moved, user_id)
     logger.info("Платёж %s оплачен галочкой: операция %s", rec["id"], tx["id"])
-    if rec["kind"] == "expense":
-        check_limit_alerts(user_id, rec["category_id"], tx["spent_on"])
     moved.pop("_due")
     ensure_payment_task(moved)
     return _tx_out(tx)
+
+
+def pay_now(rec_id: str, user_id: str) -> Optional[dict]:
+    """Галочка у платежа в кошельке (любого, решение владельца 11 октября 2026): оплата записана сегодня, срок —
+    следующий. У платежа «по галочке» это то же, что галочка на его задаче. Платёж на паузе — снова в работе."""
+    rec = _get_rec_row(rec_id, user_id)
+    if not rec:
+        return None
+    if not rec.get("active", True):
+        supabase.table(REC_TABLE).update({"active": True}).eq("id", rec_id).eq("user_id", user_id).execute()
+        rec["active"] = True
+    open_tasks = _open_payment_tasks(rec_id, user_id) if rec.get("as_task") else []
+    if open_tasks:
+        import task_service
+        from models import TaskUpdate
+        task_service.update_task(open_tasks[0]["id"], TaskUpdate(status="Done"), user_id)
+    else:
+        moved = _advance_claim(rec, rec["next_run"])
+        if moved:
+            tx = _record_payment(rec, moved, user_id)
+            logger.info("Платёж %s оплачен в кошельке: операция %s", rec_id, tx["id"])
+            moved.pop("_due")
+            ensure_payment_task(moved)
+    row = _get_rec_row(rec_id, user_id)
+    return _rec_out(row) if row else None
 
 
 def skip_payment(task: dict, user_id: str) -> None:

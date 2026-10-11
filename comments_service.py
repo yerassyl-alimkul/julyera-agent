@@ -55,13 +55,27 @@ def _out(row: dict, urls: dict) -> dict:
                       "url": urls.get(row["file_path"])} if row.get("file_path") else None)}
 
 
+def _canonical(task: dict) -> str:
+    """У совместной задачи комментарии общие и лежат на главной копии (shared_id, migration 014)."""
+    return task.get("shared_id") or task["id"]
+
+
 def list_comments(task_id: str, user_id: str) -> Optional[list[dict]]:
-    """Комментарии своей задачи, старые сверху. None — задачи нет или она чужая."""
-    if not task_service.get_task(task_id, user_id):
+    """Комментарии своей задачи (у совместной — всех участников), старые сверху. None — задачи нет или она чужая."""
+    task = task_service.get_task(task_id, user_id)
+    if not task:
         return None
-    rows = supabase.table(TABLE).select("*").eq("task_id", task_id).eq("user_id", user_id).order("created_at").execute().data
+    rows = supabase.table(TABLE).select("*").eq("task_id", _canonical(task)).order("created_at").execute().data
     urls = _signed_urls([r["file_path"] for r in rows if r.get("file_path")])
-    return [_out(r, urls) for r in rows]
+    names = {}
+    out = []
+    for r in rows:
+        item = {**_out(r, urls), "task_id": task_id, "mine": r["user_id"] == user_id}
+        if not item["mine"]:
+            import users_service
+            item["author"] = names.setdefault(r["user_id"], (users_service.get_by_id(r["user_id"]) or {}).get("name"))
+        out.append(item)
+    return out
 
 
 def decode_file(data_base64: Optional[str], file_type: Optional[str]) -> tuple[bytes, str]:
@@ -83,8 +97,10 @@ def decode_file(data_base64: Optional[str], file_type: Optional[str]) -> tuple[b
 def add_comment(task_id: str, user_id: str, text: Optional[str] = None, file_bytes: Optional[bytes] = None,
                 file_type: Optional[str] = None, file_name: Optional[str] = None) -> Optional[dict]:
     """Добавить комментарий (текст и/или файл) к своей задаче. None — задачи нет или она чужая."""
-    if not task_service.get_task(task_id, user_id):
+    task = task_service.get_task(task_id, user_id)
+    if not task:
         return None
+    task_id = _canonical(task)  # совместная задача — комментарий общий
     text = (text or "").strip() or None
     if text and len(text) > TEXT_MAX:
         raise CommentError(422, f"Комментарий — не длиннее {TEXT_MAX} символов", "bad_text")
@@ -133,23 +149,34 @@ def delete_comment(comment_id: str, user_id: str) -> bool:
 def delete_task_files(task_id: str, user_id: str) -> None:
     """Перед удалением задачи: строки комментариев уйдут каскадом, а файлы из хранилища удаляем сами."""
     try:
-        rows = supabase.table(TABLE).select("file_path").eq("task_id", task_id).eq("user_id", user_id).execute().data
+        # задачу проверил вызывающий; файлы всех авторов (у бывшей совместной задачи есть и чужие)
+        rows = supabase.table(TABLE).select("file_path").eq("task_id", task_id).execute().data
         _remove_files([r["file_path"] for r in rows if r.get("file_path")])
     except Exception as exc:
         logger.warning("Файлы задачи не удалены: %s", type(exc).__name__)
 
 
-def counts(user_id: str) -> dict:
-    """{task_id: {"comments": n, "files": m}} — для значков 💬 и 📎 в списке задач."""
+def counts(user_id: str, tasks: Optional[list] = None) -> dict:
+    """{task_id: {"comments": n, "files": m}} — для значков 💬 и 📎 в списке задач. С tasks — по их главным копиям
+    (у совместной задачи считаются комментарии всех участников)."""
+    targets = {}
     try:
-        rows = supabase.table(TABLE).select("task_id,file_path").eq("user_id", user_id).execute().data
+        if tasks is None:
+            rows = supabase.table(TABLE).select("task_id,file_path").eq("user_id", user_id).execute().data
+        else:
+            for t in tasks:
+                targets.setdefault(_canonical(t), []).append(t["id"])
+            ids, rows = list(targets), []
+            for i in range(0, len(ids), 200):
+                rows += supabase.table(TABLE).select("task_id,file_path").in_("task_id", ids[i:i + 200]).execute().data
     except Exception as exc:  # до миграции 005 таблицы нет — список задач от этого не ломается
         logger.warning("Счётчики комментариев недоступны: %s", type(exc).__name__)
         return {}
     out = {}
     for r in rows:
-        c = out.setdefault(r["task_id"], {"comments": 0, "files": 0})
-        c["comments"] += 1
-        if r.get("file_path"):
-            c["files"] += 1
+        for tid in targets.get(r["task_id"], [r["task_id"]]):
+            c = out.setdefault(tid, {"comments": 0, "files": 0})
+            c["comments"] += 1
+            if r.get("file_path"):
+                c["files"] += 1
     return out

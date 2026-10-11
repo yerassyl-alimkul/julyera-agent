@@ -190,6 +190,9 @@ def _apply_event(task: dict, event: dict, user_id: str, tz: str) -> bool:
         note = _plain(event.get("description"))
         if note != (task.get("note") or None):
             changes["note"] = note
+        place = (event.get("location") or "").strip()[:200] or None
+        if place and place != (task.get("location") or None):  # место из Google (migration 014)
+            changes["location"] = place
     real = set(changes) - {"gcal_updated"}
     if real:
         changes["updated_at"] = datetime.utcnow().isoformat()
@@ -281,6 +284,8 @@ def sync_user(user_id: str, now_utc: Optional[datetime] = None) -> Optional[dict
             end = event_end(ev, tz)
             if end and end > deadline:
                 row["ends_at"] = end.isoformat()
+            if (ev.get("location") or "").strip():
+                row["location"] = ev["location"].strip()[:200]
             if ev["_cal"] != "primary":  # у задач из основного календаря колонка пустая, как до миграции 008
                 row["gcal_calendar_id"] = ev["_cal"]
             try:

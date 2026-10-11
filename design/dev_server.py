@@ -45,6 +45,30 @@ for i, name in enumerate(("Study", "Work", "Personal", "UniMe")):
     categories_service.create_category(uid, name, categories_service.PALETTE[i])
 money_service.ensure_defaults(uid)
 
+# Второй пользователь — для совместных задач (http://localhost:8002/?key=test456)
+julie = users_service.create_user("Julie", 1002)
+next(u for u in db.tables["users"] if u["id"] == julie["id"]).update({"access_key": "test456"})
+categories_service.create_category(julie["id"], "Дом", categories_service.PALETTE[2])
+users_service.link_chat(1001, uid)
+users_service.link_chat(1002, julie["id"])
+import notifier  # noqa: E402
+notifier.send_telegram = lambda chat_id, text, with_app_button=False, buttons=None: print("BOT →", chat_id, text, buttons, flush=True) or True
+import shared_service  # noqa: E402
+
+
+def _dev_accept_all():
+    """Только тестовый сервер: Julie нажимает «Принять» во всех приглашениях (бота здесь нет)."""
+    rows = [r for r in db.tables.get("task_invites", []) if r["status"] == "pending"]
+    return [shared_service.answer(r["id"], r["to_user"], True) for r in rows]
+
+
+main.app.add_api_route("/dev/accept-all", _dev_accept_all, methods=["POST"])
+main.app.router.routes.insert(0, main.app.router.routes.pop())  # раньше статики на «/»
+import places_service  # noqa: E402
+places_service.search = lambda q, lang="ru": [
+    {"name": "Stephansplatz", "address": "Stephansplatz, Innere Stadt, Wien, Österreich"},
+    {"name": "Café Central", "address": "Café Central, Herrengasse 14, Wien, Österreich"}] if len(q.strip()) >= 3 else []
+
 today = date.today()
 for title, cat, days in (("Созвон с командой", "Work", 0), ("Купить продукты", "Personal", 0),
                          ("Сдать отчёт", "Work", 2), ("Прочитать главу", "Study", None),

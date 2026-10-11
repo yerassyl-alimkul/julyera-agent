@@ -840,6 +840,19 @@ async def save_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text("В какую цель?", reply_markup=InlineKeyboardMarkup(rows))
 
 
+async def share_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """«Принять / Отклонить» приглашение в совместную задачу (sh:y|n:<id>): отвечает только тот, кому оно."""
+    query = update.callback_query
+    user = users_service.get_by_telegram_id(query.from_user.id)
+    await query.answer()
+    if not user:
+        return
+    import shared_service
+    _, choice, invite_id = query.data.split(":", 2)
+    text = shared_service.answer(invite_id, user["id"], choice == "y")
+    await query.edit_message_text(text)
+
+
 async def goal_save_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     user = users_service.get_by_telegram_id(query.from_user.id)
@@ -1273,6 +1286,7 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("remind", remind_command))
     app.add_handler(CommandHandler("split", split_command))
     app.add_handler(CommandHandler("save", save_command))
+    app.add_handler(CallbackQueryHandler(share_callback, pattern=r"^sh:[yn]:[0-9a-f-]{36}$"))
     app.add_handler(CallbackQueryHandler(goal_save_callback, pattern=r"^gs:[0-9a-f-]{36}:-?\d+\.\d{2}$"))
     app.add_handler(CallbackQueryHandler(split_callback, pattern=r"^sp:[0-9a-f]{8}:(\d+|ok|x)$"))
     app.add_handler(CommandHandler("backup", backup_command))

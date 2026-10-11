@@ -259,6 +259,7 @@ def _event_body(task: dict, tz: str = "Europe/Rome") -> dict:
     return {
         "summary": f"{emoji_c} {emoji_p} {task['task']}".strip(),
         "description": task.get("note") or "",
+        "location": task.get("location") or "",
         "start": {"dateTime": start_dt.isoformat(), "timeZone": tz},
         "end": {"dateTime": end_dt.isoformat(), "timeZone": tz},
         "extendedProperties": JULYERA_MARK,
@@ -311,6 +312,8 @@ def _imported_patch(task: dict, event: dict, tz: str) -> dict:
     start = _naive(task["deadline"])
     old_start, old_end = event.get("start") or {}, event.get("end") or {}
     body = {"summary": task["task"], "description": task.get("note") or ""}
+    if task.get("location"):  # место из JulYera; пустое не стирает место события
+        body["location"] = task["location"]
     if task.get("gcal_all_day") and start.strftime("%H:%M") == "23:59":
         days = 1
         if old_start.get("date") and old_end.get("date"):

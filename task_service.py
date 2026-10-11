@@ -20,7 +20,7 @@ from models import Status, TaskCreate, TaskUpdate
 
 logger = logging.getLogger(__name__)
 TABLE = "tasks"
-NULLABLE_FIELDS = {"deadline", "ends_at", "note", "source", "recurrence_pattern", "recurrence_days"}
+NULLABLE_FIELDS = {"deadline", "ends_at", "note", "source", "recurrence_pattern", "recurrence_days", "location"}
 # Повторения одного события Google Calendar связаны: эти поля, изменённые у одного, меняются у всех незакрытых.
 # Время, статус и удаление — только у самого повторения (как «только это событие» в Google).
 SERIES_FIELDS = ("task", "category", "priority", "note")
@@ -162,6 +162,9 @@ def create_task(payload: TaskCreate, user_id: str) -> dict:
     data = payload.model_dump(mode="json", exclude_none=False)
     data["user_id"] = user_id  # владельца ставит сервер, не клиент
     data["category"] = _known_category(user_id, data["category"])
+    data["location"] = (data.get("location") or "").strip() or None
+    if not data["location"]:
+        data.pop("location")  # колонку пишем, только когда место есть
     _normalize_recurrence(data, data.get("deadline"))
     _normalize_ends(data)
     result = supabase.table(TABLE).insert(data).execute()
@@ -221,7 +224,7 @@ def breakdown(task_id: str, user_id: str) -> Optional[list[dict]]:
     import groq_client
     import subtasks_service
     from models import SubtaskCreate
-    existing = supabase.table("subtasks").select("content").eq("task_id", task_id).execute().data
+    existing = supabase.table("subtasks").select("content").eq("task_id", task.get("shared_id") or task_id).execute().data
     have = {(r.get("content") or "").strip().lower() for r in existing}
     steps = groq_client.suggest_steps(task["task"], task.get("note"), [r["content"] for r in existing])
     added = []
@@ -261,7 +264,8 @@ def get_task(task_id: str, user_id: str) -> Optional[dict]:
     return result.data[0] if result.data else None
 
 
-def update_task(task_id: str, payload: TaskUpdate, user_id: str) -> Optional[dict]:
+def update_task(task_id: str, payload: TaskUpdate, user_id: str, propagate: bool = True) -> Optional[dict]:
+    """propagate=False — правка пришла от другой копии совместной задачи (shared_service), дальше не рассылать."""
     current = get_task(task_id, user_id)
     if not current:
         return None
@@ -275,6 +279,10 @@ def update_task(task_id: str, payload: TaskUpdate, user_id: str) -> Optional[dic
     }
     if "category" in update_data:
         update_data["category"] = _known_category(user_id, update_data["category"])
+    if "location" in update_data:
+        update_data["location"] = (update_data["location"] or "").strip() or None
+    if current.get("shared_id") and update_data.get("recurrence_pattern"):
+        raise CategoryError(422, "Совместную задачу пока нельзя сделать повторяющейся", "shared_recurring")
     if "recurrence_pattern" in update_data or "recurrence_days" in update_data:
         if "recurrence_pattern" not in update_data:
             update_data["recurrence_pattern"] = current.get("recurrence_pattern")
@@ -286,6 +294,13 @@ def update_task(task_id: str, payload: TaskUpdate, user_id: str) -> Optional[dic
     if not result.data:
         raise RuntimeError("Не удалось обновить задачу")
     updated = result.data[0]
+
+    if propagate and current.get("shared_id"):  # совместная задача: общие поля — у всех копий (migration 014)
+        try:
+            import shared_service
+            shared_service.propagate(current, update_data, user_id)
+        except Exception as exc:
+            logger.warning("Совместная задача %s: копии не обновлены: %s", task_id, type(exc).__name__)
 
     series = gcal.series_of(current.get("google_event_id")) if current.get("gcal_imported") else None
     if series:
@@ -361,6 +376,9 @@ def delete_task(task_id: str, user_id: str, payment_hook: bool = True) -> bool:
     task = get_task(task_id, user_id)
     if not task:
         return False
+    if task.get("shared_id"):  # совместная: удаление = выход, у остальных задача остаётся (migration 014)
+        import shared_service
+        shared_service.leave(task, user_id)
     gcal.sync_task_delete(task.get("google_event_id"), user_id, task.get("gcal_calendar_id"))
     import comments_service  # файлы комментариев — из хранилища; строки уйдут каскадом вместе с задачей
     comments_service.delete_task_files(task_id, user_id)

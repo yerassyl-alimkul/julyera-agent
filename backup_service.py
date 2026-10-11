@@ -29,11 +29,8 @@ def build(user_id: str) -> tuple[str, bytes, int]:
     """(имя файла, содержимое, сколько всего записей)."""
     user = users_service.get_by_id(user_id) or {}
     tasks = _all("tasks", user_id)
-    task_ids = {t["id"] for t in tasks}
-    subtasks = []
-    ids = sorted(task_ids)
-    for i in range(0, len(ids), 200):  # у подзадач нет user_id — берём по своим задачам
-        subtasks += supabase.table("subtasks").select("*").in_("task_id", ids[i:i + 200]).execute().data
+    import subtasks_service  # у подзадач нет user_id — берём по своим задачам (у совместных — общие шаги)
+    subtasks = subtasks_service.list_all_subtasks(user_id)
     try:
         comments = [{k: c.get(k) for k in ("id", "task_id", "text", "file_name", "file_type", "created_at")}
                     for c in _all("task_comments", user_id)]
