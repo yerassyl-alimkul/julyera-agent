@@ -46,7 +46,11 @@ DEFAULTS = {
     "pre_reminder_log": lambda: {"sent_at": _now()},
     "notes": lambda: {"id": str(uuid.uuid4()), "created_at": _now(), "updated_at": _now()},
     "note_files": lambda: {"id": str(uuid.uuid4()), "created_at": _now()},
-    "task_invites": lambda: {"id": str(uuid.uuid4()), "status": "pending", "answered_at": None, "created_at": _now()},
+    "task_invites": lambda: {"id": str(uuid.uuid4()), "status": "pending", "answered_at": None, "group_name": None,
+                             "created_at": _now()},
+    "contacts": lambda: {"created_at": _now()},
+    "contact_links": lambda: {"created_at": _now()},
+    "task_groups": lambda: {"id": str(uuid.uuid4()), "created_at": _now()},
     "subtasks": lambda: {"id": str(uuid.uuid4()), "is_done": False, "created_at": _now()},
     "telegram_chats": lambda: {"created_at": _now()},
     "categories": lambda: {"id": str(uuid.uuid4()), "sort_order": 0, "created_at": _now()},
@@ -154,7 +158,8 @@ class Query:
                 raise FakeError(f'null value in column "{col}" of relation "{self.table}"')
         composite = {"money_limit_alerts": ("user_id", "category_id", "month", "threshold"),
                      "money_report_log": ("user_id", "month"), "pre_reminder_log": ("task_id", "deadline"),
-                     "task_invites": ("task_id", "to_user")}
+                     "task_invites": ("task_id", "to_user"), "contacts": ("user_id", "contact_id"),
+                     "task_group_members": ("group_id", "member_id")}
         if self.table in composite:  # составной первичный ключ
             cols = composite[self.table]
             for other in self._rows():
@@ -279,6 +284,10 @@ class Query:
                 self.db.tables["subtasks"] = [s for s in self.db.tables.get("subtasks", []) if s["task_id"] not in ids]
                 self.db.tables["task_comments"] = [c for c in self.db.tables.get("task_comments", []) if c["task_id"] not in ids]
                 self.db.tables["task_invites"] = [c for c in self.db.tables.get("task_invites", []) if c["task_id"] not in ids]
+            if self.table == "task_groups":  # task_group_members.group_id ... on delete cascade
+                ids = {r["id"] for r in gone}
+                self.db.tables["task_group_members"] = [m for m in self.db.tables.get("task_group_members", [])
+                                                        if m["group_id"] not in ids]
             if self.table == "notes":  # note_files.note_id ... on delete cascade
                 ids = {r["id"] for r in gone}
                 self.db.tables["note_files"] = [f for f in self.db.tables.get("note_files", []) if f["note_id"] not in ids]

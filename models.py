@@ -106,8 +106,15 @@ class CommentFile(BaseModel):
 
 
 class ShareIn(BaseModel):
-    """POST /tasks/{id}/share: с кем поделиться задачей (id из GET /people)."""
-    user_id: UUID
+    """POST /tasks/{id}/share: с кем поделиться — один контакт (user_id из GET /people) или группа (group_id)."""
+    user_id: Optional[UUID] = None
+    group_id: Optional[UUID] = None
+
+
+class GroupIn(BaseModel):
+    """POST /groups, PATCH /groups/{id}: название и участники (только свои контакты, от двух)."""
+    name: Optional[str] = None
+    member_ids: Optional[List[UUID]] = None
 
 
 class NotePhotoIn(BaseModel):

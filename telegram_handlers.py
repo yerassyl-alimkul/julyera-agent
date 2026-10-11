@@ -168,6 +168,19 @@ def _known_user(update: Update) -> dict | None:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = _known_user(update)
+    payload = (context.args[0] if getattr(context, "args", None) else "") or ""
+    if payload.startswith("c_"):  # ссылка-приглашение в контакты (contacts_service.link)
+        token = payload[2:]
+        if not user:
+            await update.message.reply_text("Чтобы добавить человека в контакты, сначала нужен доступ к JulYera. "
+                                            "Отправил запрос владельцу — после одобрения откройте ссылку ещё раз.")
+        else:
+            import contacts_service
+            owner, text = contacts_service.preview(token, user["id"])
+            markup = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Принять", callback_data=f"ct:y:{token}"),
+                                            InlineKeyboardButton("✖️ Нет", callback_data=f"ct:n:{token}")]]) if owner else None
+            await update.message.reply_text(text, reply_markup=markup)
+            return
     if user:
         await update.message.reply_text(
             f"Привет, {user['name']}! Напиши мне задачу текстом или голосом — я разберу её и сохраню.\n"
@@ -840,6 +853,18 @@ async def save_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text("В какую цель?", reply_markup=InlineKeyboardMarkup(rows))
 
 
+async def contact_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """«Принять / Нет» на ссылку-приглашение в контакты (ct:y|n:<токен>)."""
+    query = update.callback_query
+    user = users_service.get_by_telegram_id(query.from_user.id)
+    await query.answer()
+    if not user:
+        return
+    import contacts_service
+    _, choice, token = query.data.split(":", 2)
+    await query.edit_message_text(contacts_service.accept(token, user["id"]) if choice == "y" else "Хорошо, не добавляю.")
+
+
 async def share_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """«Принять / Отклонить» приглашение в совместную задачу (sh:y|n:<id>): отвечает только тот, кому оно."""
     query = update.callback_query
@@ -1287,6 +1312,7 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("split", split_command))
     app.add_handler(CommandHandler("save", save_command))
     app.add_handler(CallbackQueryHandler(share_callback, pattern=r"^sh:[yn]:[0-9a-f-]{36}$"))
+    app.add_handler(CallbackQueryHandler(contact_callback, pattern=r"^ct:[yn]:[0-9a-f]{1,32}$"))
     app.add_handler(CallbackQueryHandler(goal_save_callback, pattern=r"^gs:[0-9a-f-]{36}:-?\d+\.\d{2}$"))
     app.add_handler(CallbackQueryHandler(split_callback, pattern=r"^sp:[0-9a-f]{8}:(\d+|ok|x)$"))
     app.add_handler(CommandHandler("backup", backup_command))

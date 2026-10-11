@@ -51,6 +51,13 @@ next(u for u in db.tables["users"] if u["id"] == julie["id"]).update({"access_ke
 categories_service.create_category(julie["id"], "Дом", categories_service.PALETTE[2])
 users_service.link_chat(1001, uid)
 users_service.link_chat(1002, julie["id"])
+mama = users_service.create_user("Мама", 1003)
+users_service.link_chat(1003, mama["id"])
+for a, b in ((uid, julie["id"]), (uid, mama["id"])):  # контакты Yera (в жизни — по ссылке и «Принять»)
+    db.table("contacts").insert({"user_id": a, "contact_id": b}).execute()
+    db.table("contacts").insert({"user_id": b, "contact_id": a}).execute()
+import contacts_service  # noqa: E402
+contacts_service.bot_username = lambda: "JulYeraDevBot"
 import notifier  # noqa: E402
 notifier.send_telegram = lambda chat_id, text, with_app_button=False, buttons=None: print("BOT →", chat_id, text, buttons, flush=True) or True
 import shared_service  # noqa: E402
