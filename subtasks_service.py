@@ -75,7 +75,22 @@ def update_subtask(subtask_id: str, payload: SubtaskUpdate, user_id: str) -> dic
     result = supabase.table(TABLE).update(data).eq("id", subtask_id).eq("task_id", current["task_id"]).execute()
     if not result.data:
         raise RuntimeError("Не удалось обновить подзадачу")
+    if data.get("is_done"):
+        _complete_if_all_done(current["task_id"], own, user_id)
     return {**result.data[0], "task_id": own}
+
+
+def _complete_if_all_done(canonical: str, own_task_id: str, user_id: str) -> None:
+    """Отметили последний шаг — задача выполнена (решение владельца 14 октября 2026). Закрыть задачу раньше,
+    с незакрытыми шагами, тоже можно. Через task_service.update_task — повтор, календарь, общие задачи."""
+    steps = supabase.table(TABLE).select("is_done").eq("task_id", canonical).execute().data
+    if not steps or not all(s.get("is_done") for s in steps):
+        return
+    import task_service
+    from models import Status, TaskUpdate
+    task = task_service.get_task(own_task_id, user_id)
+    if task and task.get("status") != Status.done.value:
+        task_service.update_task(own_task_id, TaskUpdate(status=Status.done), user_id)
 
 
 def delete_subtask(subtask_id: str, user_id: str) -> bool:

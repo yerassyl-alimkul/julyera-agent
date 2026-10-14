@@ -334,6 +334,8 @@ def main():
     db.table("money_recurring").insert({"user_id": D["id"], "kind": "expense", "amount": "12.99", "currency": "EUR",
                                         "category_id": cat, "note": "Netflix", "day_of_month": 12,
                                         "next_run": "2026-10-12"}).execute()
+    real_run_recurring = money_service.run_recurring
+    money_service.run_recurring = lambda *a, **k: []  # часы подставные, а списание идёт по настоящей дате — не списывать
     at(20, 10, plus_days=1)  # пятница
     msgs = to(D, run())
     check("в будни вечером — обычные «Итоги дня»", any("Итоги дня" in m.text for m in msgs)
@@ -347,6 +349,7 @@ def main():
           "Сделано во вторник" in week and "План на неделю" in week and "Пн 12 окт: План на понедельник" in week, week)
     charge = next((m.text for m in msgs if "спишется" in m.text), "")
     check("накануне платежа — «💳 Завтра спишется: 12.99 EUR — Netflix»", "12.99 EUR — Netflix" in charge, charge)
+    money_service.run_recurring = real_run_recurring
     at(20, 40, plus_days=3)
     check("…один раз", not any("спишется" in m.text for m in to(D, run())))
 

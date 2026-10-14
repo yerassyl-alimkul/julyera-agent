@@ -1207,6 +1207,35 @@ applyTheme();
   .money-list-head .money-h2 { margin: 0; }
   .money-list-tools { display: flex; align-items: center; gap: 4px; }
   .people-list { display: flex; flex-direction: column; gap: var(--gap-s); }
+  /* Шаги в строке задачи — плашка «2/3 ▾» */
+  .steps-pill { flex: 0 0 auto; align-self: center; display: inline-flex; align-items: center; gap: 2px; min-width: var(--touch);
+    height: 32px; margin: 0 2px; padding: 0 6px 0 10px; border: 1.5px solid currentColor; border-radius: var(--radius-pill);
+    background: transparent; color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .steps-pill svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round;
+    stroke-linejoin: round; transition: transform var(--dur-base) ease-out; }
+  .steps-pill[aria-expanded="true"] svg { transform: rotate(180deg); }
+  .row-place { display: inline; padding: 0; margin-left: 6px; border: 0; background: none; color: inherit; font: inherit;
+    text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+  /* Папки — карточки */
+  .folder-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--gap-s); }
+  .folder-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 84px; padding: 12px 14px;
+    border: 0; border-radius: var(--radius-card); background: var(--row-bg, var(--surface)); color: #1B1B1B; font: inherit;
+    text-align: left; cursor: pointer; }
+  .folder-card svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .folder-card b { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+  .folder-card small { font-size: 12px; opacity: .75; }
+  .folder-card.add { border: 1.5px dashed var(--line); background: transparent; color: var(--ink-muted); align-items: center;
+    justify-content: center; flex-direction: row; gap: 6px; }
+  .section-label { margin: var(--gap-l) 0 var(--gap-s); font-size: 13px; font-weight: 600; color: var(--ink-muted); }
+  /* Карточка задачи для просмотра */
+  .tv-title { margin: var(--gap-m) 0 4px; font-size: 22px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+  .tv-badges { font-size: 14px; color: var(--ink-muted); }
+  .tv-block { display: flex; flex-direction: column; gap: 6px; padding: 14px 0; border-top: 1px solid var(--line); }
+  .tv-block:first-of-type { border-top: 0; }
+  .tv-label { font-size: 13px; font-weight: 600; color: var(--ink-muted); }
+  .tv-text { font-size: 16px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .tv-actions { display: flex; gap: var(--gap-s); }
+  .tv-actions button { flex: 1; }
   .newtask-group { margin: 0 0 var(--gap-m); padding: 10px 14px; border-radius: var(--radius-compact); background: var(--surface);
     border: 1px solid var(--line); font-size: 15px; font-weight: 600; }
   .group-page-title { overflow-wrap: anywhere; }
@@ -1864,6 +1893,7 @@ applyTheme();
           <button class="tools-item" id="moneyStatementBtn" role="menuitem" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h7"/></svg>Выписка</button>
         </div>
       </div>
+      <button class="tb-btn" id="folderSettingsBtn" aria-label="Папка: переименовать или удалить" hidden><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg></button>
       <button class="tb-btn" id="groupSettingsBtn" aria-label="Настройки группы" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
       <button class="tb-btn" id="searchBtn" aria-label="Поиск"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button>
       <button class="tb-btn" id="filtersBtn" aria-label="Фильтры по категории и приоритету">
@@ -1877,6 +1907,7 @@ applyTheme();
     <div class="segmented page-switch" id="tasksSwitch" role="group" aria-label="Вид задач">
       <button type="button" data-sub="list" aria-pressed="true">Список</button>
       <button type="button" data-sub="calendar" aria-pressed="false">Календарь</button>
+      <button type="button" data-sub="folders" aria-pressed="false">Папки</button>
     </div>
     <div id="listView">
       <section id="dayView" aria-labelledby="dayTitle">
@@ -2066,10 +2097,35 @@ applyTheme();
           </div>
         </div>
         <div class="group-members" id="groupPageMembers"></div>
+        <div class="section-label">Папки</div>
+        <div class="folder-grid" id="groupFolders"></div>
+        <div class="section-label" id="groupTasksLabel">Задачи без папки</div>
         <div class="group-task-list" id="groupTasks"></div>
         <button class="link-btn" id="groupDoneToggle" type="button" hidden></button>
         <div class="group-task-list" id="groupDoneTasks" hidden></div>
       </div>
+    </section>
+
+    <section id="foldersView" style="display: none;" aria-labelledby="foldersTitle">
+      <div class="day-head">
+        <div class="day-head-text">
+          <h1 class="t-h1" id="foldersTitle">Папки</h1>
+          <div class="day-sub">Задачи по темам. Они видны и в общем списке по дням</div>
+        </div>
+      </div>
+      <div class="folder-grid" id="foldersGrid" style="padding-top: 20px;"></div>
+    </section>
+
+    <section id="folderView" style="display: none;" aria-labelledby="folderTitle">
+      <div class="day-head">
+        <div class="day-head-text">
+          <h1 class="t-h1 group-page-title" id="folderTitle"></h1>
+          <div class="day-sub" id="folderSub"></div>
+        </div>
+      </div>
+      <div class="group-task-list" id="folderTasks" style="padding-top: var(--gap-m);"></div>
+      <button class="link-btn" id="folderDoneToggle" type="button" hidden></button>
+      <div class="group-task-list" id="folderDoneTasks" hidden></div>
     </section>
   </main>
 </div>
@@ -2134,6 +2190,10 @@ applyTheme();
       <section class="form-section">
         <h3 class="form-label">Место</h3>
         <div id="newPlace"></div>
+      </section>
+      <section class="form-section" id="newFolderSection" hidden>
+        <h3 class="form-label" id="newFolderLabel">Папка</h3>
+        <div class="chip-group" id="newFolder" role="group" aria-labelledby="newFolderLabel"></div>
       </section>
       <section class="form-section" id="newRepeatSection">
         <h3 class="form-label" id="newRepeatLabel">Повторять</h3>
@@ -2421,6 +2481,42 @@ applyTheme();
   </div>
 </div>
 
+<!-- Просмотр задачи: только смотреть, «Изменить» и «Удалить» — кнопками (решение владельца 14 октября 2026) -->
+<div class="sheet" id="taskViewSheet" role="dialog" aria-modal="true" aria-labelledby="tvTitle" hidden>
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <button class="tb-btn" id="tvClose" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <h2 class="t-modal-title">Задача</h2>
+      <span></span>
+    </div>
+    <div id="tvBody"></div>
+  </div>
+  <div class="sheet-footer tv-actions">
+    <button class="btn-primary" id="tvEdit" type="button">Изменить</button>
+    <button class="btn-danger" id="tvDelete" type="button"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/></svg><span id="tvDeleteLabel">Удалить</span></button>
+  </div>
+</div>
+
+<!-- Папка: создать, переименовать, удалить (migration 015) -->
+<div class="sheet" id="folderSheet" role="dialog" aria-modal="true" aria-labelledby="folderSheetTitle" hidden>
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <button class="tb-btn" id="folderSheetClose" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <h2 class="t-modal-title" id="folderSheetTitle">Новая папка</h2>
+      <span></span>
+    </div>
+    <div class="edit-form">
+      <label class="form-label" for="folderName">Название</label>
+      <input class="field" id="folderName" type="text" maxlength="40" autocomplete="off" placeholder="Например: Поездка в Вену">
+      <p class="form-hint repeat-hint" id="folderSheetHint"></p>
+      <button class="btn-danger" id="folderDelete" type="button" hidden><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/></svg><span>Удалить папку</span></button>
+    </div>
+  </div>
+  <div class="sheet-footer">
+    <button class="btn-primary" id="folderSave">Создать папку</button>
+  </div>
+</div>
+
 <!-- Группа: создание и настройки (migration 014) -->
 <div class="sheet" id="groupSheet" role="dialog" aria-modal="true" aria-labelledby="groupTitle" hidden>
   <div class="sheet-inner">
@@ -2538,6 +2634,10 @@ applyTheme();
       <section class="form-section">
         <h3 class="form-label">Место</h3>
         <div id="editPlace"></div>
+      </section>
+      <section class="form-section" id="editFolderSection" hidden>
+        <h3 class="form-label" id="editFolderLabel">Папка</h3>
+        <div class="chip-group" id="editFolder" role="group" aria-labelledby="editFolderLabel"></div>
       </section>
       <section class="form-section" id="editShareSection" hidden>
         <h3 class="form-label">Группа</h3>
@@ -2861,15 +2961,17 @@ function renderChips() {
   const archive = currentPage === 'list' && viewMode === 'archive';
   document.getElementById('filterDot').hidden = !(activeCategory || activePriority);
   const inGroup = currentPage === 'groups' && !!openGroupId;  // страница группы: «назад» к списку групп вместо меню
-  document.getElementById('menuBtn').hidden = archive || inGroup;
-  document.getElementById('backBtn').hidden = !(archive || inGroup);
-  document.getElementById('backBtn').setAttribute('aria-label', inGroup ? 'Назад к группам' : 'Назад к задачам');
+  const inFolder = currentPage === 'folder';
+  document.getElementById('menuBtn').hidden = archive || inGroup || inFolder;
+  document.getElementById('backBtn').hidden = !(archive || inGroup || inFolder);
+  document.getElementById('backBtn').setAttribute('aria-label', inGroup ? 'Назад к группам' : inFolder ? 'Назад' : 'Назад к задачам');
+  document.getElementById('folderSettingsBtn').hidden = !inFolder;
   document.getElementById('groupSettingsBtn').hidden = !inGroup;
   document.getElementById('filtersBtn').hidden = !((currentPage === 'list' && !archive) || currentPage === 'calendar');
   document.getElementById('moneyMenuWrap').hidden = currentPage !== 'money' || archive;
   if (currentPage !== 'money') closeMoneyMenu();
   const tasksSwitch = document.getElementById('tasksSwitch');
-  tasksSwitch.hidden = !((currentPage === 'list' && !archive) || currentPage === 'calendar');
+  tasksSwitch.hidden = !((currentPage === 'list' && !archive) || currentPage === 'calendar' || currentPage === 'folders');
   tasksSwitch.querySelectorAll('[data-sub]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.sub === currentPage)));
   const layoutBtn = document.getElementById('layoutBtn');
   layoutBtn.hidden = !(currentPage === 'list' && !archive);
@@ -2924,6 +3026,12 @@ async function toggleSubtask(id, isDone) {
       body: JSON.stringify({ is_done: isDone }),
     });
     if (!res.ok) throw new Error('bad status');
+    // последний шаг отмечен — сервер сам закрыл задачу (решение владельца 14 октября 2026)
+    const steps = sub ? allSubtasks.filter(x => x.task_id === sub.task_id) : [];
+    if (isDone && steps.length && steps.every(x => x.is_done)) {
+      toast('Все шаги готовы — задача выполнена');
+      await loadTasks();
+    }
   } catch (e) {
     toast('Не удалось обновить подзадачу');
     await loadTasks();
@@ -3060,16 +3168,24 @@ function renderCurrentPage() {
     renderMoney();
   } else if (currentPage === 'groups') {
     renderGroups();
+  } else if (currentPage === 'folders') {
+    renderFoldersPage();
+  } else if (currentPage === 'folder') {
+    renderFolderPage();
   }
+  if (!taskViewSheet.hidden) renderTaskView();
 }
 
 let tasksSub = 'list';  // последняя подстраница «Задач»: 'list' | 'calendar'
 
 function switchPage(page) {
   currentPage = page;
-  if (page === 'list' || page === 'calendar') tasksSub = page;
+  if (page === 'list' || page === 'calendar' || page === 'folders') tasksSub = page;
+  const groupFolder = page === 'folder' && openFolderObj && openFolderObj.group_id;
   document.querySelectorAll('.dock-btn').forEach(btn => {
-    const active = btn.dataset.page === page || (btn.dataset.page === 'list' && page === 'calendar');
+    const active = btn.dataset.page === page
+      || (btn.dataset.page === 'list' && (page === 'calendar' || page === 'folders' || (page === 'folder' && !groupFolder)))
+      || (btn.dataset.page === 'groups' && groupFolder);
     btn.classList.toggle('active', active);
     if (active) btn.setAttribute('aria-current', 'page');
     else btn.removeAttribute('aria-current');
@@ -3079,12 +3195,16 @@ function switchPage(page) {
   document.getElementById('calendarView').style.display = page === 'calendar' ? '' : 'none';
   document.getElementById('notesView').style.display = page === 'notes' ? '' : 'none';
   document.getElementById('groupsView').style.display = page === 'groups' ? '' : 'none';
+  document.getElementById('foldersView').style.display = page === 'folders' ? '' : 'none';
+  document.getElementById('folderView').style.display = page === 'folder' ? '' : 'none';
   document.getElementById('moneyView').style.display = page === 'money' ? '' : 'none';
   document.getElementById('fabBtn').setAttribute('aria-label',
     page === 'notes' ? 'Добавить заметку' : page === 'money' ? 'Добавить операцию' : 'Добавить задачу');
   if (page === 'notes') loadNotes();
   else if (page === 'money') loadMoney();
   else if (page === 'groups') showGroups();
+  else if (page === 'folders') { renderFoldersPage(); loadFolders().then(() => { if (currentPage === 'folders') renderFoldersPage(); }); }
+  else if (page === 'folder') renderFolderPage();
   else renderCurrentPage();
 }
 
@@ -3353,7 +3473,9 @@ function taskRowEl(task, mode) {
   time.className = 'row-time';
   if (mode === DAY_NODATE) {
     time.textContent = 'Без срока';
-  } else if (mode === 'group' && task.deadline) {   // страница группы: дата и время
+  } else if ((mode === 'group' || mode === 'folder') && !task.deadline) {
+    time.textContent = 'Без срока';
+  } else if ((mode === 'group' || mode === 'folder') && task.deadline) {   // страница группы или папки: дата и время
     const dt = parseNaiveDeadline(task.deadline);
     time.textContent = `${dt.getDate()} ${MONTH_GENITIVE[dt.getMonth()]}, ${timeRange(task)}`;
   } else if (mode === DAY_OVERDUE) {
@@ -3370,8 +3492,10 @@ function taskRowEl(task, mode) {
     else rest.push(`👥 ${gname || 'общая'}`);
     if (!task.shared.tick_all && task.shared.total > 1) rest.push(`${task.shared.done} из ${task.shared.total} готово`);
   }
-  if (task.location) rest.push(`📍 ${placeShort(task.location)}`);
-  if (steps.length) rest.push(stepsText(steps.filter(s => s.is_done).length, steps.length));
+  if (task.folder_id && mode !== 'folder') {
+    const f = folderById(task.folder_id);
+    if (f) rest.push(`📁 ${f.name}`);
+  }
   if (task.comments_count) rest.push(`💬 ${task.comments_count}`);
   if (task.files_count) rest.push(`📎 ${task.files_count}`);
   const repeat = repeatLabel(task);
@@ -3379,25 +3503,38 @@ function taskRowEl(task, mode) {
   const restEl = document.createElement('span');
   restEl.textContent = rest.join(' · ');
   meta.append(time, restEl);
+  if (task.location) {   // место — сразу в Google Maps
+    const place = document.createElement('button');
+    place.type = 'button';
+    place.className = 'row-place';
+    place.dataset.focusKey = 'place-' + task.id;
+    place.setAttribute('aria-label', `Открыть в Google Maps: ${task.location}`);
+    place.textContent = `📍 ${placeShort(task.location)}`;
+    place.onclick = (e) => { e.stopPropagation(); openExternal(mapsUrl(task.location)); };
+    meta.appendChild(place);
+  }
   body.append(srEdit, title, meta);
   body.onkeydown = (e) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEdit(task.id); }
+    if (e.target !== body) return;
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openTaskView(task.id); }
   };
 
   row.append(check, body);
   if (mode === DAY_OVERDUE && task.status !== 'Done') row.appendChild(moveButtonsEl(task));
 
-  if (hasMore) {
+  if (hasMore) {   // шаги — заметная плашка «2/3 ▾», нажатие раскрывает список шагов прямо в строке
     const chevron = document.createElement('button');
-    chevron.className = 'row-chevron';
+    chevron.className = 'steps-pill';
     chevron.dataset.focusKey = 'chev-' + task.id;
     chevron.setAttribute('aria-expanded', String(expanded));
-    chevron.setAttribute('aria-label', (expanded ? 'Свернуть: ' : 'Развернуть: ') + task.task);
-    chevron.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>';
+    const doneSteps = steps.filter(x => x.is_done).length;
+    chevron.setAttribute('aria-label', `${expanded ? 'Свернуть' : 'Показать'} шаги: ${doneSteps} из ${steps.length}`);
+    chevron.innerHTML = '<span></span><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>';
+    chevron.querySelector('span').textContent = `${doneSteps}/${steps.length}`;
     chevron.onclick = () => {
       if (expandedTasks.has(task.id)) expandedTasks.delete(task.id);
       else { expandedTasks.add(task.id); justExpandedId = task.id; }
-      renderTaskList();
+      renderCurrentPage();  // и в списке, и на страницах группы и папки
       justExpandedId = null;
     };
     row.appendChild(chevron);
@@ -3430,7 +3567,7 @@ function taskRowEl(task, mode) {
     if (Date.now() < suppressRowClickUntil) return;
     if (e.target.closest('button, input, .row-more')) return;
     if (openSwipe && openSwipe.id === task.id) { closeSwipe(); return; }
-    openEdit(task.id);
+    openTaskView(task.id);
   });
 
   return swipeWrapEl(row, task.id);
@@ -3789,6 +3926,7 @@ function renderArchive() {
 }
 
 document.getElementById('backBtn').onclick = () => {
+  if (currentPage === 'folder') { openFolderObj = null; switchPage(folderReturn); return; }
   if (currentPage === 'groups') { openGroupId = null; renderChips(); renderGroups(); document.getElementById('menuBtn').focus(); return; }
   viewMode = 'active';
   switchPage('list');
@@ -3910,7 +4048,7 @@ function renderCalendar() {
     title.textContent = task.task;
     body.append(time, title, priorityBarsEl(task.priority));
     body.dataset.focusKey = 'cal-task-' + task.id;
-    body.onclick = () => openEdit(task.id);
+    body.onclick = () => openTaskView(task.id);
     row.append(check, body);
     list.appendChild(row);
   });
@@ -4619,6 +4757,11 @@ async function firstLoad() {
     if (result.ok) {
       taskLoadFinished(true);
       renderCurrentPage();
+      // папки и группы — для подписей «📁 …» в списке (не мешают показу задач)
+      Promise.allSettled([loadFolders(), loadGroups()]).then(async () => {
+        await Promise.allSettled((groups || []).map(g => loadFolders(g.id)));
+        renderCurrentPage();
+      });
       return;
     }
     if (result.auth) return;  // экран входа уже показан api()
@@ -4938,7 +5081,8 @@ async function submitComposer() {
     const res = await api(`/tasks/parse`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, default_date: newTaskDefaultDay, ...(newTaskGroup ? { group_id: newTaskGroup.id } : {}) }),
+      body: JSON.stringify({ text, default_date: newTaskDefaultDay, ...(newTaskGroup ? { group_id: newTaskGroup.id } : {}),
+        ...(folderChoice.new ? { folder_id: folderChoice.new } : {}) }),
     });
     if (!res.ok) {
       // 422 и 502 — разбор не удался, задач нет. Другая ошибка могла случиться уже после
@@ -4959,7 +5103,7 @@ async function submitComposer() {
     }
     viewMode = 'active';
     renderChips();
-    switchPage(newTaskGroup ? 'groups' : 'list');  // задача группы — остаёмся на странице группы
+    switchPage(newTaskFolder ? 'folder' : newTaskGroup ? 'groups' : 'list');  // задача папки или группы — остаёмся там
     await loadTasks();
   } catch (e) {
     // Нет ответа (сеть, сервер просыпается): запрос мог дойти, поэтому тоже перечитываем список.
@@ -4993,6 +5137,7 @@ async function submitManual() {
   payload.ends_at = endsAt;
   if (placeState.new && placeState.new.value) payload.location = placeState.new.value;
   if (newTaskGroup) payload.group_id = newTaskGroup.id;
+  if (folderChoice.new) payload.folder_id = folderChoice.new;
   if (repeatState.new.pattern === 'days' && !repeatState.new.days.length) { toast('Выберите хотя бы один день недели'); return; }
   btn.disabled = true;
   btn.textContent = 'Сохраняю…';
@@ -5022,7 +5167,7 @@ async function submitManual() {
     stripNeedsScroll = true;
     viewMode = 'active';
     renderChips();
-    switchPage(newTaskGroup ? 'groups' : 'list');  // задача группы — остаёмся на странице группы
+    switchPage(newTaskFolder ? 'folder' : newTaskGroup ? 'groups' : 'list');  // задача папки или группы — остаёмся там
     await loadTasks();
   } catch (e) {
     toast('Нет связи с сервером. Проверь список: задача могла сохраниться');
@@ -7354,7 +7499,11 @@ function openNewTask() {
   if (newTaskDefaultDay) document.getElementById('newDate').value = newTaskDefaultDay;  // «Вручную» — сразу эта дата
   if (!placeState.new) placeState.new = placeField(document.getElementById('newPlace'), '', 'Место задачи');
   // «+» на странице группы — задача сразу всем участникам: без категории и повтора
-  newTaskGroup = currentPage === 'groups' && openGroupId ? groupById(openGroupId) : null;
+  newTaskFolder = currentPage === 'folder' ? openFolderObj : null;
+  newTaskGroup = newTaskFolder && newTaskFolder.group_id ? groupById(newTaskFolder.group_id)
+    : (currentPage === 'groups' && openGroupId ? groupById(openGroupId) : null);
+  folderChoice.new = newTaskFolder ? newTaskFolder.id : null;
+  renderFolderChips('new', newTaskGroup ? newTaskGroup.id : null);
   document.getElementById('newTaskGroup').hidden = !newTaskGroup;
   document.getElementById('newTaskGroup').textContent = newTaskGroup ? `👥 В группу «${newTaskGroup.name}» — появится у всех участников` : '';
   document.getElementById('newCatSection').hidden = !!newTaskGroup;
@@ -7387,6 +7536,7 @@ document.getElementById('fabBtn').onclick = () => {
   if (currentPage === 'notes') document.getElementById('noteInput').focus();
   else if (currentPage === 'money' && moneyTab === 'goals') openGoalForm(null);
   else if (currentPage === 'groups' && !openGroupId) openGroupSheet(null);
+  else if (currentPage === 'folders') openFolderSheet(null, null);
   else if (currentPage === 'money') openMoneyForm(null, 'tx', { kind: moneyTab === 'income' ? 'income' : 'expense' });
   else openNewTask();
 };
@@ -7688,7 +7838,12 @@ function renderGroupPage(g) {
     ? `${g.members.map(m => m.name).join(', ')} · ${g.tick_all ? 'галочка у всех' : 'у каждого своя галочка'}`
     : 'Пока только вы — пригласите людей в настройках группы';
   mem.appendChild(label);
-  const mine = allTasks.filter(t => t.group_id === g.id);
+  if (!folderLists[g.id]) loadFolders(g.id).then(() => { if (currentPage === 'groups' && openGroupId === g.id) renderGroups(); });
+  const fgrid = document.getElementById('groupFolders');
+  fgrid.innerHTML = '';
+  (folderLists[g.id] || []).forEach(f => fgrid.appendChild(folderCardEl(f, 'groups')));
+  fgrid.appendChild(addFolderCardEl(g.id));
+  const mine = allTasks.filter(t => t.group_id === g.id && !t.folder_id);
   const open = mine.filter(t => t.status !== 'Done').sort(byDeadline);
   const done = mine.filter(t => t.status === 'Done');
   const box = document.getElementById('groupTasks');
@@ -7696,7 +7851,7 @@ function renderGroupPage(g) {
   if (!open.length) {
     const empty = document.createElement('div');
     empty.className = 'empty-dashed';
-    empty.textContent = 'Задач нет. Нажмите «+», чтобы добавить задачу для всей группы';
+    empty.textContent = 'Нажмите «+», чтобы добавить задачу для всей группы, или откройте папку';
     box.appendChild(empty);
   }
   open.forEach(t => box.appendChild(taskRowEl(t, t.deadline ? (dateKey(t.deadline) < localDateKey(new Date()) ? DAY_OVERDUE : 'group') : DAY_NODATE)));
@@ -7852,6 +8007,290 @@ function renderEditGroup(task) {
   parts.push('Название, срок, место, заметка, шаги и комментарии общие. Удалить — значит выйти из задачи.');
   document.getElementById('editShareHint').textContent = parts.join(' ');
 }
+
+// ---------- Папки (migration 015): личные («Задачи → Папки») и папки группы, страница папки ----------
+const FOLDER_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4.2l2 2H19a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/></svg>';
+let folderLists = {};        // 'me' | id группы → [папки]
+let openFolderObj = null;    // папка на странице 'folder'
+let folderReturn = 'folders';
+let folderDoneOpen = false;
+let newTaskFolder = null;    // «+» на странице папки — задача сразу в неё
+const folderChoice = { new: null, edit: null };
+function folderById(id) {
+  for (const key in folderLists) { const f = (folderLists[key] || []).find(x => x.id === id); if (f) return f; }
+  return null;
+}
+async function loadFolders(groupId) {
+  const key = groupId || 'me';
+  try { folderLists[key] = await apiJson(groupId ? `/folders?group_id=${groupId}` : '/folders'); }
+  catch (e) { folderLists[key] = folderLists[key] || []; }
+  return folderLists[key];
+}
+function folderCardEl(f, from) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'folder-card';
+  b.dataset.focusKey = 'folder-' + f.id;
+  if (f.color) b.style.setProperty('--row-bg', f.color);
+  b.innerHTML = FOLDER_ICON + '<b></b><small></small>';
+  b.querySelector('b').textContent = f.name;
+  const open = allTasks.filter(t => t.folder_id === f.id);
+  const done = open.filter(t => t.status === 'Done').length;
+  b.querySelector('small').textContent = open.length ? `${done} из ${open.length} готово` : 'пока пусто';
+  b.onclick = () => openFolderPage(f, from);
+  return b;
+}
+function addFolderCardEl(groupId) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'folder-card add';
+  b.dataset.focusKey = 'folder-add-' + (groupId || 'me');
+  b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Папка</span>';
+  b.onclick = () => openFolderSheet(null, groupId);
+  return b;
+}
+function renderFoldersPage() {
+  const grid = document.getElementById('foldersGrid');
+  grid.innerHTML = '';
+  (folderLists.me || []).forEach(f => grid.appendChild(folderCardEl(f, 'folders')));
+  grid.appendChild(addFolderCardEl(null));
+}
+function openFolderPage(f, from) {
+  openFolderObj = f;
+  folderReturn = from;
+  folderDoneOpen = false;
+  switchPage('folder');
+  window.scrollTo(0, 0);
+}
+function renderFolderPage() {
+  const f = openFolderObj && (folderById(openFolderObj.id) || openFolderObj);
+  if (!f) return;
+  openFolderObj = f;
+  const g = f.group_id ? groupById(f.group_id) : null;
+  document.getElementById('folderTitle').textContent = `📁 ${f.name}`;
+  const mine = allTasks.filter(t => t.folder_id === f.id);
+  const open = mine.filter(t => t.status !== 'Done').sort(byDeadline);
+  const done = mine.filter(t => t.status === 'Done');
+  document.getElementById('folderSub').textContent =
+    `${g ? `👥 ${g.name} · ` : ''}${mine.length ? `${done.length} из ${mine.length} готово` : 'Пока пусто'}`;
+  const box = document.getElementById('folderTasks');
+  box.innerHTML = '';
+  if (!open.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-dashed';
+    empty.textContent = g ? 'Нажмите «+» — задача появится в папке у всех участников' : 'Нажмите «+», чтобы добавить задачу в папку';
+    box.appendChild(empty);
+  }
+  open.forEach(t => box.appendChild(taskRowEl(t, 'folder')));
+  const toggle = document.getElementById('folderDoneToggle');
+  toggle.hidden = !done.length;
+  toggle.textContent = folderDoneOpen ? `Скрыть выполненные (${done.length})` : `Выполненные (${done.length})`;
+  const doneBox = document.getElementById('folderDoneTasks');
+  doneBox.hidden = !folderDoneOpen;
+  doneBox.innerHTML = '';
+  if (folderDoneOpen) done.forEach(t => doneBox.appendChild(doneRowEl(t)));
+  document.getElementById('fabBtn').setAttribute('aria-label', `Новая задача в папку «${f.name}»`);
+}
+function doneRowEl(t) {
+  const row = document.createElement('div');
+  row.className = 'archive-row';
+  paintRow(row, t.category);
+  row.innerHTML = '<div class="row-body"><div class="row-title"></div><div class="row-meta"><span class="row-time"></span></div></div>';
+  row.querySelector('.row-title').textContent = t.task;
+  const dt = t.deadline && parseNaiveDeadline(t.deadline);
+  row.querySelector('.row-time').textContent = dt ? `${dt.getDate()} ${MONTH_SHORT[dt.getMonth()]} · ${timeOf(t.deadline)}` : 'Без срока';
+  row.style.cursor = 'pointer';
+  row.onclick = () => openTaskView(t.id);
+  return row;
+}
+document.getElementById('folderDoneToggle').onclick = () => { folderDoneOpen = !folderDoneOpen; renderFolderPage(); };
+document.getElementById('folderSettingsBtn').onclick = () => { if (openFolderObj) openFolderSheet(openFolderObj, openFolderObj.group_id); };
+
+// Окно папки: создать (в «Папках» или на странице группы), переименовать, удалить.
+const folderSheet = document.getElementById('folderSheet');
+let folderEditing = null, folderSheetGroup = null;
+function openFolderSheet(f, groupId) {
+  folderEditing = f;
+  folderSheetGroup = groupId || null;
+  const g = groupId ? groupById(groupId) : null;
+  document.getElementById('folderSheetTitle').textContent = f ? 'Папка' : 'Новая папка';
+  document.getElementById('folderName').value = f ? f.name : '';
+  document.getElementById('folderSheetHint').textContent = g
+    ? `Папка группы «${g.name}»: её видят все участники, задачи в ней — у всех.`
+    : 'Личная папка: видите только вы. Задачи из неё видны и в общем списке по дням.';
+  document.getElementById('folderDelete').hidden = !f || !f.can_delete;
+  document.getElementById('folderSave').textContent = f ? 'Сохранить' : 'Создать папку';
+  folderSheet.hidden = false;
+  document.body.classList.add('no-scroll');
+  setBackgroundInert(true);
+  document.getElementById('folderName').focus();
+}
+function closeFolderSheet() {
+  folderSheet.hidden = true;
+  document.body.classList.remove('no-scroll');
+  setBackgroundInert(false);
+}
+document.getElementById('folderSheetClose').onclick = closeFolderSheet;
+document.getElementById('folderName').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('folderSave').click(); } };
+document.getElementById('folderSave').onclick = async () => {
+  const name = document.getElementById('folderName').value.trim();
+  if (!name) { toast('Назовите папку'); document.getElementById('folderName').focus(); return; }
+  try {
+    if (folderEditing) await apiJson(`/folders/${folderEditing.id}`, { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify({ name }) });
+    else await apiJson('/folders', { method: 'POST', headers: JSON_HEADERS,
+      body: JSON.stringify(folderSheetGroup ? { name, group_id: folderSheetGroup } : { name }) });
+    await loadFolders(folderSheetGroup);
+    closeFolderSheet();
+    toast(folderEditing ? 'Сохранено' : 'Папка создана');
+    renderCurrentPage();
+  } catch (e) { toast(e.message || 'Не удалось сохранить папку'); }
+};
+document.getElementById('folderDelete').onclick = async () => {
+  if (!folderEditing) return;
+  try {
+    await apiJson(`/folders/${folderEditing.id}`, { method: 'DELETE' });
+    await loadFolders(folderSheetGroup);
+    closeFolderSheet();
+    toast('Папка удалена. Задачи остались');
+    if (currentPage === 'folder') { openFolderObj = null; switchPage(folderReturn); }
+    await loadTasks();
+  } catch (e) { toast(e.message || 'Не удалось удалить папку'); }
+};
+
+// Выбор папки в «Новой задаче» и «Изменить»: личные папки у обычной задачи, папки группы — у задачи группы.
+async function renderFolderChips(where, groupId) {
+  const key = groupId || 'me';
+  if (!folderLists[key]) await loadFolders(groupId);
+  const list = folderLists[key] || [];
+  const section = document.getElementById(`${where}FolderSection`);
+  section.hidden = !list.length;
+  const box = document.getElementById(`${where}Folder`);
+  box.innerHTML = '';
+  [[null, 'Без папки'], ...list.map(f => [f.id, `📁 ${f.name}`])].forEach(([id, label]) => {
+    const [btn, text] = choiceChipEl(label, folderChoice[where] === id, 'solid', () => { folderChoice[where] = id; renderFolderChips(where, groupId); });
+    btn.appendChild(text);
+    box.appendChild(btn);
+  });
+}
+
+// ---------- Просмотр задачи: прочитать всё, отметить шаги; «Изменить» и «Удалить» — кнопками ----------
+const taskViewSheet = document.getElementById('taskViewSheet');
+let tvTaskId = null;
+function openTaskView(id) {
+  const task = findTask(id);
+  if (!task) return;
+  tvTaskId = id;
+  taskViewSheet.dataset.returnKey = document.activeElement && document.activeElement.dataset ? (document.activeElement.dataset.focusKey || '') : '';
+  document.getElementById('tvBody').innerHTML = '<div id="tvMain"></div><div class="tv-block" id="tvCommentsBlock" hidden><div class="tv-label">Комментарии</div><div class="comment-list" id="tvComments"></div></div>';
+  renderTaskView();
+  loadTaskViewComments(id);
+  taskViewSheet.hidden = false;
+  taskViewSheet.scrollTop = 0;
+  document.body.classList.add('no-scroll');
+  setBackgroundInert(true);
+  document.getElementById('tvClose').focus();
+}
+function closeTaskView() {
+  if (taskViewSheet.hidden) return;
+  taskViewSheet.hidden = true;
+  tvTaskId = null;
+  document.body.classList.remove('no-scroll');
+  setBackgroundInert(false);
+  const key = taskViewSheet.dataset.returnKey;
+  const back = key && document.querySelector(`[data-focus-key="${key}"]`);
+  if (back) back.focus({ preventScroll: true });
+}
+function tvBlock(label, content) {
+  const b = document.createElement('div');
+  b.className = 'tv-block';
+  const l = document.createElement('div');
+  l.className = 'tv-label';
+  l.textContent = label;
+  b.appendChild(l);
+  if (content) b.appendChild(content);
+  return b;
+}
+function renderTaskView() {
+  const task = tvTaskId && findTask(tvTaskId);
+  const main = document.getElementById('tvMain');
+  if (!task || !main) { closeTaskView(); return; }
+  const focusKey = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.focusKey : null;
+  main.innerHTML = '';
+  const title = document.createElement('h3');
+  title.className = 'tv-title';
+  title.textContent = task.task;
+  const badges = document.createElement('div');
+  badges.className = 'tv-badges';
+  const parts = [task.category, PRIORITY_TEXT[task.priority] || ''];
+  const f = task.folder_id && folderById(task.folder_id);
+  if (f) parts.push(`📁 ${f.name}`);
+  if (task.shared && task.shared.with.length) parts.push(`👥 с ${task.shared.with.join(', ')}${!task.shared.tick_all ? ` · готово ${task.shared.done} из ${task.shared.total}` : ''}`);
+  if (task.status === 'Done') parts.push('✅ выполнена');
+  badges.textContent = parts.filter(Boolean).join(' · ');
+  main.append(title, badges);
+  const when = document.createElement('div');
+  when.className = 'tv-text';
+  const dt = task.deadline && parseNaiveDeadline(task.deadline);
+  const repeat = repeatLabel(task);
+  when.textContent = dt
+    ? `${WEEKDAY_FULL[dt.getDay()]}, ${dt.getDate()} ${MONTH_GENITIVE[dt.getMonth()]}${timeOf(task.deadline) === '23:59' && !task.ends_at ? '' : ' · ' + timeRange(task)}${repeat ? ' · ↻ ' + repeat : ''}`
+    : 'Без срока';
+  main.appendChild(tvBlock('Срок', when));
+  if (task.location) {
+    const wrap = document.createElement('div');
+    wrap.className = 'place-preview';
+    const link = document.createElement('button');
+    link.type = 'button';
+    link.className = 'place-chip';
+    link.dataset.focusKey = 'tv-place';
+    link.innerHTML = PIN_ICON + '<span></span>';
+    link.querySelector('span').textContent = task.location;
+    link.setAttribute('aria-label', `Открыть в Google Maps: ${task.location}`);
+    link.onclick = () => openExternal(mapsUrl(task.location));
+    const map = document.createElement('iframe');
+    map.className = 'place-map';
+    map.title = 'Карта места';
+    map.loading = 'lazy';
+    map.referrerPolicy = 'no-referrer-when-downgrade';
+    map.src = `https://maps.google.com/maps?q=${encodeURIComponent(task.location)}&z=15&output=embed`;
+    wrap.append(link, map);
+    main.appendChild(tvBlock('Место', wrap));
+  }
+  if (task.note) {
+    const note = linkifiedEl(task.note);
+    note.classList.add('tv-text');
+    main.appendChild(tvBlock('Заметка', note));
+  }
+  const steps = allSubtasks.filter(x => x.task_id === task.id);
+  const stepsBox = document.createElement('div');
+  steps.forEach(step => stepsBox.appendChild(stepRowEl(step)));
+  if (task.status !== 'Done') {
+    const input = document.createElement('input');
+    input.className = 'step-input';
+    input.type = 'text';
+    input.placeholder = '+ добавить шаг';
+    input.autocomplete = 'off';
+    input.setAttribute('aria-label', 'Новый шаг');
+    input.dataset.focusKey = 'tv-step-input';
+    stepsBox.appendChild(stepInputEl(input, task.id));
+    stepsBox.appendChild(breakdownBtnEl(task.id, 'tv-breakdown'));
+  }
+  main.appendChild(tvBlock(steps.length ? `Шаги · ${steps.filter(x => x.is_done).length} из ${steps.length}` : 'Шаги', stepsBox));
+  document.getElementById('tvDeleteLabel').textContent = task.shared_id ? 'Выйти' : 'Удалить';
+  if (focusKey) { const again = main.querySelector(`[data-focus-key="${focusKey}"]`); if (again) again.focus({ preventScroll: true }); }
+}
+async function loadTaskViewComments(id) {
+  let comments = [];
+  try { comments = await apiJson(`/tasks/${id}/comments`); } catch (e) { comments = []; }
+  if (tvTaskId !== id) return;
+  const box = document.getElementById('tvComments');
+  box.innerHTML = '';
+  comments.forEach(c => box.appendChild(commentEl(c)));
+  document.getElementById('tvCommentsBlock').hidden = !comments.length;
+}
+document.getElementById('tvClose').onclick = closeTaskView;
+document.getElementById('tvEdit').onclick = () => { const id = tvTaskId; closeTaskView(); openEdit(id); };
+document.getElementById('tvDelete').onclick = () => { const id = tvTaskId; closeTaskView(); deleteTask(id); };
 
 function choiceChipEl(label, pressed, extraClass, onPick) {
   const btn = document.createElement('button');
@@ -8043,6 +8482,8 @@ function openEdit(id) {
   document.getElementById('editRepeatSection').hidden = !!task.gcal_imported || !!task.shared_id || !!task.group_id;
   placeState.edit = placeField(document.getElementById('editPlace'), task.location, 'Место задачи');
   document.getElementById('editDeleteLabel').textContent = task.shared_id ? 'Выйти из задачи' : 'Удалить задачу';
+  folderChoice.edit = task.folder_id || null;
+  renderFolderChips('edit', task.group_id || null);
   renderEditGroup(task);
   renderRepeat('edit');
   renderEditChips();
@@ -8299,6 +8740,7 @@ async function submitEdit() {
   if (endsAt === undefined) return;
   fields.ends = endsAt;
   fields.extra = { location: placeState.edit ? placeState.edit.value : null };
+  if (!document.getElementById('editFolderSection').hidden) fields.extra.folder_id = folderChoice.edit;
   const task = findTask(editingId);
   if (task && !task.gcal_imported) {
     if (repeatState.edit.pattern === 'days' && !repeatState.edit.days.length) { toast('Выберите хотя бы один день недели'); return; }
@@ -8345,6 +8787,8 @@ document.addEventListener('keydown', (e) => {
   else if (!moneySheet.hidden) closeMoneyForm();
   else if (!currencySheet.hidden) closeCurrency();
   else if (!statementSheet.hidden) closeStatement();
+  else if (!folderSheet.hidden) closeFolderSheet();
+  else if (!taskViewSheet.hidden) closeTaskView();
   else if (!groupSheet.hidden) closeGroupSheet();
   else if (!settingsSheet.hidden) closeSettings();
   else if (!calendarsSheet.hidden) closeCalendars();

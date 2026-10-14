@@ -48,6 +48,8 @@ DEFAULTS = {
     "note_files": lambda: {"id": str(uuid.uuid4()), "created_at": _now()},
     "task_groups": lambda: {"id": str(uuid.uuid4()), "tick_all": True, "created_at": _now()},
     "task_group_members": lambda: {"joined_at": _now()},
+    "task_folders": lambda: {"id": str(uuid.uuid4()), "user_id": None, "group_id": None, "color": None,
+                             "created_at": _now()},
     "subtasks": lambda: {"id": str(uuid.uuid4()), "is_done": False, "created_at": _now()},
     "telegram_chats": lambda: {"created_at": _now()},
     "categories": lambda: {"id": str(uuid.uuid4()), "sort_order": 0, "created_at": _now()},
@@ -286,6 +288,16 @@ class Query:
                 for t in self.db.tables.get("tasks", []):
                     if t.get("group_id") in ids:
                         t["group_id"] = None
+                gone_folders = {f["id"] for f in self.db.tables.get("task_folders", []) if f.get("group_id") in ids}
+                self.db.tables["task_folders"] = [f for f in self.db.tables.get("task_folders", []) if f["id"] not in gone_folders]
+                for t in self.db.tables.get("tasks", []):
+                    if t.get("folder_id") in gone_folders:
+                        t["folder_id"] = None
+            if self.table == "task_folders":  # tasks.folder_id ... on delete set null
+                ids = {r["id"] for r in gone}
+                for t in self.db.tables.get("tasks", []):
+                    if t.get("folder_id") in ids:
+                        t["folder_id"] = None
             if self.table == "notes":  # note_files.note_id ... on delete cascade
                 ids = {r["id"] for r in gone}
                 self.db.tables["note_files"] = [f for f in self.db.tables.get("note_files", []) if f["note_id"] not in ids]

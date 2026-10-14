@@ -109,6 +109,7 @@ def main():
     check("повтор у задачи группы → 422",
           client.patch(f"/tasks/{jt['id']}", headers=hJ, json={"recurrence_pattern": "daily"}).status_code == 422)
     s1 = client.post(f"/tasks/{jt['id']}/subtasks", headers=hJ, json={"content": "Торт"}).json()
+    client.post(f"/tasks/{jt['id']}/subtasks", headers=hJ, json={"content": "Цветы"})  # второй шаг открыт — задача не закроется сама
     check("шаг, добавленный Julie, виден у Yera под его копией",
           any(s["content"] == "Торт" and s["task_id"] == t["id"] for s in client.get("/subtasks", headers=hY).json()))
     r = client.patch(f"/subtasks/{s1['id']}", headers=hY, json={"is_done": True})

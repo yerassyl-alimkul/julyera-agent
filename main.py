@@ -50,6 +50,7 @@ import goals_service
 import calendar_sync
 import categories_service
 import comments_service
+import folders_service
 import groups_service
 import places_service
 import shared_service
@@ -81,6 +82,7 @@ from models import (
     MoneyCategoryUpdate,
     MoneyParseRequest,
     NotePhotoIn,
+    FolderIn,
     GroupIn,
     RecurringCreate,
     RecurringUpdate,
@@ -277,7 +279,8 @@ def parse_and_create_tasks(payload: ParseRequest, user: dict = Depends(current_u
     try:
         created = task_service.create_tasks_from_text(payload.text, user["id"], source_hint=payload.source,
                                                       default_date=payload.default_date,
-                                                      group_id=str(payload.group_id) if payload.group_id else None)
+                                                      group_id=str(payload.group_id) if payload.group_id else None,
+                                                      folder_id=str(payload.folder_id) if payload.folder_id else None)
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=f"Ошибка разбора LLM: {exc}")
 
@@ -311,6 +314,32 @@ def list_tasks(
         t["comments_count"], t["files_count"] = c.get("comments", 0), c.get("files", 0)
         t["shared"] = shared.get(t["id"])
     return tasks
+
+
+@app.get("/folders")
+def list_folders(group_id: Optional[UUID] = Query(None), user: dict = Depends(current_user)):
+    """Папки: личные (без group_id) или папки группы."""
+    return folders_service.list_folders(user["id"], str(group_id) if group_id else None)
+
+
+@app.post("/folders", status_code=201)
+def create_folder(payload: FolderIn, user: dict = Depends(current_user)):
+    return folders_service.create_folder(user["id"], payload.name, str(payload.group_id) if payload.group_id else None)
+
+
+@app.patch("/folders/{folder_id}")
+def rename_folder(folder_id: UUID, payload: FolderIn, user: dict = Depends(current_user)):
+    folder = folders_service.rename_folder(str(folder_id), user["id"], payload.name)
+    if not folder:
+        raise HTTPException(status_code=404, detail="Папка не найдена")
+    return folder
+
+
+@app.delete("/folders/{folder_id}", status_code=204)
+def delete_folder(folder_id: UUID, user: dict = Depends(current_user)):
+    if not folders_service.delete_folder(str(folder_id), user["id"]):
+        raise HTTPException(status_code=404, detail="Папка не найдена")
+    return None
 
 
 @app.get("/groups")

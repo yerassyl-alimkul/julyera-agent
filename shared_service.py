@@ -22,7 +22,7 @@ from database import supabase
 logger = logging.getLogger(__name__)
 
 TASKS = "tasks"
-SHARED_FIELDS = ("task", "deadline", "ends_at", "note", "location", "priority", "status")
+SHARED_FIELDS = ("task", "deadline", "ends_at", "note", "location", "priority", "status", "folder_id")
 
 
 def _now() -> str:
@@ -88,6 +88,8 @@ def _copy_row(source: dict, user_id: str, group: dict, canonical: str) -> dict:
            "source": "Группа", "deadline": source.get("deadline"), "ends_at": source.get("ends_at"),
            "priority": source.get("priority") or "Mid", "status": "To Do", "note": source.get("note"),
            "is_recurring": False, "tags": [], "shared_id": canonical, "group_id": group["id"]}
+    if source.get("folder_id"):  # папка группы — общая
+        row["folder_id"] = source["folder_id"]
     if source.get("location"):
         row["location"] = source["location"]
     return row

@@ -43,6 +43,7 @@ class TaskBase(BaseModel):
     note: Optional[str] = None
     location: Optional[str] = Field(None, max_length=200)  # место (адрес текстом), migration 014
     group_id: Optional[UUID] = None  # задача группы: сразу у всех участников (migration 014); менять нельзя
+    folder_id: Optional[UUID] = None  # папка (migration 015): своя личная или папка той же группы
     is_recurring: bool = False
     recurrence_pattern: Optional[RecurrencePattern] = None
     recurrence_days: Optional[List[int]] = None
@@ -64,6 +65,7 @@ class ParseRequest(BaseModel):
         None, description="YYYY-MM-DD: день, открытый в приложении; задачи без даты в тексте встают на него"
     )
     group_id: Optional[UUID] = Field(None, description="задачи сразу в группу (страница группы)")
+    folder_id: Optional[UUID] = Field(None, description="задачи сразу в папку (страница папки)")
 
 
 class TaskUpdate(BaseModel):
@@ -78,6 +80,7 @@ class TaskUpdate(BaseModel):
     status: Optional[Status] = None
     note: Optional[str] = None
     location: Optional[str] = Field(None, max_length=200)
+    folder_id: Optional[UUID] = None  # переложить в папку; null — убрать из папки
     is_recurring: Optional[bool] = None
     recurrence_pattern: Optional[RecurrencePattern] = None
     recurrence_days: Optional[List[int]] = None
@@ -105,6 +108,12 @@ class CommentFile(BaseModel):
     name: Optional[str] = None
     type: str
     data: str
+
+
+class FolderIn(BaseModel):
+    """POST /folders (group_id — папка группы, без него — личная), PATCH /folders/{id} (название)."""
+    name: Optional[str] = None
+    group_id: Optional[UUID] = None
 
 
 class GroupIn(BaseModel):

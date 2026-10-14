@@ -20,7 +20,8 @@ from models import Status, TaskCreate, TaskUpdate
 
 logger = logging.getLogger(__name__)
 TABLE = "tasks"
-NULLABLE_FIELDS = {"deadline", "ends_at", "note", "source", "recurrence_pattern", "recurrence_days", "location"}
+NULLABLE_FIELDS = {"deadline", "ends_at", "note", "source", "recurrence_pattern", "recurrence_days", "location",
+                   "folder_id"}
 # Повторения одного события Google Calendar связаны: эти поля, изменённые у одного, меняются у всех незакрытых.
 # Время, статус и удаление — только у самого повторения (как «только это событие» в Google).
 SERIES_FIELDS = ("task", "category", "priority", "note")
@@ -161,8 +162,18 @@ def _known_category(user_id: str, name: str) -> str:
 def create_task(payload: TaskCreate, user_id: str) -> dict:
     data = payload.model_dump(mode="json", exclude_none=False)
     data["user_id"] = user_id  # владельца ставит сервер, не клиент
+    import folders_service
     import shared_service
+    if data.get("folder_id"):  # задача в папке группы — задача этой группы (migration 015)
+        folder = folders_service.get_folder(data["folder_id"], user_id)
+        if folder and folder.get("group_id") and not data.get("group_id"):
+            data["group_id"] = folder["group_id"]
     group = shared_service.prepare_group_task(data, user_id)  # задача группы: категория — название группы
+    if data.get("folder_id"):
+        folders_service.check_for_task(data["folder_id"], user_id, data.get("group_id"))
+        data["folder_id"] = str(data["folder_id"])
+    else:
+        data.pop("folder_id", None)
     if not group:
         data["category"] = _known_category(user_id, data["category"])
     data["location"] = (data.get("location") or "").strip() or None
@@ -210,13 +221,16 @@ def _parsed_tasks(raw_text: str, user_id: str, source_hint: Optional[str] = None
 
 
 def create_tasks_from_text(raw_text: str, user_id: str, source_hint: Optional[str] = None,
-                           default_date: Optional[str] = None, group_id: Optional[str] = None) -> list[dict]:
+                           default_date: Optional[str] = None, group_id: Optional[str] = None,
+                           folder_id: Optional[str] = None) -> list[dict]:
     """default_date ("YYYY-MM-DD") — день, открытый в приложении: задачи без даты в тексте встают на него
     (время — из текста или 23:59). Своя дата в тексте главнее. group_id — задачи сразу в группу."""
     tasks = _parsed_tasks(raw_text, user_id, source_hint, default_date)
     if group_id:
         tasks = [t.model_copy(update={"group_id": group_id, "is_recurring": False, "recurrence_pattern": None,
                                       "recurrence_days": None}) for t in tasks]
+    if folder_id:
+        tasks = [t.model_copy(update={"folder_id": folder_id}) for t in tasks]
     return [create_task(t, user_id) for t in tasks]
 
 
@@ -294,6 +308,9 @@ def update_task(task_id: str, payload: TaskUpdate, user_id: str, propagate: bool
     if (current.get("shared_id") or current.get("group_id")) and update_data.get("recurrence_pattern"):
         raise CategoryError(422, "Задачу группы пока нельзя сделать повторяющейся", "shared_recurring")
     update_data.pop("group_id", None)  # группу у задачи не меняют
+    if update_data.get("folder_id"):
+        import folders_service
+        folders_service.check_for_task(update_data["folder_id"], user_id, current.get("group_id"))
     if "recurrence_pattern" in update_data or "recurrence_days" in update_data:
         if "recurrence_pattern" not in update_data:
             update_data["recurrence_pattern"] = current.get("recurrence_pattern")
