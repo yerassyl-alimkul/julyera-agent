@@ -1226,6 +1226,8 @@ applyTheme();
   .folder-card small { font-size: 12px; opacity: .75; }
   .folder-card.add { border: 1.5px dashed var(--line); background: transparent; color: var(--ink-muted); align-items: center;
     justify-content: center; flex-direction: row; gap: 6px; }
+  .folder-add-existing { display: inline-flex; align-items: center; gap: 6px; margin-top: var(--gap-m); }
+  .folder-add-existing svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   .section-label { margin: var(--gap-l) 0 var(--gap-s); font-size: 13px; font-weight: 600; color: var(--ink-muted); }
   /* Карточка задачи для просмотра */
   .tv-title { margin: var(--gap-m) 0 4px; font-size: 22px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
@@ -2123,6 +2125,7 @@ applyTheme();
           <div class="day-sub" id="folderSub"></div>
         </div>
       </div>
+      <button class="pill-btn folder-add-existing" id="folderAddExisting" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4.2l2 2H19a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5zM12 11v5M9.5 13.5h5"/></svg>Добавить задачи</button>
       <div class="group-task-list" id="folderTasks" style="padding-top: var(--gap-m);"></div>
       <button class="link-btn" id="folderDoneToggle" type="button" hidden></button>
       <div class="group-task-list" id="folderDoneTasks" hidden></div>
@@ -2494,6 +2497,25 @@ applyTheme();
   <div class="sheet-footer tv-actions">
     <button class="btn-primary" id="tvEdit" type="button">Изменить</button>
     <button class="btn-danger" id="tvDelete" type="button"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/></svg><span id="tvDeleteLabel">Удалить</span></button>
+  </div>
+</div>
+
+<!-- Добавить существующие задачи в папку -->
+<div class="sheet" id="folderPickSheet" role="dialog" aria-modal="true" aria-labelledby="folderPickTitle" hidden>
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <button class="tb-btn" id="folderPickClose" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <h2 class="t-modal-title" id="folderPickTitle">Добавить в папку</h2>
+      <span></span>
+    </div>
+    <div class="edit-form">
+      <input class="field" id="folderPickSearch" type="search" autocomplete="off" placeholder="Найти задачу" aria-label="Найти задачу">
+      <p class="form-hint repeat-hint" id="folderPickHint"></p>
+      <div class="people-list" id="folderPickList"></div>
+    </div>
+  </div>
+  <div class="sheet-footer">
+    <button class="btn-primary" id="folderPickSave">Добавить в папку</button>
   </div>
 </div>
 
@@ -8104,6 +8126,90 @@ function doneRowEl(t) {
   return row;
 }
 document.getElementById('folderDoneToggle').onclick = () => { folderDoneOpen = !folderDoneOpen; renderFolderPage(); };
+
+// «Добавить задачи»: существующие незакрытые задачи — в эту папку (PATCH folder_id). В папку группы — только задачи
+// этой группы, в личную — только свои задачи (не групповые): так же проверяет сервер.
+const folderPickSheet = document.getElementById('folderPickSheet');
+let folderPicked = new Set();
+function folderPickCandidates(f) {
+  return allTasks.filter(t => t.status !== 'Done' && t.folder_id !== f.id
+    && (f.group_id ? t.group_id === f.group_id : !t.group_id) && !pendingDeletions[t.id]).sort(byDeadline);
+}
+function openFolderPick() {
+  const f = openFolderObj;
+  if (!f) return;
+  folderPicked = new Set();
+  document.getElementById('folderPickTitle').textContent = `В папку «${f.name}»`;
+  document.getElementById('folderPickSearch').value = '';
+  const g = f.group_id ? groupById(f.group_id) : null;
+  document.getElementById('folderPickHint').textContent = g
+    ? `Здесь задачи группы «${g.name}». Отмеченные переедут в папку у всех участников.`
+    : 'Здесь ваши задачи (не групповые). Если задача уже в другой папке, она переедет сюда.';
+  renderFolderPick();
+  folderPickSheet.hidden = false;
+  document.body.classList.add('no-scroll');
+  setBackgroundInert(true);
+  document.getElementById('folderPickClose').focus();
+}
+function closeFolderPick() {
+  folderPickSheet.hidden = true;
+  document.body.classList.remove('no-scroll');
+  setBackgroundInert(false);
+}
+function renderFolderPick() {
+  const f = openFolderObj;
+  const q = document.getElementById('folderPickSearch').value.trim().toLowerCase().replace(/ё/g, 'е');
+  const list = document.getElementById('folderPickList');
+  list.innerHTML = '';
+  const items = folderPickCandidates(f).filter(t => !q || t.task.toLowerCase().replace(/ё/g, 'е').includes(q));
+  if (!items.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-dashed';
+    empty.textContent = q ? 'Ничего не нашлось' : 'Подходящих задач нет';
+    list.appendChild(empty);
+  }
+  items.forEach(t => {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'people-row';
+    row.setAttribute('role', 'checkbox');
+    row.setAttribute('aria-checked', String(folderPicked.has(t.id)));
+    row.dataset.focusKey = 'fp-' + t.id;
+    row.innerHTML = '<span class="step-circle"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="people-name"><span></span><small></small></span>';
+    row.querySelector('.people-name span').textContent = t.task;
+    const dt = t.deadline && parseNaiveDeadline(t.deadline);
+    const other = t.folder_id && folderById(t.folder_id);
+    row.querySelector('small').textContent = `${dt ? `${dt.getDate()} ${MONTH_SHORT[dt.getMonth()]}` : 'без срока'} · ${other ? `📁 ${other.name} → переедет` : 'без папки'}`;
+    row.onclick = () => {
+      if (folderPicked.has(t.id)) folderPicked.delete(t.id); else folderPicked.add(t.id);
+      renderFolderPick();
+      const again = list.querySelector(`[data-focus-key="fp-${t.id}"]`);
+      if (again) again.focus({ preventScroll: true });
+    };
+    list.appendChild(row);
+  });
+  const btn = document.getElementById('folderPickSave');
+  btn.textContent = folderPicked.size ? `Добавить в папку (${folderPicked.size})` : 'Отметьте задачи';
+  btn.disabled = !folderPicked.size;
+}
+document.getElementById('folderAddExisting').onclick = openFolderPick;
+document.getElementById('folderPickClose').onclick = closeFolderPick;
+document.getElementById('folderPickSearch').oninput = renderFolderPick;
+document.getElementById('folderPickSave').onclick = async () => {
+  const f = openFolderObj;
+  if (!f || !folderPicked.size) return;
+  const btn = document.getElementById('folderPickSave');
+  btn.disabled = true;
+  let failed = 0;
+  for (const id of folderPicked) {
+    try { await apiJson(`/tasks/${id}`, { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify({ folder_id: f.id }) }); }
+    catch (e) { failed++; }
+  }
+  const moved = folderPicked.size - failed;
+  closeFolderPick();
+  toast(failed ? `Добавлено: ${moved}, не получилось: ${failed}` : `Добавлено в папку: ${moved}`);
+  await loadTasks();
+};
 document.getElementById('folderSettingsBtn').onclick = () => { if (openFolderObj) openFolderSheet(openFolderObj, openFolderObj.group_id); };
 
 // Окно папки: создать (в «Папках» или на странице группы), переименовать, удалить.
@@ -8788,6 +8894,7 @@ document.addEventListener('keydown', (e) => {
   else if (!currencySheet.hidden) closeCurrency();
   else if (!statementSheet.hidden) closeStatement();
   else if (!folderSheet.hidden) closeFolderSheet();
+  else if (!folderPickSheet.hidden) closeFolderPick();
   else if (!taskViewSheet.hidden) closeTaskView();
   else if (!groupSheet.hidden) closeGroupSheet();
   else if (!settingsSheet.hidden) closeSettings();
