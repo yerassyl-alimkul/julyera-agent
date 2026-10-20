@@ -231,7 +231,7 @@ def main():
     calB.add("b1", "Событие B", at(d(1), 8), at(d(1), 9))
 
     calendar_sync.PAGE_SIZE = 4  # заодно проверяем чтение по страницам
-    r = client.post("/internal/reminders/run", headers={"X-Reminder-Secret": os.environ["REMINDERS_SECRET"]})
+    r = client.post("/internal/reminders/run?wait=1", headers={"X-Reminder-Secret": os.environ["REMINDERS_SECRET"]})
     check("рассылка с синхронизацией отвечает 200", r.status_code == 200, r.text[:200])
     ids = {t["google_event_id"] for t in tasks_of(A)}
     expected = {"one", "kz", "allday", "far"} | {f"rec_{d(1 + 7 * k):%Y%m%d}" for k in range(5)}

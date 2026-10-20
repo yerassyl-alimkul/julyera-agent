@@ -90,7 +90,7 @@ def main():
 
     def run():
         start = len(sent)
-        r = client.post("/internal/reminders/run", headers={"X-Reminder-Secret": secret})
+        r = client.post("/internal/reminders/run?wait=1", headers={"X-Reminder-Secret": secret})
         assert r.status_code == 200, r.status_code
         return sent[start:]
 
@@ -411,6 +411,11 @@ def main():
     run()
     check("частый вызов быстрый (меньше 10 секунд на 30+ пользователей)", _time.time() - started < 10)
     check("без секрета → 403", client.post("/internal/reminders/run").status_code == 403)
+    import time as _time
+    t0 = _time.monotonic()
+    r = client.post("/internal/reminders/run", headers={"X-Reminder-Secret": secret})
+    check("cron получает ответ сразу (202), работа идёт в фоне", r.status_code == 202
+          and r.json()["status"] in ("started", "already_running") and _time.monotonic() - t0 < 5, r.text[:120])
 
     failed = [name for ok, name in ic.results if not ok]
     print(f"\nИтого: {len(ic.results) - len(failed)} из {len(ic.results)} проверок пройдено.")

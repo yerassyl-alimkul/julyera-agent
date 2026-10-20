@@ -530,7 +530,7 @@ def reminder_checks(client, A, B, wife):
     real = main._send_telegram_message
     main._send_telegram_message = fake_send
     try:
-        r = client.post("/internal/reminders/run", headers={"X-Reminder-Secret": os.environ["REMINDERS_SECRET"]})
+        r = client.post("/internal/reminders/run?wait=1", headers={"X-Reminder-Secret": os.environ["REMINDERS_SECRET"]})
     finally:
         main._send_telegram_message = real
     to_a = "\n".join(t for c, t in sent if c == A["telegram_user_id"])

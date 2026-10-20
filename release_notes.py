@@ -11,8 +11,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-RELEASE_ID = "2026-10-20-reminders-stable"
-RELEASE_TEXT = """🔧 Напоминания, сводки и повторяющиеся платежи снова приходят по расписанию, а приложение реже «просыпается» долго."""
+RELEASE_ID = "2026-10-20-reminders-background"
+RELEASE_TEXT = """🔧 Приложение отвечает быстрее, пока JulYera рассылает напоминания и синхронизирует календарь."""
 
 
 async def announce(bot, supabase, users: list[dict], reply_markup=None) -> bool:

@@ -29,6 +29,7 @@ Backend для персонального агента структуриров�
 Локально WEBHOOK_BASE_URL не задавай — вместо этого используй bot.py (polling).
 """
 import logging
+import asyncio
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -823,17 +824,45 @@ async def run_reminders(request: Request):
         raise HTTPException(status_code=403, detail="Forbidden")
     if not TELEGRAM_BOT_TOKEN:
         raise HTTPException(status_code=500, detail="TELEGRAM_BOT_TOKEN не настроен")
+    # Отвечаем сразу (202), работа — в фоне (решение владельца 20 октября 2026): cron-job.org ждёт ответа не
+    # дольше 30 секунд, а синхронизация календаря и рассылки занимают 10–20 с и растут с числом людей.
+    # Пока прошлый запуск не закончился, новый не стартует (рассылки и так уходят по одному разу — digest_log).
+    # ?wait=1 — дождаться и вернуть итог (проверки в scripts/).
+    global _reminders_task
+    if request.query_params.get("wait") == "1":
+        return await _run_reminders_once()
+    if _reminders_task and not _reminders_task.done():
+        return JSONResponse({"status": "already_running"}, status_code=202)
+    _reminders_task = asyncio.create_task(_reminders_job())
+    return JSONResponse({"status": "started"}, status_code=202)
+
+
+_reminders_task = None
+
+
+async def _reminders_job() -> None:
+    try:
+        result = await _run_reminders_once()
+        logger.info("Рассылка: сообщений %d, отправлено %d, о платежах %d",
+                    result["messages"], result["sent"], result["recurring_notices"])
+    except Exception as exc:  # фон: ошибка только в лог, следующий вызов cron попробует снова
+        logger.warning("Рассылка не прошла: %s", type(exc).__name__)
+
+
+async def _run_reminders_once() -> dict:
+    """Синхронизация календаря, повторяющиеся платежи, сводки и напоминания всем. Обращения к базе и Google —
+    в отдельном потоке (asyncio.to_thread), чтобы сервер в это время отвечал приложению."""
 
     sent = 0
     messages = 0
     recurring_messages = []
     calendar_messages = []
     try:  # события из Google Calendar → задачи, до сводок: утренняя сводка уже видит перенесённое
-        calendar_messages = calendar_sync.run_all()
+        calendar_messages = await asyncio.to_thread(calendar_sync.run_all)
     except Exception as exc:
         logger.warning("Синхронизация календаря не прошла: %s", type(exc).__name__)
     try:
-        recurring_messages = money_service.run_recurring()
+        recurring_messages = await asyncio.to_thread(money_service.run_recurring)
     except Exception as exc:
         logger.warning("Повторяющиеся платежи не обработаны: %s", type(exc).__name__)
     async with httpx.AsyncClient(timeout=15) as client:
@@ -843,9 +872,9 @@ async def run_reminders(request: Request):
                     await _send_telegram_message(client, chat_id, text)
                 except Exception as exc:
                     logger.warning("Сообщение о платеже не отправлено: %s", type(exc).__name__)
-        for user in users_service.list_users():
+        for user in await asyncio.to_thread(users_service.list_users):
             try:
-                due = digest_service.due_messages(user)
+                due = await asyncio.to_thread(digest_service.due_messages, user)
             except Exception as exc:
                 logger.warning("Рассылка пользователю %s не собрана: %s", user["id"], type(exc).__name__)
                 continue
@@ -858,8 +887,8 @@ async def run_reminders(request: Request):
                     except Exception as exc:
                         logger.warning("Сообщение не отправлено: %s", type(exc).__name__)
             try:  # воскресенье 21:00 — резервная копия данных пользователя в его чат
-                if digest_service.backup_due(user):
-                    name, content, count = backup_service.build(user["id"])
+                if await asyncio.to_thread(digest_service.backup_due, user):
+                    name, content, count = await asyncio.to_thread(backup_service.build, user["id"])
                     for chat_id in users_service.get_chat_ids(user["id"]):
                         await _send_telegram_document(client, chat_id, name, content, backup_service.caption(count))
             except Exception as exc:

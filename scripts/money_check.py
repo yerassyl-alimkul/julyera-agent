@@ -475,7 +475,7 @@ def recurring_checks(db, client, A, B):
     original = money_service.run_recurring
     money_service.run_recurring = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("всё сломалось"))
     try:
-        r = client.post("/internal/reminders/run", headers={"X-Reminder-Secret": secret})
+        r = client.post("/internal/reminders/run?wait=1", headers={"X-Reminder-Secret": secret})
     finally:
         money_service.run_recurring = original
     check("сбой платежей не ломает рассылку напоминаний", r.status_code == 200 and "messages" in r.json(), str(r.status_code))
