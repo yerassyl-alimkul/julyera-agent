@@ -11,11 +11,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-RELEASE_ID = "2026-10-20-note-view-no-priority"
-RELEASE_TEXT = """✨ Обновление JulYera
-
-• Заметка открывается нажатием — целиком, с галочками, фото и местом. «Изменить» и «Удалить» — кнопками внизу. Длинные заметки в списке теперь короче.
-• Приоритет убран: в задачах остались категория, срок, место и папка."""
+RELEASE_ID = "2026-10-20-reminders-stable"
+RELEASE_TEXT = """🔧 Напоминания, сводки и повторяющиеся платежи снова приходят по расписанию, а приложение реже «просыпается» долго."""
 
 
 async def announce(bot, supabase, users: list[dict], reply_markup=None) -> bool:

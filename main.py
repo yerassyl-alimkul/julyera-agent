@@ -812,7 +812,14 @@ async def run_reminders(request: Request):
     15 минут, плюс GitHub Actions) — каждая рассылка уходит один раз в своё окно (digest_log).
     Каждому только его задачи. Сбой у одного пользователя не мешает остальным. Защищено секретным заголовком.
     """
-    if not REMINDERS_SECRET or request.headers.get("X-Reminder-Secret") != REMINDERS_SECRET:
+    # Пробелы по краям (частая ошибка при копировании в cron-job.org) не считаются; имя заголовка — X-Reminder-Secret,
+    # принимаем и X-Reminders-Secret. Секрет сравнивается безопасно и в лог не пишется — только причина отказа.
+    import hmac
+    got = (request.headers.get("X-Reminder-Secret") or request.headers.get("X-Reminders-Secret") or "").strip()
+    expected = (REMINDERS_SECRET or "").strip()
+    if not expected or not got or not hmac.compare_digest(got, expected):
+        logger.warning("Рассылка отклонена: %s", "секрет не задан на сервере" if not expected
+                       else "нет заголовка X-Reminder-Secret" if not got else "секрет не совпал")
         raise HTTPException(status_code=403, detail="Forbidden")
     if not TELEGRAM_BOT_TOKEN:
         raise HTTPException(status_code=500, detail="TELEGRAM_BOT_TOKEN не настроен")
