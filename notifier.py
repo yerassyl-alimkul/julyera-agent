@@ -39,6 +39,8 @@ def notify_user(user_id: str, text: str, with_app_button: bool = False, buttons:
     """Шлёт сообщение во все чаты пользователя; возвращает, сколько отправлено."""
     import users_service
 
+    if (users_service.get_by_id(user_id) or {}).get("blocked"):  # доступ отключён владельцем — не пишем
+        return 0
     sent = 0
     for chat_id in users_service.get_chat_ids(user_id):
         if send_telegram(chat_id, text, with_app_button, buttons):

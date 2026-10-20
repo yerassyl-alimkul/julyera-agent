@@ -94,10 +94,9 @@ def _format_deadline(deadline_str: str | None) -> str:
 
 
 def _format_task_line(task: dict) -> str:
-    """Строка задачи: приоритет, текст, название категории пользователя, дедлайн."""
-    emoji_p = PRIORITY_EMOJI.get(task.get("priority"), "")
+    """Строка задачи: текст, название категории пользователя, дедлайн (приоритет не показываем с 20 октября 2026)."""
     deadline = _format_deadline(task.get("deadline"))
-    return f"{emoji_p} {task['task']} · {task.get('category', '')} — {deadline}"
+    return f"• {task['task']} · {task.get('category', '')} — {deadline}"
 
 
 # Постоянная панель под полем ввода: частые действия одним нажатием. Текст кнопки — это просто сообщение,
@@ -161,6 +160,8 @@ def _known_user(update: Update) -> dict | None:
     if not update.effective_user:
         return None
     user = users_service.get_by_telegram_id(update.effective_user.id)
+    if user and user.get("blocked"):  # владелец отключил доступ (migration 016) — для бота его «нет»
+        return None
     if user and update.effective_chat:
         users_service.link_chat(update.effective_chat.id, user["id"])
     return user
@@ -193,6 +194,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     tg_user = update.effective_user
+    known = users_service.get_by_telegram_id(tg_user.id)
+    if known and known.get("blocked"):  # отключён владельцем — новый запрос доступа не шлём
+        await update.message.reply_text("Доступ к JulYera закрыт владельцем.")
+        return
     now = time.time()
     last = _last_access_request.get(tg_user.id)
     if last and now - last < ACCESS_REQUEST_COOLDOWN:

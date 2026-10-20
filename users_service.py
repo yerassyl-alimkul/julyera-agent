@@ -43,9 +43,14 @@ def create_user(name: str, telegram_user_id: int) -> dict:
     return result.data[0]
 
 
-def list_users() -> list[dict]:
-    """Все пользователи — для рассылки напоминаний."""
-    return supabase.table(TABLE).select("*").execute().data
+def list_users(include_blocked: bool = False) -> list[dict]:
+    """Пользователи — для рассылок и групп. Отключённых владельцем (blocked, migration 016) — только для админа."""
+    rows = supabase.table(TABLE).select("*").execute().data
+    return rows if include_blocked else [u for u in rows if not u.get("blocked")]
+
+
+def set_blocked(user_id: str, blocked: bool) -> None:
+    supabase.table(TABLE).update({"blocked": bool(blocked)}).eq("id", user_id).execute()
 
 
 def list_admins() -> list[dict]:

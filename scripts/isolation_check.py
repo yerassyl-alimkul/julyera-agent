@@ -253,12 +253,12 @@ def http_checks(client, token, A, B, owner, unknown_tg_id, count_users_with_tg):
 
     section("Повторяющиеся задачи")
     rec = client.post("/tasks", headers=hA, json={
-        "task": "Повтор A", "category": "Personal", "deadline": "2026-10-10T09:00:00",
+        "task": "Повтор A", "category": "Personal", "deadline": "2030-01-07T09:00:00",
         "is_recurring": True, "recurrence_pattern": "weekly"}).json()
     client.patch(f"/tasks/{rec['id']}", headers=hA, json={"status": "Done"})
     next_a = [t for t in client.get("/tasks", headers=hA).json() if t["task"] == "Повтор A" and t["status"] == "To Do"]
     check("закрытие повторяющейся задачи создаёт следующую у того же пользователя",
-          len(next_a) == 1 and next_a[0]["deadline"].startswith("2026-10-17"))
+          len(next_a) == 1 and next_a[0]["deadline"].startswith("2030-01-14"))
     check("…и у B её нет", all(t["task"] != "Повтор A" for t in client.get("/tasks", headers=hB).json()))
 
     return {"task_a": ta, "task_b_id": tb_id}

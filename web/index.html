@@ -640,6 +640,18 @@ applyTheme();
   .rec-row.done .check-circle svg { stroke: var(--on-ink); } /* без этого короткая заметка сжималась и кнопки свайпа торчали */
   .note-body { display: flex; flex-direction: column; gap: 2px; }
   .note-body .comment-text { font-size: 16px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .note-body.clamped { max-height: 10.5em; overflow: hidden;
+    -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
+  .admin-row-meta { font-size: 13px; color: var(--ink-muted); }
+  .admin-task { padding: 10px 12px; border-radius: var(--radius-compact); background: var(--row-bg, var(--surface)); color: #1B1B1B; }
+  .admin-task b { display: block; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+  .admin-task small { display: block; font-size: 12px; opacity: .75; }
+  .admin-task ul { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
+  .admin-task li.done { text-decoration: line-through; opacity: .6; }
+  .admin-task.overdue small { color: #A1271D; opacity: 1; }
+  .nv-date { font-size: 13px; color: var(--ink-muted); margin-bottom: var(--gap-m); }
+  #nvBody, #adminBody { padding-top: var(--gap-m); }
+  #nvBody .note-body .comment-text, #nvBody .note-check { font-size: 17px; }
   .note-check { display: flex; align-items: center; gap: var(--gap-m); min-height: var(--touch); padding: 2px 0; border: 0;
     background: transparent; color: var(--ink); font: inherit; font-size: 16px; line-height: 1.35; text-align: left; cursor: pointer; }
   .note-check .step-circle { flex: 0 0 auto; }
@@ -1783,7 +1795,7 @@ applyTheme();
     </div>
     <div class="menu-stat">
       <span class="menu-stat-num" id="statHigh">0</span>
-      <span class="menu-stat-label">с высоким приоритетом</span>
+      <span class="menu-stat-label">просрочено</span>
     </div>
   </div>
 
@@ -1791,6 +1803,10 @@ applyTheme();
     <button class="menu-item" id="menuArchive">
       <svg viewBox="0 0 24 24"><path d="M4 7h16v4H4zM6 11v8h12v-8M10 15h4"/></svg>
       Архив
+    </button>
+    <button class="menu-item" id="menuAdmin" hidden>
+      <svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
+      Администрирование
     </button>
     <button class="menu-item" id="menuSettings">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg>
@@ -2173,7 +2189,7 @@ applyTheme();
         <h3 class="form-label" id="newCatLabel">Категория</h3>
         <div class="chip-group" id="newCategory" role="group" aria-labelledby="newCatLabel"></div>
       </section>
-      <section class="form-section">
+      <section class="form-section" hidden>
         <h3 class="form-label" id="newPrioLabel">Приоритет</h3>
         <div class="chip-group" id="newPriority" role="group" aria-labelledby="newPrioLabel"></div>
       </section>
@@ -2484,6 +2500,34 @@ applyTheme();
   </div>
 </div>
 
+<!-- Администрирование (только владелец): люди, их задачи (только просмотр), отключить / вернуть доступ -->
+<div class="sheet" id="adminSheet" role="dialog" aria-modal="true" aria-labelledby="adminTitle" hidden>
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <button class="tb-btn" id="adminClose" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <h2 class="t-modal-title" id="adminTitle">Администрирование</h2>
+      <span></span>
+    </div>
+    <div id="adminBody"></div>
+  </div>
+</div>
+
+<!-- Просмотр заметки целиком: галочки отмечаются тут же, «Изменить» и «Удалить» — кнопками -->
+<div class="sheet" id="noteViewSheet" role="dialog" aria-modal="true" aria-labelledby="nvTitle" hidden>
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <button class="tb-btn" id="nvClose" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <h2 class="t-modal-title" id="nvTitle">Заметка</h2>
+      <span></span>
+    </div>
+    <div id="nvBody"></div>
+  </div>
+  <div class="sheet-footer tv-actions">
+    <button class="btn-primary" id="nvEdit" type="button">Изменить</button>
+    <button class="btn-danger" id="nvDelete" type="button"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/></svg><span>Удалить</span></button>
+  </div>
+</div>
+
 <!-- Просмотр задачи: только смотреть, «Изменить» и «Удалить» — кнопками (решение владельца 14 октября 2026) -->
 <div class="sheet" id="taskViewSheet" role="dialog" aria-modal="true" aria-labelledby="tvTitle" hidden>
   <div class="sheet-inner">
@@ -2608,7 +2652,7 @@ applyTheme();
         <h3 class="form-label" id="filterCatLabel">Категория</h3>
         <div class="chip-group" id="filterCategory" role="group" aria-labelledby="filterCatLabel"></div>
       </section>
-      <section class="form-section">
+      <section class="form-section" hidden>
         <h3 class="form-label" id="filterPrioLabel">Приоритет</h3>
         <div class="chip-group" id="filterPriority" role="group" aria-labelledby="filterPrioLabel"></div>
       </section>
@@ -2636,7 +2680,7 @@ applyTheme();
         <h3 class="form-label" id="editCatLabel">Категория</h3>
         <div class="chip-group" id="editCategory" role="group" aria-labelledby="editCatLabel"></div>
       </section>
-      <section class="form-section">
+      <section class="form-section" hidden>
         <h3 class="form-label" id="editPrioLabel">Приоритет</h3>
         <div class="chip-group" id="editPriority" role="group" aria-labelledby="editPrioLabel"></div>
       </section>
@@ -2937,6 +2981,8 @@ let calSelectedDate = null; // 'YYYY-MM-DD' | null
 let allNotes = [];
 let editingNoteId = null;
 let noteDraft = null;          // текст открытой правки: переживает перерисовку после загрузки фото
+const noteStartEdit = {};      // id заметки → открыть правку на месте (для кнопки «Изменить» в просмотре)
+let noteViewId = null;
 let notePlaceEditField = null; // поле «Место» в открытой правке заметки
 let noteEditPlace = undefined; // место открытой правки до сохранения (переживает перерисовку)
 let notePlaceNewField = null;  // поле «Место» новой заметки
@@ -3157,7 +3203,8 @@ function updateStats() {
   const n = activeTasks.length, a = n % 10, b = n % 100;
   document.getElementById('statTotalLabel').textContent =
     a === 1 && b !== 11 ? 'активная задача' : (a >= 2 && a <= 4 && (b < 12 || b > 14) ? 'активные задачи' : 'активных задач');
-  document.getElementById('statHigh').textContent = activeTasks.filter(t => t.priority === 'High').length;
+  const todayKeyStat = localDateKey(new Date());
+  document.getElementById('statHigh').textContent = activeTasks.filter(t => t.deadline && dateKey(t.deadline) < todayKeyStat).length;
 }
 
 // Ключ "YYYY-MM-DD" из дедлайна задачи, игнорируя время и любое смещение
@@ -3561,7 +3608,7 @@ function taskRowEl(task, mode) {
     };
     row.appendChild(chevron);
   }
-  row.appendChild(priorityBarsEl(task.priority));
+  // приоритет в интерфейсе не показываем (решение владельца 20 октября 2026), колонка в базе осталась
 
   if (expanded) {
     const more = document.createElement('div');
@@ -4068,7 +4115,7 @@ function renderCalendar() {
     const title = document.createElement('span');
     title.className = 'compact-title';
     title.textContent = task.task;
-    body.append(time, title, priorityBarsEl(task.priority));
+    body.append(time, title);
     body.dataset.focusKey = 'cal-task-' + task.id;
     body.onclick = () => openTaskView(task.id);
     row.append(check, body);
@@ -4216,14 +4263,17 @@ function noteCardEl(note) {
     const area = document.querySelector('#notesList .note-edit-textarea');
     if (area) { area.focus(); area.setSelectionRange(area.value.length, area.value.length); }
   };
+  // Нажатие открывает заметку целиком (просмотр), «Изменить» — там же или свайпом (решение владельца 20 октября 2026)
   view.onclick = (e) => {
     if (e.target.closest('a, .note-check, .note-photo, .note-place')) return; // ссылка, галочка, фото и место — свои действия
-    if (Date.now() >= suppressRowClickUntil) startEdit();
+    if (Date.now() >= suppressRowClickUntil) openNoteView(note.id);
   };
   view.onkeydown = (e) => {
     if (e.target !== view) return;
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEdit(); }
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openNoteView(note.id); }
   };
+  if (note.content.split('\n').length > 6 || note.content.length > 320) content.classList.add('clamped');
+  noteStartEdit[note.id] = startEdit;
   el.appendChild(view);
   if (notePreview && notePreview.noteId === note.id) el.appendChild(notePreviewEl(note));
   else {
@@ -4332,6 +4382,7 @@ function cancelNoteEdit(id) {
 }
 
 function renderNotes() {
+  if (!document.getElementById('noteViewSheet').hidden) setTimeout(renderNoteView, 0);
   document.getElementById('notesSubtitle').textContent = pluralNotes(allNotes.length);
   const container = document.getElementById('notesList');
   container.innerHTML = '';
@@ -4473,6 +4524,181 @@ document.getElementById('noteFile').onchange = async (e) => {
   }
   if (target) { if (notePlaceEditField) noteEditPlace = notePlaceEditField.value; await loadNotes(); } else renderNewNotePhotos();
 };
+
+// ---------- Администрирование (только владелец, GET /admin/users, /admin/users/{id}/tasks) ----------
+// Только просмотр чужих задач; можно отключить или вернуть человеку доступ. Заметки и деньги сюда не попадают.
+const adminSheet = document.getElementById('adminSheet');
+let adminUser = null;   // открытый человек или null — список
+async function openAdmin() {
+  closeMobileMenu();
+  adminUser = null;
+  adminSheet.hidden = false;
+  document.body.classList.add('no-scroll');
+  setBackgroundInert(true);
+  document.getElementById('adminClose').focus();
+  await renderAdmin();
+}
+function closeAdmin() {
+  if (adminUser) { adminUser = null; renderAdmin(); return; }  // из человека — назад к списку
+  adminSheet.hidden = true;
+  document.body.classList.remove('no-scroll');
+  setBackgroundInert(false);
+}
+async function renderAdmin() {
+  const box = document.getElementById('adminBody');
+  document.getElementById('adminClose').setAttribute('aria-label', adminUser ? 'Назад к списку людей' : 'Закрыть');
+  document.getElementById('adminClose').innerHTML = adminUser
+    ? '<svg viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  box.innerHTML = '<div class="empty-dashed">Загружаю…</div>';
+  if (!adminUser) {
+    let users = [];
+    try { users = await apiJson('/admin/users'); } catch (e) { box.innerHTML = ''; toast(e.message || 'Не удалось загрузить'); return; }
+    document.getElementById('adminTitle').textContent = 'Администрирование';
+    box.innerHTML = '';
+    const list = document.createElement('div');
+    list.className = 'people-list';
+    users.forEach(u => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'people-row';
+      row.dataset.focusKey = 'admin-' + u.id;
+      row.innerHTML = '<span class="people-av" aria-hidden="true"></span><span class="people-name"><span></span><small></small></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg>';
+      row.querySelector('.people-av').textContent = initials(u.name);
+      row.querySelector('.people-name span').textContent = u.name + (u.me ? ' (вы)' : '') + (u.blocked ? ' · доступ отключён' : '');
+      const last = u.last_activity ? new Date(u.last_activity) : null;
+      row.querySelector('small').textContent = `открыто ${u.open}${u.overdue ? `, просрочено ${u.overdue}` : ''} · выполнено ${u.done}`
+        + (last ? ` · активность ${last.getDate()} ${MONTH_SHORT[last.getMonth()]}` : '');
+      row.onclick = () => { adminUser = u; renderAdmin(); };
+      list.appendChild(row);
+    });
+    box.appendChild(list);
+    return;
+  }
+  const u = adminUser;
+  let data;
+  try { data = await apiJson(`/admin/users/${u.id}/tasks`); } catch (e) { box.innerHTML = ''; toast(e.message || 'Не удалось загрузить'); return; }
+  if (adminUser !== u) return;
+  document.getElementById('adminTitle').textContent = u.name;
+  box.innerHTML = '';
+  const meta = document.createElement('p');
+  meta.className = 'admin-row-meta';
+  meta.textContent = `Открыто ${u.open}, просрочено ${u.overdue}, выполнено ${u.done}. Только просмотр — менять чужие задачи нельзя.`;
+  box.appendChild(meta);
+  if (!u.me && !u.is_admin) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = u.blocked ? 'btn-soft' : 'btn-danger';
+    btn.style.margin = 'var(--gap-m) 0';
+    btn.textContent = u.blocked ? 'Вернуть доступ' : 'Отключить доступ';
+    btn.onclick = async () => {
+      try {
+        const r = await apiJson(`/admin/users/${u.id}/block`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ blocked: !u.blocked }) });
+        u.blocked = r.blocked;
+        toast(r.blocked ? `${u.name}: доступ отключён. Данные сохранены` : `${u.name}: доступ возвращён`);
+        renderAdmin();
+      } catch (e) { toast(e.message || 'Не получилось'); }
+    };
+    box.appendChild(btn);
+  }
+  const today = localDateKey(new Date());
+  const steps = data.subtasks || [];
+  const open = data.tasks.filter(t => t.status !== 'Done').sort(byDeadline);
+  const done = data.tasks.filter(t => t.status === 'Done').sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')));
+  const section = (label, tasks) => {
+    const h = document.createElement('div');
+    h.className = 'section-label';
+    h.textContent = `${label} · ${tasks.length}`;
+    box.appendChild(h);
+    const list = document.createElement('div');
+    list.className = 'people-list';
+    if (!tasks.length) { const e = document.createElement('div'); e.className = 'empty-dashed'; e.textContent = 'Нет'; list.appendChild(e); }
+    tasks.forEach(t => {
+      const card = document.createElement('div');
+      card.className = 'admin-task';
+      const cat = (allCategories || []).find(c => c.name === t.category);
+      card.style.setProperty('--row-bg', 'var(--surface)');
+      card.style.color = 'var(--ink)';
+      const dt = t.deadline && parseNaiveDeadline(t.deadline);
+      if (t.status !== 'Done' && dt && dateKey(t.deadline) < today) card.classList.add('overdue');
+      card.innerHTML = '<b></b><small></small>';
+      card.querySelector('b').textContent = t.task;
+      card.querySelector('small').textContent = [dt ? `${dt.getDate()} ${MONTH_SHORT[dt.getMonth()]} · ${timeOf(t.deadline)}` : 'без срока',
+        t.category, t.location ? `📍 ${placeShort(t.location)}` : '', t.is_recurring ? '↻' : ''].filter(Boolean).join(' · ');
+      const own = steps.filter(x => x.task_id === t.id);
+      if (own.length) {
+        const ul = document.createElement('ul');
+        own.forEach(st => { const li = document.createElement('li'); li.textContent = st.content; if (st.is_done) li.className = 'done'; ul.appendChild(li); });
+        card.appendChild(ul);
+      }
+      list.appendChild(card);
+    });
+    box.appendChild(list);
+  };
+  section('Открытые', open);
+  section('Выполненные', done.slice(0, 30));
+}
+document.getElementById('adminClose').onclick = closeAdmin;
+document.getElementById('menuAdmin').onclick = openAdmin;
+
+// ---------- Просмотр заметки ----------
+const noteViewSheet = document.getElementById('noteViewSheet');
+function openNoteView(id) {
+  if (!allNotes.find(n => n.id === id)) return;
+  noteViewId = id;
+  renderNoteView();
+  noteViewSheet.hidden = false;
+  noteViewSheet.scrollTop = 0;
+  document.body.classList.add('no-scroll');
+  setBackgroundInert(true);
+  document.getElementById('nvClose').focus();
+}
+function closeNoteView() {
+  if (noteViewSheet.hidden) return;
+  noteViewSheet.hidden = true;
+  const id = noteViewId;
+  noteViewId = null;
+  document.body.classList.remove('no-scroll');
+  setBackgroundInert(false);
+  const back = document.querySelector(`[data-focus-key="note-${id}"]`);
+  if (back) back.focus({ preventScroll: true });
+}
+function renderNoteView() {
+  const note = noteViewId && allNotes.find(n => n.id === noteViewId);
+  const box = document.getElementById('nvBody');
+  if (!note) { closeNoteView(); return; }
+  const focusKey = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.focusKey : null;
+  box.innerHTML = '';
+  const date = document.createElement('div');
+  date.className = 'nv-date';
+  date.textContent = fmtNoteDate(note.updated_at || note.created_at);
+  const body = document.createElement('div');
+  body.className = 'note-body';
+  fillNoteBody(body, note);
+  box.append(date, body);
+  const photos = notePhotosEl(note, false);
+  photos.style.marginTop = 'var(--gap-m)';
+  box.appendChild(photos);
+  if (note.location) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'place-chip';
+    chip.style.marginTop = 'var(--gap-m)';
+    chip.dataset.focusKey = 'nv-place';
+    chip.setAttribute('aria-label', `Открыть в Google Maps: ${note.location}`);
+    chip.innerHTML = PIN_ICON + '<span></span>';
+    chip.querySelector('span').textContent = note.location;
+    chip.onclick = () => openExternal(mapsUrl(note.location));
+    box.appendChild(chip);
+  }
+  if (focusKey) { const again = box.querySelector(`[data-focus-key="${focusKey}"]`); if (again) again.focus({ preventScroll: true }); }
+}
+document.getElementById('nvClose').onclick = closeNoteView;
+document.getElementById('nvEdit').onclick = () => {
+  const id = noteViewId;
+  closeNoteView();
+  if (noteStartEdit[id]) noteStartEdit[id]();
+};
+document.getElementById('nvDelete').onclick = () => { const id = noteViewId; closeNoteView(); deleteNote(id); };
 
 // ---------- Заметки: список с галочками, ссылки, фото ----------
 // Пункт списка — строка «☐ текст» / «☑ текст» прямо в тексте заметки (старые «- [ ]» / «- [x]» тоже понимаем):
@@ -4780,6 +5006,7 @@ async function firstLoad() {
       taskLoadFinished(true);
       renderCurrentPage();
       // папки и группы — для подписей «📁 …» в списке (не мешают показу задач)
+      apiJson('/me').then(me => { moneyMe = moneyMe || me; document.getElementById('menuAdmin').hidden = !me.is_admin; }).catch(() => {});
       Promise.allSettled([loadFolders(), loadGroups()]).then(async () => {
         await Promise.allSettled((groups || []).map(g => loadFolders(g.id)));
         renderCurrentPage();
@@ -7639,7 +7866,7 @@ function renderSearch() {
     meta.append(when, task.category);
     if (task.status === 'Done') meta.append(' · В архиве');
     body.append(title, meta);
-    row.append(body, priorityBarsEl(task.priority));
+    row.append(body);
     row.onclick = () => openSearchResult(task);
     list.appendChild(row);
   });
@@ -8327,7 +8554,7 @@ function renderTaskView() {
   title.textContent = task.task;
   const badges = document.createElement('div');
   badges.className = 'tv-badges';
-  const parts = [task.category, PRIORITY_TEXT[task.priority] || ''];
+  const parts = [task.category];
   const f = task.folder_id && folderById(task.folder_id);
   if (f) parts.push(`📁 ${f.name}`);
   if (task.shared && task.shared.with.length) parts.push(`👥 с ${task.shared.with.join(', ')}${!task.shared.tick_all ? ` · готово ${task.shared.done} из ${task.shared.total}` : ''}`);
@@ -8896,6 +9123,8 @@ document.addEventListener('keydown', (e) => {
   else if (!folderSheet.hidden) closeFolderSheet();
   else if (!folderPickSheet.hidden) closeFolderPick();
   else if (!taskViewSheet.hidden) closeTaskView();
+  else if (!noteViewSheet.hidden) closeNoteView();
+  else if (!adminSheet.hidden) closeAdmin();
   else if (!groupSheet.hidden) closeGroupSheet();
   else if (!settingsSheet.hidden) closeSettings();
   else if (!calendarsSheet.hidden) closeCalendars();

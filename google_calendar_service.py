@@ -257,7 +257,7 @@ def _event_body(task: dict, tz: str = "Europe/Rome") -> dict:
         start_dt = start_dt.replace(tzinfo=None)
     end_dt = _naive(task["ends_at"]) if task.get("ends_at") else start_dt + timedelta(minutes=30)
     return {
-        "summary": f"{emoji_c} {emoji_p} {task['task']}".strip(),
+        "summary": f"{emoji_c} {task['task']}".strip(),  # без значка приоритета (20 октября 2026)
         "description": task.get("note") or "",
         "location": task.get("location") or "",
         "start": {"dateTime": start_dt.isoformat(), "timeZone": tz},

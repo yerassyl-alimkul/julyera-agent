@@ -594,3 +594,7 @@ alter table task_folders enable row level security;
 -- Задача в папке; удалили папку — задачи остаются без папки.
 alter table tasks add column if not exists folder_id uuid references task_folders(id) on delete set null;
 create index if not exists tasks_folder_idx on tasks (folder_id) where folder_id is not null;
+
+-- 016: владелец может отключить человеку доступ (решение 20 октября 2026). Данные человека остаются.
+-- Выполнить целиком в Supabase SQL Editor. Повторный запуск безопасен. Только добавляет.
+alter table users add column if not exists blocked boolean not null default false;

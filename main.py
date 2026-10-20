@@ -49,6 +49,7 @@ import backup_service
 import goals_service
 import calendar_sync
 import categories_service
+import admin_service
 import comments_service
 import folders_service
 import groups_service
@@ -82,6 +83,7 @@ from models import (
     MoneyCategoryUpdate,
     MoneyParseRequest,
     NotePhotoIn,
+    BlockIn,
     FolderIn,
     GroupIn,
     RecurringCreate,
@@ -194,6 +196,13 @@ def _deny(request: Request, status: int, reason: str, detail) -> HTTPException:
     return HTTPException(status_code=status, detail=detail)
 
 
+def _not_blocked(request: Request, user: dict) -> dict:
+    """Владелец отключил доступ (users.blocked, migration 016) — как не одобрен: экран «Ждём одобрения»."""
+    if user.get("blocked"):
+        raise _deny(request, 403, "отключён", {"code": "not_approved", "message": "Доступ закрыт владельцем"})
+    return user
+
+
 def current_user(
     request: Request,
     x_telegram_init_data: Optional[str] = Header(None),
@@ -210,13 +219,41 @@ def current_user(
         if not user:
             raise _deny(request, 403, "не одобрен",
                         {"code": "not_approved", "message": "Доступ ещё не одобрен владельцем"})
-        return user
+        return _not_blocked(request, user)
     if x_access_key:
         user = users_service.get_by_access_key(x_access_key)
         if not user:
             raise _deny(request, 401, "ключ неверный", {"code": "bad_key", "message": "Неверный ключ доступа"})
-        return user
+        return _not_blocked(request, user)
     raise _deny(request, 401, "нет заголовка", {"code": "no_auth", "message": "Нужен вход через Telegram"})
+
+
+def admin_user(user: dict = Depends(current_user)) -> dict:
+    """Только владелец (is_admin): раздел «Администрирование»."""
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Только для владельца")
+    return user
+
+
+@app.get("/admin/users")
+def admin_users(user: dict = Depends(admin_user)):
+    """Все пользователи со сводкой задач (без заметок, денег и целей)."""
+    return admin_service.users_overview(user["id"])
+
+
+@app.get("/admin/users/{user_id}/tasks")
+def admin_user_tasks(user_id: UUID, user: dict = Depends(admin_user)):
+    """Задачи и шаги человека — только просмотр."""
+    data = admin_service.user_tasks(str(user_id))
+    if data is None:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    return data
+
+
+@app.post("/admin/users/{user_id}/block")
+def admin_block(user_id: UUID, payload: BlockIn, user: dict = Depends(admin_user)):
+    """Отключить (blocked: true) или вернуть доступ. Себя и других владельцев отключить нельзя."""
+    return admin_service.set_blocked(user["id"], str(user_id), payload.blocked)
 
 
 @app.post("/tasks", response_model=Task, status_code=201)

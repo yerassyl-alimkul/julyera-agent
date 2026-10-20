@@ -110,6 +110,11 @@ class CommentFile(BaseModel):
     data: str
 
 
+class BlockIn(BaseModel):
+    """POST /admin/users/{id}/block: отключить (true) или вернуть доступ (false)."""
+    blocked: bool
+
+
 class FolderIn(BaseModel):
     """POST /folders (group_id — папка группы, без него — личная), PATCH /folders/{id} (название)."""
     name: Optional[str] = None
