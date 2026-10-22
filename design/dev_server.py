@@ -46,11 +46,11 @@ for i, name in enumerate(("Study", "Work", "Personal", "UniMe")):
 money_service.ensure_defaults(uid)
 
 # Второй пользователь — для совместных задач (http://localhost:8002/?key=test456)
-julie = users_service.create_user("Julie", 1002)
-next(u for u in db.tables["users"] if u["id"] == julie["id"]).update({"access_key": "test456"})
-categories_service.create_category(julie["id"], "Дом", categories_service.PALETTE[2])
+aliya = users_service.create_user("Алия", 1002)
+next(u for u in db.tables["users"] if u["id"] == aliya["id"]).update({"access_key": "test456"})
+categories_service.create_category(aliya["id"], "Дом", categories_service.PALETTE[2])
 users_service.link_chat(1001, uid)
-users_service.link_chat(1002, julie["id"])
+users_service.link_chat(1002, aliya["id"])
 mama = users_service.create_user("Мама", 1003)
 users_service.link_chat(1003, mama["id"])
 import groups_service  # noqa: E402
@@ -60,10 +60,10 @@ notifier.send_telegram = lambda chat_id, text, with_app_button=False, buttons=No
 
 
 def _dev_join_all():
-    """Только тестовый сервер: Julie и Мама нажимают «Вступить» во всех группах (бота здесь нет)."""
+    """Только тестовый сервер: Алия и Мама нажимают «Вступить» во всех группах (бота здесь нет)."""
     out = []
     for g in db.tables.get("task_groups", []):
-        for u in (julie, mama):
+        for u in (aliya, mama):
             out.append(groups_service.join(g["invite_token"], u["id"]))
     return out
 
