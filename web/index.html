@@ -14,6 +14,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="apple-mobile-web-app-title" content="JulYera" />
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="i18n.js?v=2"></script>
 <script>
 // Тема ставится до отрисовки, иначе тёмная тема мигнёт светлой. «Авто» повторяет Telegram (в Mini App)
 // или систему (браузер, иконка на экране Домой); выбор в меню хранится в localStorage.
@@ -1877,6 +1878,15 @@ applyTheme();
       <button type="button" data-theme-pref="dark" aria-pressed="false">Тёмная</button>
     </div>
   </div>
+  <div class="menu-theme set-block">
+    <span class="menu-theme-label" id="langLabel">Язык</span>
+    <div class="segmented" role="group" aria-labelledby="langLabel">
+      <button type="button" data-lang-pref="auto" aria-pressed="true">Авто</button>
+      <button type="button" data-lang-pref="ru" aria-pressed="false" lang="ru" data-noi18n>Русский</button>
+      <button type="button" data-lang-pref="en" aria-pressed="false" lang="en">English</button>
+      <button type="button" data-lang-pref="kk" aria-pressed="false" lang="kk" data-noi18n>Қазақша</button>
+    </div>
+  </div>
     <button class="set-row" id="exportCsvBtn">
       <svg viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14"/></svg>
       <span class="set-label">Экспорт задач CSV</span>
@@ -2919,6 +2929,12 @@ if (inTelegram) {
 // Системная тема поменялась (например, вечером) — в режиме «Авто» меняемся вместе с ней.
 try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme); } catch (e) { /* старый Safari */ }
 
+// Язык интерфейса (web/i18n.js): выбор хранится в памяти браузера, «Авто» — язык Telegram или браузера.
+document.querySelectorAll('[data-lang-pref]').forEach(btn => {
+  btn.setAttribute('aria-pressed', String(btn.dataset.langPref === languageChoice()));
+  btn.onclick = () => { if (btn.dataset.langPref !== languageChoice()) setLanguage(btn.dataset.langPref); };
+});
+
 function renderThemeButtons() {
   const pref = themePreference();
   document.querySelectorAll('[data-theme-pref]').forEach(btn =>
@@ -3070,14 +3086,14 @@ function fmtDeadline(d) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const dtDay = new Date(dt); dtDay.setHours(0, 0, 0, 0);
   const diffDays = Math.round((dtDay - today) / 86400000);
-  const timeStr = dt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-  const dateStr = dt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+  const timeStr = dt.toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' });
+  const dateStr = dt.toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' });
 
   let label;
-  if (diffDays === 0) label = `Сегодня в ${timeStr}`;
-  else if (diffDays === 1) label = `Завтра в ${timeStr}`;
-  else if (diffDays < 0) label = `Просрочено (${dateStr} в ${timeStr})`;
-  else label = `${dateStr} в ${timeStr}`;
+  if (diffDays === 0) label = t("Сегодня в {0}", timeStr);
+  else if (diffDays === 1) label = t("Завтра в {0}", timeStr);
+  else if (diffDays < 0) label = t("Просрочено ({0} в {1})", dateStr, timeStr);
+  else label = t("{0} в {1}", dateStr, timeStr);
 
   return { label, overdue: diffDays < 0 };
 }
@@ -3129,7 +3145,7 @@ function breakdownBtnEl(taskId, key) {
   btn.type = 'button';
   btn.className = 'btn-soft';
   btn.dataset.focusKey = key;
-  btn.innerHTML = BREAKDOWN_ICON + '<span>Разбей на шаги</span>';
+  btn.innerHTML = BREAKDOWN_ICON + '<span>' + escapeHtml(t('Разбей на шаги')) + '</span>';
   btn.onclick = () => breakdownTask(taskId, btn);
   return btn;
 }
@@ -3144,7 +3160,7 @@ async function breakdownTask(taskId, btn) {
     const res = await apiJson(`/tasks/${taskId}/breakdown`, { method: 'POST' });
     allSubtasks.push(...res.added);
     if (res.added.length) expandedTasks.add(taskId);
-    toast(res.added.length ? `Добавил шагов: ${res.added.length}` : 'Новых шагов не придумал');
+    toast(res.added.length ? t("Добавил шагов: {0}", res.added.length) : 'Новых шагов не придумал');
   } catch (e) {
     toast(e.message || 'ИИ не ответил, попробуйте ещё раз');
   } finally {
@@ -3201,8 +3217,7 @@ function updateStats() {
   const activeTasks = allTasks.filter(t => t.status !== 'Done');
   document.getElementById('statTotal').textContent = activeTasks.length;
   const n = activeTasks.length, a = n % 10, b = n % 100;
-  document.getElementById('statTotalLabel').textContent =
-    a === 1 && b !== 11 ? 'активная задача' : (a >= 2 && a <= 4 && (b < 12 || b > 14) ? 'активные задачи' : 'активных задач');
+  document.getElementById('statTotalLabel').textContent = tn(n, 'активная задача|активные задачи|активных задач');
   const todayKeyStat = localDateKey(new Date());
   document.getElementById('statHigh').textContent = activeTasks.filter(t => t.deadline && dateKey(t.deadline) < todayKeyStat).length;
 }
@@ -3278,9 +3293,9 @@ function switchPage(page) {
 }
 
 // ---------- Main: задачи на день (design/DESIGN.md, раздел 5) ----------
-const WEEKDAY_SHORT = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-const WEEKDAY_FULL = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
-const MONTH_GENITIVE = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+const WEEKDAY_SHORT = i18nArray('WEEKDAY_SHORT', ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']);
+const WEEKDAY_FULL = i18nArray('WEEKDAY_FULL', ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота']);
+const MONTH_GENITIVE = i18nArray('MONTH_GENITIVE', ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']);
 const PRIORITY_LEVEL = { High: 3, Mid: 2, Low: 1 };
 const PRIORITY_TEXT = { High: 'Приоритет: высокий', Mid: 'Приоритет: средний', Low: 'Приоритет: низкий' };
 const STRIP_DAYS_AHEAD = 14; // сплошные дни от сегодня; дальше только дни с задачами
@@ -3303,17 +3318,14 @@ function keyToDate(key) {
 }
 
 function pluralTasks(n) {
-  if (n === 0) return 'нет задач';
-  const a = n % 10, b = n % 100;
-  if (a === 1 && b !== 11) return n + ' задача';
-  if (a >= 2 && a <= 4 && (b < 12 || b > 14)) return n + ' задачи';
-  return n + ' задач';
+  return n === 0 ? t('нет задач') : n + ' ' + tn(n, 'задача|задачи|задач');
 }
 
 // «2 из 3 шагов», «1 из 1 шага», «0 из 21 шага»
 function stepsText(done, total) {
+  if (LANG !== 'ru') return t('{0} из {1} шагов', done, total);
   const word = (total % 10 === 1 && total % 100 !== 11) ? 'шага' : 'шагов';
-  return `${done} из ${total} ${word}`;
+  return done + t(' из ') + total + ' ' + word;
 }
 
 // «➡️ Завтра / Послезавтра» под просроченной задачей: дедлайн = сегодня + N дней, время прежнее.
@@ -3323,9 +3335,9 @@ function moveButtonsEl(task) {
   [[1, 'завтра'], [2, 'послезавтра']].forEach(([days, label]) => {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.textContent = `На ${label}`;
+    btn.textContent = t("На {0}", label);
     btn.dataset.focusKey = `move-${days}-${task.id}`;
-    btn.setAttribute('aria-label', `Перенести «${task.task}» на ${label}`);
+    btn.setAttribute('aria-label', t("Перенести «{0}» на {1}", task.task, label));
     btn.onclick = async (e) => {
       e.stopPropagation();
       btn.disabled = true;
@@ -3336,7 +3348,7 @@ function moveButtonsEl(task) {
         const res = await api(`/tasks/${task.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ deadline: `${localDateKey(day)}T${time}:00` }) });
         if (!res.ok) throw new Error('bad status');
-        toast(`Перенесено на ${day.getDate()} ${MONTH_GENITIVE[day.getMonth()]}`);
+        toast(t("Перенесено на {0} {1}", day.getDate(), MONTH_GENITIVE[day.getMonth()]));
         await loadTasks();
       } catch (err) {
         toast('Не удалось перенести задачу');
@@ -3474,7 +3486,7 @@ function stepRowEl(step, onRemove) {
   check.type = 'button';
   check.className = 'step-check';
   check.dataset.focusKey = 'step-check-' + step.id;
-  check.setAttribute('aria-label', (step.is_done ? 'Снять отметку: ' : 'Отметить выполненным: ') + step.content);
+  check.setAttribute('aria-label', (step.is_done ? 'Снять отметку: ' : t('Отметить выполненным: ')) + step.content);
   check.innerHTML = '<span class="step-circle"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>';
   check.onclick = () => toggleSubtask(step.id, !step.is_done);
   const text = document.createElement('span');
@@ -3485,7 +3497,7 @@ function stepRowEl(step, onRemove) {
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'step-remove';
-    remove.setAttribute('aria-label', 'Удалить шаг: ' + step.content);
+    remove.setAttribute('aria-label', t('Удалить шаг: {0}', step.content));
     remove.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>';
     remove.onclick = onRemove;
     row.appendChild(remove);
@@ -3519,7 +3531,7 @@ function taskRowEl(task, mode) {
   const check = document.createElement('button');
   check.className = 'row-check';
   check.dataset.focusKey = 'check-' + task.id;
-  check.setAttribute('aria-label', 'Отметить выполненной: ' + task.task);
+  check.setAttribute('aria-label', t('Отметить выполненной: ') + task.task);
   check.innerHTML = '<span class="check-circle"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>';
   check.onclick = () => completeTask(task.id, row, check);
 
@@ -3558,8 +3570,8 @@ function taskRowEl(task, mode) {
   if (task.shared) {   // задача группы: категория — название группы, значок вместо повтора
     const gname = task.shared.group ? task.shared.group.name : null;
     if (gname && task.category === gname) rest[0] = `👥 ${gname}`;
-    else rest.push(`👥 ${gname || 'общая'}`);
-    if (!task.shared.tick_all && task.shared.total > 1) rest.push(`${task.shared.done} из ${task.shared.total} готово`);
+    else rest.push(`👥 ${gname || t('общая')}`);
+    if (!task.shared.tick_all && task.shared.total > 1) rest.push(t("{0} из {1} готово", task.shared.done, task.shared.total));
   }
   if (task.folder_id && mode !== 'folder') {
     const f = folderById(task.folder_id);
@@ -3577,7 +3589,7 @@ function taskRowEl(task, mode) {
     place.type = 'button';
     place.className = 'row-place';
     place.dataset.focusKey = 'place-' + task.id;
-    place.setAttribute('aria-label', `Открыть в Google Maps: ${task.location}`);
+    place.setAttribute('aria-label', t("Открыть в Google Maps: {0}", task.location));
     place.textContent = `📍 ${placeShort(task.location)}`;
     place.onclick = (e) => { e.stopPropagation(); openExternal(mapsUrl(task.location)); };
     meta.appendChild(place);
@@ -3597,7 +3609,7 @@ function taskRowEl(task, mode) {
     chevron.dataset.focusKey = 'chev-' + task.id;
     chevron.setAttribute('aria-expanded', String(expanded));
     const doneSteps = steps.filter(x => x.is_done).length;
-    chevron.setAttribute('aria-label', `${expanded ? 'Свернуть' : 'Показать'} шаги: ${doneSteps} из ${steps.length}`);
+    chevron.setAttribute('aria-label', expanded ? t("Свернуть шаги: {0} из {1}", doneSteps, steps.length) : t("Показать шаги: {0} из {1}", doneSteps, steps.length));
     chevron.innerHTML = '<span></span><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>';
     chevron.querySelector('span').textContent = `${doneSteps}/${steps.length}`;
     chevron.onclick = () => {
@@ -3616,7 +3628,7 @@ function taskRowEl(task, mode) {
     const head = document.createElement('div');
     head.className = 'row-more-head';
     head.innerHTML = '<b>Шаги</b><span></span>';
-    head.querySelector('span').textContent = steps.length ? `${steps.filter(s => s.is_done).length} из ${steps.length}` : '';
+    head.querySelector('span').textContent = steps.length ? t("{0} из {1}", steps.filter(s => s.is_done).length, steps.length) : '';
     more.appendChild(head);
     steps.forEach(step => more.appendChild(stepRowEl(step)));
     const input = document.createElement('input');
@@ -3624,7 +3636,7 @@ function taskRowEl(task, mode) {
     input.type = 'text';
     input.placeholder = '+ добавить шаг';
     input.autocomplete = 'off';
-    input.setAttribute('aria-label', 'Новый шаг: ' + task.task);
+    input.setAttribute('aria-label', t('Новый шаг: {0}', task.task));
     input.dataset.focusKey = 'step-input-' + task.id;
     more.appendChild(stepInputEl(input, task.id));
     if (task.status !== 'Done') more.appendChild(breakdownBtnEl(task.id, 'breakdown-' + task.id));
@@ -3659,8 +3671,8 @@ function swipeWrapEl(row, taskId, actions) {
   actionsEl.className = 'swipe-actions';
   actionsEl.setAttribute('aria-hidden', 'true');
   actionsEl.innerHTML =
-    `<button class="swipe-edit" tabindex="-1" aria-label="Изменить ${handlers.noun}"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg>Изменить</button>` +
-    `<button class="swipe-delete" tabindex="-1" aria-label="Удалить ${handlers.noun}"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/></svg>Удалить</button>`;
+    `<button class="swipe-edit" tabindex="-1" aria-label="${escapeHtml(t('Изменить ' + handlers.noun))}"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg>Изменить</button>` +
+    `<button class="swipe-delete" tabindex="-1" aria-label="${escapeHtml(t('Удалить ' + handlers.noun))}"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/></svg>Удалить</button>`;
   actionsEl.querySelector('.swipe-edit').onclick = () => { closeSwipe(); handlers.edit(); };
   actionsEl.querySelector('.swipe-delete').onclick = () => { closeSwipe(); handlers.del(); };
   track.append(row, actionsEl);
@@ -3786,12 +3798,12 @@ function renderMain() {
   if (groups.overdue.length) {
     strip.appendChild(dayChipEl({
       key: DAY_OVERDUE, wd: 'Просрочено', num: String(groups.overdue.length), count: '',
-      label: `Просрочено, ${pluralTasks(groups.overdue.length)}`, extraClass: 'wide overdue',
+      label: t("Просрочено, {0}", pluralTasks(groups.overdue.length)), extraClass: 'wide overdue',
     }));
   }
   strip.appendChild(dayChipEl({
     key: DAY_NODATE, wd: 'Без даты', num: '–', count: groups.nodate.length ? String(groups.nodate.length) : '',
-    label: `Без даты, ${pluralTasks(groups.nodate.length)}`, extraClass: 'wide',
+    label: t("Без даты, {0}", pluralTasks(groups.nodate.length)), extraClass: 'wide',
   }));
   dayKeys.forEach(key => {
     const dt = keyToDate(key);
@@ -3828,7 +3840,7 @@ function renderMain() {
     const dt = keyToDate(selectedDay);
     tasks = groups.byDay[selectedDay] || []; mode = 'day';
     title = WEEKDAY_FULL[dt.getDay()];
-    subtitle = [selectedDay === today ? 'Сегодня' : '', `${dt.getDate()} ${MONTH_GENITIVE[dt.getMonth()]}`, pluralTasks(tasks.length)]
+    subtitle = [selectedDay === today ? t('Сегодня') : '', `${dt.getDate()} ${MONTH_GENITIVE[dt.getMonth()]}`, pluralTasks(tasks.length)]
       .filter(Boolean).join(' · ');
   }
   document.getElementById('dayTitle').textContent = title;
@@ -3865,10 +3877,10 @@ function renderTaskList() {
 function allGroupTitle(key, today) {
   const dt = keyToDate(key);
   const date = `${dt.getDate()} ${MONTH_GENITIVE[dt.getMonth()]}`;
-  const t = keyToDate(today);
-  const tomorrow = localDateKey(new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1));
-  if (key === today) return `Сегодня · ${date}`;
-  if (key === tomorrow) return `Завтра · ${date}`;
+  const td = keyToDate(today);
+  const tomorrow = localDateKey(new Date(td.getFullYear(), td.getMonth(), td.getDate() + 1));
+  if (key === today) return t("Сегодня · {0}", date);
+  if (key === tomorrow) return t("Завтра · {0}", date);
   return `${WEEKDAY_FULL[dt.getDay()]}, ${date}`;
 }
 
@@ -3933,14 +3945,10 @@ document.getElementById('layoutBtn').onclick = () => {
 };
 
 // ---------- Архив (макет Archive) ----------
-const MONTH_SHORT = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+const MONTH_SHORT = i18nArray('MONTH_SHORT', ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']);
 
 function pluralDone(n) {
-  if (n === 0) return 'нет выполненных задач';
-  const a = n % 10, b = n % 100;
-  if (a === 1 && b !== 11) return n + ' выполненная задача';
-  if (a >= 2 && a <= 4 && (b < 12 || b > 14)) return n + ' выполненные задачи';
-  return n + ' выполненных задач';
+  return n === 0 ? t('нет выполненных задач') : n + ' ' + tn(n, 'выполненная задача|выполненные задачи|выполненных задач');
 }
 
 function renderArchive() {
@@ -3980,7 +3988,7 @@ function renderArchive() {
     const restore = document.createElement('button');
     restore.className = 'restore-btn';
     restore.dataset.focusKey = 'restore-' + task.id;
-    restore.setAttribute('aria-label', 'Вернуть в список: ' + task.task);
+    restore.setAttribute('aria-label', t('Вернуть в список: {0}', task.task));
     restore.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 7L5 11l4 4"/><path d="M5 11h9a5 5 0 0 1 0 10h-3"/></svg>';
     restore.onclick = async () => {
       restore.disabled = true;
@@ -4017,7 +4025,7 @@ document.getElementById('todayBtn').onclick = () => {
   document.getElementById('dayStrip').scrollLeft = 0;
 };
 
-const MONTH_NAMES_RU = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+const MONTH_NAMES_RU = i18nArray('MONTH_NAMES', ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']);
 
 function calSelectDefault() {
   // Сегодня, если он в показанном месяце, иначе первое число месяца.
@@ -4103,12 +4111,12 @@ function renderCalendar() {
     const check = document.createElement('button');
     check.className = 'row-check';
     check.dataset.focusKey = 'cal-check-' + task.id;
-    check.setAttribute('aria-label', 'Отметить выполненной: ' + task.task);
+    check.setAttribute('aria-label', t('Отметить выполненной: ') + task.task);
     check.innerHTML = '<span class="check-circle"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>';
     check.onclick = () => completeTask(task.id, row, check);
     const body = document.createElement('button');
     body.className = 'compact-body';
-    body.setAttribute('aria-label', `${timeRange(task)}, ${task.task}, ${task.category}. Изменить`);
+    body.setAttribute('aria-label', t("{0}, {1}, {2}. Изменить", timeRange(task), task.task, task.category));
     const time = document.createElement('span');
     time.className = 'compact-time';
     time.textContent = timeRange(task);
@@ -4158,15 +4166,11 @@ async function loadNotes() {
 
 function fmtNoteDate(d) {
   const dt = new Date(d);
-  return dt.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return dt.toLocaleString(LOCALE, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
 function pluralNotes(n) {
-  if (n === 0) return 'нет заметок';
-  const a = n % 10, b = n % 100;
-  if (a === 1 && b !== 11) return n + ' заметка';
-  if (a >= 2 && a <= 4 && (b < 12 || b > 14)) return n + ' заметки';
-  return n + ' заметок';
+  return n === 0 ? t('нет заметок') : n + ' ' + tn(n, 'заметка|заметки|заметок');
 }
 
 // Просмотр: текст и дата, тап открывает редактирование на месте (макет Notes).
@@ -4245,7 +4249,7 @@ function noteCardEl(note) {
     chip.type = 'button';
     chip.className = 'place-chip note-place';
     chip.dataset.focusKey = 'note-place-' + note.id;
-    chip.setAttribute('aria-label', `Открыть в Google Maps: ${note.location}`);
+    chip.setAttribute('aria-label', t("Открыть в Google Maps: {0}", note.location));
     chip.innerHTML = PIN_ICON;
     const t = document.createElement('span');
     t.textContent = placeShort(note.location);
@@ -4318,7 +4322,7 @@ function notePreviewEl(note) {
   box.className = 'note-preview';
   const head = document.createElement('div');
   head.className = 'note-preview-head';
-  head.textContent = `Нашёл задач: ${notePreview.items.length}`;
+  head.textContent = t("Нашёл задач: {0}", notePreview.items.length);
   box.appendChild(head);
   notePreview.items.forEach((item, i) => {
     const row = document.createElement('button');
@@ -4342,7 +4346,7 @@ function notePreviewEl(note) {
   add.className = 'btn-small';
   add.dataset.focusKey = 'note-pick-add';
   const n = notePreview.picked.size;
-  add.textContent = notePreview.busy ? 'Добавляю…' : (n ? `Добавить ${n}` : 'Ничего не выбрано');
+  add.textContent = notePreview.busy ? 'Добавляю…' : (n ? t("Добавить {0}", n) : 'Ничего не выбрано');
   add.disabled = notePreview.busy || !n;
   add.onclick = addPickedNoteTasks;
   const cancel = document.createElement('button');
@@ -4368,7 +4372,7 @@ async function addPickedNoteTasks() {
   }
   notePreview = null;
   renderNotes();
-  toast(created === picked.length ? `Добавил задач: ${created}` : `Добавил ${created} из ${picked.length}, остальные не получились`);
+  toast(created === picked.length ? t("Добавил задач: {0}", created) : t("Добавил {0} из {1}, остальные не получились", created, picked.length));
   loadTasks();
 }
 
@@ -4485,7 +4489,7 @@ async function submitNote() {
     for (const ph of photos) {
       try { await uploadNotePhoto(created.id, ph); } catch (e) { failed++; }
     }
-    if (failed) toast(`Не удалось прикрепить фото: ${failed}`);
+    if (failed) toast(t("Не удалось прикрепить фото: {0}", failed));
     await loadNotes();
   } catch (e) {
     toast('Не удалось сохранить заметку');
@@ -4564,10 +4568,10 @@ async function renderAdmin() {
       row.dataset.focusKey = 'admin-' + u.id;
       row.innerHTML = '<span class="people-av" aria-hidden="true"></span><span class="people-name"><span></span><small></small></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg>';
       row.querySelector('.people-av').textContent = initials(u.name);
-      row.querySelector('.people-name span').textContent = u.name + (u.me ? ' (вы)' : '') + (u.blocked ? ' · доступ отключён' : '');
+      row.querySelector('.people-name span').textContent = u.name + (u.me ? ' ' + t('(вы)') : '') + (u.blocked ? ' ' + t('· доступ отключён') : '');
       const last = u.last_activity ? new Date(u.last_activity) : null;
-      row.querySelector('small').textContent = `открыто ${u.open}${u.overdue ? `, просрочено ${u.overdue}` : ''} · выполнено ${u.done}`
-        + (last ? ` · активность ${last.getDate()} ${MONTH_SHORT[last.getMonth()]}` : '');
+      row.querySelector('small').textContent = (u.overdue ? t("открыто {0}, просрочено {1} · выполнено {2}", u.open, u.overdue, u.done) : t("открыто {0} · выполнено {1}", u.open, u.done))
+        + (last ? t(" · активность {0} {1}", last.getDate(), MONTH_SHORT[last.getMonth()]) : '');
       row.onclick = () => { adminUser = u; renderAdmin(); };
       list.appendChild(row);
     });
@@ -4582,7 +4586,7 @@ async function renderAdmin() {
   box.innerHTML = '';
   const meta = document.createElement('p');
   meta.className = 'admin-row-meta';
-  meta.textContent = `Открыто ${u.open}, просрочено ${u.overdue}, выполнено ${u.done}. Только просмотр — менять чужие задачи нельзя.`;
+  meta.textContent = t("Открыто {0}, просрочено {1}, выполнено {2}. Только просмотр — менять чужие задачи нельзя.", u.open, u.overdue, u.done);
   box.appendChild(meta);
   if (!u.me && !u.is_admin) {
     const btn = document.createElement('button');
@@ -4594,7 +4598,7 @@ async function renderAdmin() {
       try {
         const r = await apiJson(`/admin/users/${u.id}/block`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ blocked: !u.blocked }) });
         u.blocked = r.blocked;
-        toast(r.blocked ? `${u.name}: доступ отключён. Данные сохранены` : `${u.name}: доступ возвращён`);
+        toast(r.blocked ? t("{0}: доступ отключён. Данные сохранены", u.name) : t("{0}: доступ возвращён", u.name));
         renderAdmin();
       } catch (e) { toast(e.message || 'Не получилось'); }
     };
@@ -4607,24 +4611,24 @@ async function renderAdmin() {
   const section = (label, tasks) => {
     const h = document.createElement('div');
     h.className = 'section-label';
-    h.textContent = `${label} · ${tasks.length}`;
+    h.textContent = `${t(label)} · ${tasks.length}`;
     box.appendChild(h);
     const list = document.createElement('div');
     list.className = 'people-list';
     if (!tasks.length) { const e = document.createElement('div'); e.className = 'empty-dashed'; e.textContent = 'Нет'; list.appendChild(e); }
-    tasks.forEach(t => {
+    tasks.forEach(tk => {
       const card = document.createElement('div');
       card.className = 'admin-task';
-      const cat = (allCategories || []).find(c => c.name === t.category);
+      const cat = (allCategories || []).find(c => c.name === tk.category);
       card.style.setProperty('--row-bg', 'var(--surface)');
       card.style.color = 'var(--ink)';
-      const dt = t.deadline && parseNaiveDeadline(t.deadline);
-      if (t.status !== 'Done' && dt && dateKey(t.deadline) < today) card.classList.add('overdue');
+      const dt = tk.deadline && parseNaiveDeadline(tk.deadline);
+      if (tk.status !== 'Done' && dt && dateKey(tk.deadline) < today) card.classList.add('overdue');
       card.innerHTML = '<b></b><small></small>';
-      card.querySelector('b').textContent = t.task;
-      card.querySelector('small').textContent = [dt ? `${dt.getDate()} ${MONTH_SHORT[dt.getMonth()]} · ${timeOf(t.deadline)}` : 'без срока',
-        t.category, t.location ? `📍 ${placeShort(t.location)}` : '', t.is_recurring ? '↻' : ''].filter(Boolean).join(' · ');
-      const own = steps.filter(x => x.task_id === t.id);
+      card.querySelector('b').textContent = tk.task;
+      card.querySelector('small').textContent = [dt ? `${dt.getDate()} ${MONTH_SHORT[dt.getMonth()]} · ${timeOf(tk.deadline)}` : t('без срока'),
+        tk.category, tk.location ? `📍 ${placeShort(tk.location)}` : '', tk.is_recurring ? '↻' : ''].filter(Boolean).join(' · ');
+      const own = steps.filter(x => x.task_id === tk.id);
       if (own.length) {
         const ul = document.createElement('ul');
         own.forEach(st => { const li = document.createElement('li'); li.textContent = st.content; if (st.is_done) li.className = 'done'; ul.appendChild(li); });
@@ -4684,7 +4688,7 @@ function renderNoteView() {
     chip.className = 'place-chip';
     chip.style.marginTop = 'var(--gap-m)';
     chip.dataset.focusKey = 'nv-place';
-    chip.setAttribute('aria-label', `Открыть в Google Maps: ${note.location}`);
+    chip.setAttribute('aria-label', t("Открыть в Google Maps: {0}", note.location));
     chip.innerHTML = PIN_ICON + '<span></span>';
     chip.querySelector('span').textContent = note.location;
     chip.onclick = () => openExternal(mapsUrl(note.location));
@@ -4776,7 +4780,7 @@ function notePhotosEl(note, editing) {
     const open = document.createElement('button');
     open.type = 'button';
     open.className = 'note-photo-open';
-    open.setAttribute('aria-label', `Открыть фото ${i + 1}`);
+    open.setAttribute('aria-label', t("Открыть фото {0}", i + 1));
     open.dataset.focusKey = `note-photo-${f.id}`;
     const img = document.createElement('img');
     img.alt = '';
@@ -4789,7 +4793,7 @@ function notePhotosEl(note, editing) {
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'note-photo-del';
-      del.setAttribute('aria-label', `Удалить фото ${i + 1}`);
+      del.setAttribute('aria-label', t("Удалить фото {0}", i + 1));
       del.innerHTML = '<span aria-hidden="true">×</span>';
       del.onclick = () => deleteNotePhoto(note, f.id);
       b.appendChild(del);
@@ -4811,7 +4815,7 @@ function renderNewNotePhotos() {
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'note-photo-del';
-    del.setAttribute('aria-label', `Убрать фото ${i + 1}`);
+    del.setAttribute('aria-label', t("Убрать фото {0}", i + 1));
     del.innerHTML = '<span aria-hidden="true">×</span>';
     del.onclick = () => { newNotePhotos.splice(i, 1); renderNewNotePhotos(); };
     b.append(img, del);
@@ -4933,11 +4937,11 @@ function showLoadError(code) {
   const box = document.createElement('div');
   box.className = 'load-error';
   box.setAttribute('role', 'alert');
-  box.innerHTML = '<b>Не удалось загрузить задачи</b>' +
-    '<p>Сервер не ответил. Проверьте интернет и попробуйте ещё раз.</p>' +
+  box.innerHTML = '<b>' + escapeHtml(t('Не удалось загрузить задачи')) + '</b>' +
+    '<p>' + escapeHtml(t('Сервер не ответил. Проверьте интернет и попробуйте ещё раз.')) + '</p>' +
     '<code class="error-code"></code>' +
-    '<div class="gate-actions"><button class="btn-small">Повторить</button></div>';
-  box.querySelector('code').textContent = code || 'нет ответа';
+    '<div class="gate-actions"><button class="btn-small">' + escapeHtml(t('Повторить')) + '</button></div>';
+  box.querySelector('code').textContent = code || t('нет ответа');
   box.querySelector('button').onclick = () => firstLoad();
   list.appendChild(box);
   document.getElementById('daySubtitle').textContent = 'Нет связи с сервером';
@@ -5030,7 +5034,7 @@ async function firstLoad() {
 // а не белую страницу; после загрузки — короткое уведомление.
 function reportClientError(code) {
   if (!tasksLoaded) showLoadError(code);
-  else toast(`Ошибка в приложении: ${code}`);
+  else toast(t("Ошибка в приложении: {0}", code));
 }
 window.addEventListener('error', (e) => {
   if (!e.message || e.message === 'Script error.') return; // ошибки чужих скриптов без подробностей
@@ -5154,7 +5158,7 @@ document.querySelectorAll('[data-remind]').forEach(btn => {
     try {
       moneyMe = await apiJson('/me', { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify({ remind_before: minutes }) });
       renderRemindButtons();
-      toast(minutes ? `Напомню за ${minutes === 60 ? 'час' : minutes + ' мин'} до задачи` : 'Напоминания перед задачами выключены');
+      toast(minutes ? (minutes === 60 ? t('Напомню за час до задачи') : t("Напомню за {0} мин до задачи", minutes)) : t('Напоминания перед задачами выключены'));
     } catch (e) { toast(e.message || 'Не удалось сохранить'); }
   };
 });
@@ -5172,7 +5176,7 @@ async function loadCalendarChoice() {
     calendarsData = await apiJson('/google/calendars');
   } catch (e) { calendarsData = null; link.textContent = 'выбрать'; return; }
   const names = calendarsData.calendars.filter(c => c.selected).map(c => c.name);
-  link.textContent = names.length ? names.join(', ') : 'основного';
+  link.textContent = names.length ? names.join(', ') : t('основного');
 }
 
 const calendarsSheet = document.getElementById('calendarsSheet');
@@ -5228,7 +5232,7 @@ async function saveCalendars() {
   try {
     const res = await apiJson('/google/calendars', { method: 'PUT', headers: JSON_HEADERS,
       body: JSON.stringify({ ids: [...calendarsPicked] }) });
-    toast(res.created ? `Готово, перенесено событий: ${res.created}` : 'Сохранено');
+    toast(res.created ? t("Готово, перенесено событий: {0}", res.created) : 'Сохранено');
     closeCalendars();
     loadCalendarChoice();
     loadTasks();
@@ -5345,7 +5349,7 @@ async function submitComposer() {
     await postNewTaskComment(created);
     input.value = '';
     closeNewTask();
-    toast(`Добавлено задач: ${created.length}`);
+    toast(t("Добавлено задач: {0}", created.length));
     if (created.length) {
       selectedDay = created[0].deadline ? dateKey(created[0].deadline) : DAY_NODATE;
       stripNeedsScroll = true;
@@ -5523,7 +5527,7 @@ function escapeCsvField(val) {
 }
 
 function tasksToCSV(tasks) {
-  const headers = ['Задача', 'Категория', 'Приоритет', 'Статус', 'Дедлайн', 'Теги'];
+  const headers = ['Задача', 'Категория', 'Приоритет', 'Статус', 'Дедлайн', 'Теги'].map(h => t(h));
   const rows = tasks.map(t => [
     t.task,
     t.category,
@@ -5572,7 +5576,7 @@ function openPrintView() {
   }).join('');
 
   win.document.write(`<!DOCTYPE html>
-<html lang="ru"><head><meta charset="UTF-8"><title>Задачи — экспорт</title>
+<html lang="${LANG}"><head><meta charset="UTF-8"><title>${escapeHtml(t('Задачи — экспорт'))}</title>
 <style>
   body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
   h1 { font-size: 18px; margin-bottom: 4px; }
@@ -5582,10 +5586,10 @@ function openPrintView() {
   th { background: #f2f2f2; }
 </style></head>
 <body>
-  <h1>JulYera Agent — список задач</h1>
-  <div class="sub">Экспортировано ${new Date().toLocaleString('ru-RU')}</div>
+  <h1>JulYera Agent — ${escapeHtml(t('список задач'))}</h1>
+  <div class="sub">${escapeHtml(t('Экспортировано {0}', new Date().toLocaleString(LOCALE)))}</div>
   <table>
-    <thead><tr><th>Задача</th><th>Категория</th><th>Приоритет</th><th>Статус</th><th>Дедлайн</th><th>Теги</th></tr></thead>
+    <thead><tr>${['Задача', 'Категория', 'Приоритет', 'Статус', 'Дедлайн', 'Теги'].map(h => '<th>' + escapeHtml(t(h)) + '</th>').join('')}</tr></thead>
     <tbody>${rows}</tbody>
   </table>
 </body></html>`);
@@ -5737,7 +5741,7 @@ function renderCategoriesScreen() {
     swatch.type = 'button';
     swatch.className = 'cat-swatch-btn';
     swatch.dataset.focusKey = 'cat-color-' + cat.id;
-    swatch.setAttribute('aria-label', `Цвет категории ${cat.name}: ${COLOR_NAMES[cat.color] || cat.color}`);
+    swatch.setAttribute('aria-label', t("Цвет категории {0}: {1}", cat.name, t(COLOR_NAMES[cat.color] || cat.color)));
     swatch.setAttribute('aria-expanded', String(catOpenPalette === cat.id));
     swatch.style.setProperty('--chip-color', cat.color);
     swatch.innerHTML = '<span class="swatch"></span>';
@@ -5767,13 +5771,13 @@ function renderCategoriesScreen() {
       const r = await categoryRequest(`${catBase()}/order`, { method: 'PUT', body: JSON.stringify(body) });
       if (!r.ok) toast(r.message);
     };
-    const up = iconButton('M12 19V5M5 12l7-7 7 7', `Поднять ${cat.name}`, () => move(-1));
+    const up = iconButton('M12 19V5M5 12l7-7 7 7', t("Поднять {0}", cat.name), () => move(-1));
     up.disabled = index === 0;
     up.dataset.focusKey = 'cat-up-' + cat.id;
-    const down = iconButton('M12 5v14M5 12l7 7 7-7', `Опустить ${cat.name}`, () => move(1));
+    const down = iconButton('M12 5v14M5 12l7 7 7-7', t("Опустить {0}", cat.name), () => move(1));
     down.disabled = index === items.length - 1;
     down.dataset.focusKey = 'cat-down-' + cat.id;
-    const del = iconButton('M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12', `Удалить ${cat.name}`, async () => {
+    const del = iconButton('M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12', t("Удалить {0}", cat.name), async () => {
       if (items.length <= 1) { toast('Последнюю категорию удалить нельзя'); return; }
       const r = await categoryRequest(`${catBase()}/${cat.id}`, { method: 'DELETE' }, 'Категория удалена');
       if (r.ok) return;
@@ -5789,7 +5793,7 @@ function renderCategoriesScreen() {
     if (catScope === 'expense') card.appendChild(limitRowEl(cat));
 
     if (catOpenPalette === cat.id) {
-      card.appendChild(paletteEl(cat.color, `Цвет категории ${cat.name}`, async (color) => {
+      card.appendChild(paletteEl(cat.color, t("Цвет категории {0}", cat.name), async (color) => {
         catOpenPalette = null;
         const r = await categoryRequest(`${catBase()}/${cat.id}`, { method: 'PATCH', body: JSON.stringify({ color }) });
         if (!r.ok) toast(r.message);
@@ -5820,7 +5824,7 @@ function renderCategoriesScreen() {
       go.onclick = async () => {
         const target = catMovePrompt.target;
         catMovePrompt = null;
-        const r = await categoryRequest(`${catBase()}/${cat.id}?move_to=${encodeURIComponent(target)}`, { method: 'DELETE' }, `${itemsWord} перенесены, категория удалена`);
+        const r = await categoryRequest(`${catBase()}/${cat.id}?move_to=${encodeURIComponent(target)}`, { method: 'DELETE' }, t("{0} перенесены, категория удалена", itemsWord));
         if (!r.ok) toast(r.message);
       };
       const cancel = document.createElement('button');
@@ -5860,7 +5864,7 @@ function limitRowEl(cat) {
   wrap.innerHTML = '<span>Лимит в месяц</span><input type="text" inputmode="decimal" autocomplete="off" placeholder="нет"><span></span>';
   const input = wrap.querySelector('input');
   input.dataset.focusKey = 'cat-limit-' + cat.id;
-  input.setAttribute('aria-label', `Лимит в месяц для ${cat.name}, ${cur}`);
+  input.setAttribute('aria-label', t("Лимит в месяц для {0}, {1}", cat.name, cur));
   const current = cat.monthly_limit ? cat.monthly_limit.replace('.', ',').replace(/,00$/, '') : '';
   input.value = current;
   wrap.lastElementChild.textContent = symbol;
@@ -5937,7 +5941,7 @@ function renderStatement() {
   const { from, to } = stBounds();
   if (stPeriod !== 'custom') { document.getElementById('stFrom').value = from; document.getElementById('stTo').value = to; }
   document.getElementById('stRange').textContent = from && to
-    ? `${dayLabel(from)} ${from.slice(0, 4)} — ${dayLabel(to)} ${to.slice(0, 4)} · ${inTelegram ? 'файл придёт в бот' : 'файл скачается'}`
+    ? `${dayLabel(from)} ${from.slice(0, 4)} — ${dayLabel(to)} ${to.slice(0, 4)} · ${inTelegram ? t('файл придёт в бот') : t('файл скачается')}`
     : 'Выберите даты «с» и «по»';
 }
 function openStatement() {
@@ -6081,12 +6085,12 @@ let trendCurrency = null;
 const pendingMoneyDeletions = {};
 
 const FREQ_LABELS = { weekly: 'Каждую неделю', biweekly: 'Каждые 2 недели', monthly: 'Каждый месяц', yearly: 'Каждый год' };
-const WEEKDAY_DATIVE_PL = ['воскресеньям', 'понедельникам', 'вторникам', 'средам', 'четвергам', 'пятницам', 'субботам'];
+const WEEKDAY_DATIVE_PL = i18nArray('WEEKDAY_DATIVE_PL', ['воскресеньям', 'понедельникам', 'вторникам', 'средам', 'четвергам', 'пятницам', 'субботам']);
 
 function moneyFmt(amount, currency, sign) {
   let text;
   try {
-    text = new Intl.NumberFormat('ru-RU', { style: 'currency', currency, currencyDisplay: 'narrowSymbol', minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    text = new Intl.NumberFormat(LOCALE, { style: 'currency', currency, currencyDisplay: 'narrowSymbol', minimumFractionDigits: 2, maximumFractionDigits: 2 })
       .format(Number(amount));  // Number — только для показа; расчёты на сервере
   } catch (e) {
     text = `${amount} ${currency}`;
@@ -6125,10 +6129,10 @@ function nextRepeat(fromKey, freq, dom) {
 // «каждый месяц, 1-го», «каждую неделю, по пятницам», «каждый год, 1 ноября»
 function freqText(freq, dateKey, dom) {
   const dt = dateOfKey(dateKey);
-  if (freq === 'weekly') return `каждую неделю, по ${WEEKDAY_DATIVE_PL[dt.getDay()]}`;
-  if (freq === 'biweekly') return `каждые 2 недели, по ${WEEKDAY_DATIVE_PL[dt.getDay()]}`;
-  if (freq === 'yearly') return `каждый год, ${dom} ${MONTH_GENITIVE[dt.getMonth()]}`;
-  return `каждый месяц, ${dom}-го`;
+  if (freq === 'weekly') return t("каждую неделю, по {0}", WEEKDAY_DATIVE_PL[dt.getDay()]);
+  if (freq === 'biweekly') return t("каждые 2 недели, по {0}", WEEKDAY_DATIVE_PL[dt.getDay()]);
+  if (freq === 'yearly') return t("каждый год, {0} {1}", dom, MONTH_GENITIVE[dt.getMonth()]);
+  return t("каждый месяц, {0}-го", dom);
 }
 
 async function apiJson(path, options) {
@@ -6207,7 +6211,7 @@ function renderMoney() {
   document.getElementById('moneyMonthLabel').textContent = monthTitle(key);
   document.getElementById('moneyCurrent').hidden = key === currentMonthKey();
   document.getElementById('moneyCurrencyBtn').innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M14.5 9.5a2.5 2 0 0 0-2.5-1.5c-1.5 0-2.5.8-2.5 2s1 1.7 2.5 2 2.5.8 2.5 2-1 2-2.5 2a2.5 2 0 0 1-2.5-1.5M12 6.5V8M12 16v1.5"/></svg>'
-    + `Валюты: ${userCurrencies().map(c => CURRENCY_SYMBOLS[c] || c).join(' · ')}`;
+    + t("Валюты: {0}", userCurrencies().map(c => CURRENCY_SYMBOLS[c] || c).join(' · '));
   document.getElementById('moneyNext').disabled = key >= currentMonthKey();
   const trend = moneyTab === 'trend';
   const goals = moneyTab === 'goals';
@@ -6234,7 +6238,7 @@ function renderMoneyNet(summary, key) {
   box.innerHTML = '';
   const label = document.createElement('div');
   label.className = 'money-net-label';
-  label.textContent = `${MONTH_NAMES_RU[Number(key.slice(5, 7)) - 1]} · остаток`;
+  label.textContent = t("{0} · остаток", MONTH_NAMES_RU[Number(key.slice(5, 7)) - 1]);
   box.appendChild(label);
   const lines = summary.main
     ? [{ ...summary.main, approx: summary.main.parts && ['income', 'expense'].some(k => (summary.main.parts[k] || []).some(p => p.currency !== summary.main.currency)) }]
@@ -6247,7 +6251,7 @@ function renderMoneyNet(summary, key) {
     value.textContent = (l.approx ? '≈ ' : '') + moneyFmt(String(l.balance).replace('-', ''), l.currency, neg ? '−' : '+');
     const parts = document.createElement('div');
     parts.className = 'money-net-parts';
-    parts.textContent = `${moneyFmt(l.income, l.currency, '+')} доходы · ${moneyFmt(l.expense, l.currency, '−')} расходы`;
+    parts.textContent = t("{0} доходы · {1} расходы", moneyFmt(l.income, l.currency, '+'), moneyFmt(l.expense, l.currency, '−'));
     box.append(value, parts);
   });
 }
@@ -6266,9 +6270,9 @@ function renderMoneyRange() {
   document.getElementById('moneyRangeLabel').textContent = moneyRange ? rangeText(moneyRange) : 'Даты';
   document.getElementById('moneyRangeClear').hidden = !moneyRange;
   const totals = document.getElementById('moneyRangeTotals');
-  const t = moneyRange && moneyRangeTotals;
-  totals.hidden = !t;
-  if (t) totals.textContent = `За период: ${t.expense_approx ? '≈ ' : ''}${moneyFmt(t.expense, t.currency, '−')} · ${t.income_approx ? '≈ ' : ''}${moneyFmt(t.income, t.currency, '+')}`;
+  const rt = moneyRange && moneyRangeTotals;
+  totals.hidden = !rt;
+  if (rt) totals.textContent = t("За период: {0}{1} · {2}{3}", rt.expense_approx ? '≈ ' : '', moneyFmt(rt.expense, rt.currency, '−'), rt.income_approx ? '≈ ' : '', moneyFmt(rt.income, rt.currency, '+'));
 }
 document.getElementById('moneyRangeBtn').onclick = () => {
   const box = document.getElementById('moneyRangeBox');
@@ -6314,7 +6318,7 @@ async function loadGoals() {
 function goalDue(due) {
   if (!due) return 'без срока';
   const [y, m, d] = due.split('-').map(Number);
-  return `до ${d} ${MONTH_GENITIVE[m - 1]}${y !== new Date().getFullYear() ? ' ' + y : ''}`;
+  return t("до {0} {1}{2}", d, MONTH_GENITIVE[m - 1], y !== new Date().getFullYear() ? ' ' + y : '');
 }
 
 function renderGoals() {
@@ -6343,12 +6347,12 @@ function renderGoals() {
     card.querySelector('.goal-top b').textContent = g.name;
     card.querySelector('.goal-top span').textContent = g.achieved ? '✓ достигнута' : goalDue(g.due_date);
     card.querySelector('.money-bar-fill').style.width = g.percent + '%';
-    card.querySelector('.goal-saved').textContent = `${moneyFmt(g.saved, g.currency)} из ${moneyFmt(g.target, g.currency)}`;
+    card.querySelector('.goal-saved').textContent = t("{0} из {1}", moneyFmt(g.saved, g.currency), moneyFmt(g.target, g.currency));
     card.querySelector('.goal-pct').textContent = g.percent + '%';
     if (g.per_month && !g.achieved) {
       const sub = document.createElement('div');
       sub.className = 'goal-sub';
-      sub.textContent = `≈ ${moneyFmt(g.per_month, g.currency)} в месяц, чтобы успеть`;
+      sub.textContent = t("≈ {0} в месяц, чтобы успеть", moneyFmt(g.per_month, g.currency));
       card.appendChild(sub);
     }
     const btn = document.createElement('button');
@@ -6420,7 +6424,7 @@ async function saveGoal() {
   btn.disabled = false;
 }
 async function deleteGoal() {
-  if (!goalEditing || !confirm(`Удалить цель «${goalEditing.name}» вместе с историей?`)) return;
+  if (!goalEditing || !confirm(t("Удалить цель «{0}» вместе с историей?", goalEditing.name))) return;
   try {
     await apiJson(`/money/goals/${goalEditing.id}`, { method: 'DELETE' });
     toast('Цель удалена');
@@ -6458,7 +6462,7 @@ function renderGoalMove() {
   const g = goalMoving;
   document.getElementById('goalMoveTitle').textContent = g.name;
   document.querySelectorAll('#goalMoveMode [data-take]').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.take === '1') === goalTake)));
-  document.getElementById('goalMoveLabel').textContent = `${goalTake ? 'Снять' : 'Отложить'}, ${CURRENCY_SYMBOLS[g.currency] || g.currency} · отложено ${moneyFmt(g.saved, g.currency)} из ${moneyFmt(g.target, g.currency)}`;
+  document.getElementById('goalMoveLabel').textContent = t(goalTake ? "Снять, {0} · отложено {1} из {2}" : "Отложить, {0} · отложено {1} из {2}", CURRENCY_SYMBOLS[g.currency] || g.currency, moneyFmt(g.saved, g.currency), moneyFmt(g.target, g.currency));
   document.getElementById('goalMoveSave').textContent = goalTake ? 'Снять' : 'Отложить';
   const quick = document.getElementById('goalQuick');
   quick.innerHTML = '';
@@ -6466,7 +6470,7 @@ function renderGoalMove() {
   if (!goalTake && g.per_month) options.push(g.per_month);
   if (!goalTake && Number(g.left) > 0) options.push(g.left);
   [...new Set(options)].forEach(v => {
-    const label = v === g.per_month ? `${moneyFmt(v, g.currency)} — по плану` : (v === g.left ? `${moneyFmt(v, g.currency)} — до цели` : moneyFmt(v, g.currency));
+    const label = v === g.per_month ? t("{0} — по плану", moneyFmt(v, g.currency)) : (v === g.left ? t("{0} — до цели", moneyFmt(v, g.currency)) : moneyFmt(v, g.currency));
     const [btn, text] = choiceChipEl(label, false, 'quick', () => { document.getElementById('goalMoveAmount').value = v.replace('.00', '').replace('.', ','); });
     btn.appendChild(text);
     quick.appendChild(btn);
@@ -6485,7 +6489,7 @@ async function saveGoalMove() {
   try {
     const g = await apiJson(`/money/goals/${goalMoving.id}/moves`, { method: 'POST', headers: JSON_HEADERS,
       body: JSON.stringify({ amount, take: goalTake }) });
-    toast(g.first_achieved ? `🎉 Цель «${g.name}» достигнута!` : (goalTake ? 'Снято' : `Отложено · ${g.percent}%`));
+    toast(g.first_achieved ? t("🎉 Цель «{0}» достигнута!", g.name) : (goalTake ? 'Снято' : t("Отложено · {0}%", g.percent)));
     closeGoalMove();
     loadGoals();
   } catch (e) { toast(e.message || 'Не удалось сохранить'); }
@@ -6494,7 +6498,7 @@ async function saveGoalMove() {
 // iPhone показывает пустое поле даты как сегодняшнюю дату — подпись говорит, выбран ли срок на самом деле.
 function renderGoalDueHint() {
   const v = document.getElementById('goalDue').value;
-  document.getElementById('goalDueHint').textContent = v ? `Срок: ${dayLabel(v)} ${v.slice(0, 4)}` : 'Срок не выбран — можно оставить так';
+  document.getElementById('goalDueHint').textContent = v ? t("Срок: {0} {1}", dayLabel(v), v.slice(0, 4)) : 'Срок не выбран — можно оставить так';
   document.getElementById('goalDueClear').hidden = !v;
 }
 document.getElementById('goalDue').addEventListener('change', renderGoalDueHint);
@@ -6512,6 +6516,8 @@ document.getElementById('goalMoveAmount').onkeydown = (e) => { if (e.key === 'En
 // ---------- Расходы / Доходы ----------
 const CURRENCY_NAMES = { EUR: 'Евро', KZT: 'Тенге', USD: 'Доллар', AZN: 'Манат', TRY: 'Лира' };
 const CURRENCY_SYMBOLS = { EUR: '€', KZT: '₸', USD: '$', AZN: '₼', TRY: '₺' };
+// «в евро», «в тенге» — для подписей «Октябрь 2026 · в евро» (переводятся через t())
+const CURRENCY_IN = { EUR: 'евро', KZT: 'тенге', USD: 'долларах', AZN: 'манатах', TRY: 'лирах' };
 // Пара пользователя: основная + дополнительная (в форме траты и целей только они; чужая валюту операции — тоже).
 function userCurrencies(extra) {
   const main = (moneyMe && moneyMe.default_currency) || 'EUR';
@@ -6524,7 +6530,7 @@ function userCurrencies(extra) {
 function rateText(summary) {
   const r = summary && summary.rate;
   if (!r) return '';
-  return `Курс Нацбанка РК на ${dayLabel(r.date)}: 1 ${moneyFmt('1', r.currency).replace(/[\d\s,.]/g, '')} = ${moneyFmt(r.kzt, 'KZT')}`;
+  return t("Курс Нацбанка РК на {0}: 1 {1} = {2}", dayLabel(r.date), moneyFmt('1', r.currency).replace(/[\d\s,.]/g, ''), moneyFmt(r.kzt, 'KZT'));
 }
 
 function renderKindView(summary) {
@@ -6551,10 +6557,10 @@ function renderKindView(summary) {
     const card = document.createElement('div');
     card.className = 'money-card';
     card.innerHTML = '<div class="money-card-cur"></div><b class="money-total"></b><p class="money-compare"></p>';
-    card.querySelector('.money-card-cur').textContent = `${income ? 'Получено' : 'Потрачено'} · ${cur.currency}`;
+    card.querySelector('.money-card-cur').textContent = `${income ? t('Получено') : t('Потрачено')} · ${cur.currency}`;
     card.querySelector('.money-total').textContent = moneyFmt(total, cur.currency);
     card.querySelector('.money-compare').textContent = Number(change) === 0 ? 'Как в прошлом месяце'
-      : `На ${moneyFmt(change.replace('-', ''), cur.currency)} ${change.startsWith('-') ? 'меньше' : 'больше'}, чем в прошлом месяце`;
+      : t(change.startsWith('-') ? "На {0} меньше, чем в прошлом месяце" : "На {0} больше, чем в прошлом месяце", moneyFmt(change.replace('-', ''), cur.currency));
     cards.appendChild(card);
   });
 
@@ -6579,7 +6585,7 @@ function renderKindView(summary) {
       btn.className = 'money-bar';
       btn.dataset.focusKey = `mbar-${cur.currency}-${c.category_id}`;
       btn.setAttribute('aria-pressed', String(moneyFilterCat === c.category_id));
-      btn.setAttribute('aria-label', `${c.name}: ${moneyFmt(c.amount, cur.currency)}, ${c.share}%. Показать операции категории`);
+      btn.setAttribute('aria-label', t("{0}: {1}, {2}%. Показать операции категории", c.name, moneyFmt(c.amount, cur.currency), c.share));
       btn.style.setProperty('--chip-color', c.color || 'var(--accent)');
       btn.innerHTML = '<span class="money-bar-top"><span class="n"></span><b></b></span><span class="money-bar-track"><span class="money-bar-fill"></span></span>';
       btn.querySelector('.n').textContent = c.name;
@@ -6615,13 +6621,13 @@ function renderKindViewMain(summary) {
   card.querySelector('.money-card-cur').textContent = income ? 'Получено всего' : 'Потрачено всего';
   card.querySelector('.money-total').textContent = (approx ? '≈ ' : '') + moneyFmt(m[kind], m.currency);
   card.querySelector('.money-compare').textContent = Number(change) === 0 ? 'Как в прошлом месяце'
-    : `На ${moneyFmt(change.replace('-', ''), m.currency)} ${change.startsWith('-') ? 'меньше' : 'больше'}, чем в прошлом месяце`;
+    : t(change.startsWith('-') ? "На {0} меньше, чем в прошлом месяце" : "На {0} больше, чем в прошлом месяце", moneyFmt(change.replace('-', ''), m.currency));
   const lim = m.limits || {};
   const limTotal = (lim.ok || 0) + (lim.warn || 0) + (lim.over || 0);
   if (!income && limTotal) {
     const p = document.createElement('p');
     p.className = 'money-limits';
-    p.textContent = 'Лимиты: ' + [lim.ok ? `${lim.ok} в норме` : '', lim.warn ? `${lim.warn} почти` : '', lim.over ? `${lim.over} превышено` : '']
+    p.textContent = t('Лимиты:') + ' ' + [lim.ok ? t("{0} в норме", lim.ok) : '', lim.warn ? t("{0} почти", lim.warn) : '', lim.over ? t("{0} превышено", lim.over) : '']
       .filter(Boolean).join(' · ');
     card.querySelector('.money-compare').after(p);
   }
@@ -6630,7 +6636,7 @@ function renderKindViewMain(summary) {
     parts.forEach(p => {
       const row = document.createElement('div');
       const label = document.createElement('span');
-      label.textContent = `в ${p.currency === 'KZT' ? 'тенге' : 'евро'}`;
+      label.textContent = t("в {0}", t(CURRENCY_IN[p.currency] || p.currency));
       const value = document.createElement('b');
       value.textContent = moneyFmt(p.amount, p.currency) + (p.currency !== m.currency ? ` ≈ ${moneyFmt(p.converted, m.currency)}` : '');
       row.append(label, value);
@@ -6655,7 +6661,7 @@ function renderKindViewMain(summary) {
     btn.className = 'money-bar';
     btn.dataset.focusKey = `mbar-${c.category_id}`;
     btn.setAttribute('aria-pressed', String(moneyFilterCat === c.category_id));
-    btn.setAttribute('aria-label', `${c.name}: ${moneyFmt(c.amount, m.currency)}, ${c.share}%. Показать операции категории`);
+    btn.setAttribute('aria-label', t("{0}: {1}, {2}%. Показать операции категории", c.name, moneyFmt(c.amount, m.currency), c.share));
     btn.style.setProperty('--chip-color', c.color || 'var(--accent)');
     btn.innerHTML = '<span class="money-bar-top"><span class="n"></span><b></b></span><span class="money-bar-track"><span class="money-bar-fill"></span></span>';
     btn.querySelector('.n').textContent = c.name;
@@ -6666,12 +6672,12 @@ function renderKindViewMain(summary) {
       const L = c.limit;
       btn.classList.add('limited');
       b.textContent = L.state === 'over' && L.left.startsWith('-')
-        ? `${moneyFmt(L.spent, L.currency)} из ${moneyFmt(L.amount, L.currency)} · +${moneyFmt(L.left.slice(1), L.currency)}`
-        : `${moneyFmt(L.spent, L.currency)} из ${moneyFmt(L.amount, L.currency)} · ${L.pct}%`;
+        ? t("{0} из {1} · +{2}", moneyFmt(L.spent, L.currency), moneyFmt(L.amount, L.currency), moneyFmt(L.left.slice(1), L.currency))
+        : t("{0} из {1} · {2}%", moneyFmt(L.spent, L.currency), moneyFmt(L.amount, L.currency), L.pct);
       b.className = L.state === 'ok' ? '' : L.state;
       fill.classList.add(L.state);
       fill.style.width = `${Math.max(2, Math.min(100, L.pct))}%`;
-      btn.setAttribute('aria-label', `${c.name}: ${b.textContent}. Показать операции категории`);
+      btn.setAttribute('aria-label', t("{0}: {1}. Показать операции категории", c.name, b.textContent));
     } else {
       b.textContent = `${c.approx ? '≈ ' : ''}${moneyFmt(c.amount, m.currency)} · ${c.share}%`;
       fill.style.width = `${Math.max(2, Math.round(c.share / top * 100))}%`;
@@ -6705,7 +6711,7 @@ function renderRecurringBlock() {
     check.type = 'button';
     check.className = 'row-check';
     check.dataset.focusKey = 'rec-check-' + rec.id;
-    check.setAttribute('aria-label', `Оплачено: ${rec.note || cat.name}`);
+    check.setAttribute('aria-label', t("Оплачено: {0}", rec.note || cat.name));
     check.innerHTML = '<span class="check-circle"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>';
     check.onclick = () => payRecurring(rec, row, check);
     const body = document.createElement('div');
@@ -6719,7 +6725,7 @@ function renderRecurringBlock() {
     const meta = document.createElement('div');
     meta.className = 'money-row-meta';
     const how = freqText(rec.frequency, rec.next_run, rec.day_of_month);
-    meta.textContent = `${how[0].toUpperCase()}${how.slice(1)} · следующий ${dayLabel(rec.next_run)}${rec.as_task ? ' · по галочке' : ''}${rec.active ? '' : ' · на паузе'}`;
+    meta.textContent = [how[0].toUpperCase() + how.slice(1) + ' · ' + t("следующий {0}", dayLabel(rec.next_run)), rec.as_task ? t('по галочке') : '', rec.active ? '' : t('на паузе')].filter(Boolean).join(' · ');
     body.append(title, meta);
     const open = () => { if (Date.now() >= suppressRowClickUntil) openMoneyForm(rec, 'rec'); };
     body.onclick = open;
@@ -6745,7 +6751,7 @@ async function payRecurring(rec, row, check) {
   row.classList.add('done');
   try {
     const next = await apiJson(`/money/recurring/${rec.id}/pay`, { method: 'POST' });
-    toast(`Записано: ${rec.note || (moneyCat(rec.category_id) || {}).name || 'платёж'} · ${moneyFmt(rec.amount, rec.currency)}. Следующий — ${dayLabel(next.next_run)}`);
+    toast(t("Записано: {0} · {1}. Следующий — {2}", rec.note || (moneyCat(rec.category_id) || {}).name || t('платёж'), moneyFmt(rec.amount, rec.currency), dayLabel(next.next_run)));
     moneyDirty = true;
     if (rec.as_task) loadTasks();
   } catch (e) {
@@ -6778,7 +6784,7 @@ function moneyRowEl(tx) {
   row.tabIndex = 0;
   row.setAttribute('role', 'button');
   const income = tx.kind === 'income';
-  row.setAttribute('aria-label', `${income ? 'Доход' : 'Расход'} ${tx.note || cat.name}, ${moneyFmt(tx.amount, tx.currency)}. Изменить`);
+  row.setAttribute('aria-label', t(income ? "Доход {0}, {1}. Изменить" : "Расход {0}, {1}. Изменить", tx.note || cat.name, moneyFmt(tx.amount, tx.currency)));
   const dot = document.createElement('span');
   dot.className = 'cat-dot';
   if (cat.color) dot.style.setProperty('--chip-color', cat.color);
@@ -6825,7 +6831,7 @@ function renderMoneyList(summary) {
   const income = moneyTab === 'income';
   document.getElementById('moneyFilterClear').hidden = !moneyFilterCat;
   const filterCat = moneyFilterCat && moneyCat(moneyFilterCat);
-  document.getElementById('moneyListTitle').textContent = filterCat ? `Операции: ${filterCat.name}` : 'Операции';
+  document.getElementById('moneyListTitle').textContent = filterCat ? t("Операции: {0}", filterCat.name) : 'Операции';
   const rows = moneyTx.filter(t => !pendingMoneyDeletions[t.id]);
   if (!rows.length) {
     const empty = document.createElement('div');
@@ -6946,9 +6952,9 @@ function renderTrendCharts(summary) {
         `<rect class="trend-expense" x="${x + 1}" y="${base - h(p.expense)}" width="12" height="${h(p.expense)}" rx="3"/>` +
         `<text class="trend-label" x="${x}" y="${H - 6}" text-anchor="middle">${MONTH_SHORT[m]}</text>`;
     }).join('');
-    const desc = series.points.map(p => `${monthTitle(p.month)}: доходы ${moneyFmt(p.income, series.currency)}, расходы ${moneyFmt(p.expense, series.currency)}`).join('; ');
+    const desc = series.points.map(p => t("{0}: доходы {1}, расходы {2}", monthTitle(p.month), moneyFmt(p.income, series.currency), moneyFmt(p.expense, series.currency))).join('; ');
     trend.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img"><title></title>${parts}</svg>`;
-    trend.querySelector('title').textContent = `Динамика ${series.currency}. ${desc}`;
+    trend.querySelector('title').textContent = t("Динамика {0}. {1}", series.currency, desc);
   }
 
   // Круговая диаграмма расходов месяца по категориям (выбранная валюта)
@@ -6976,7 +6982,7 @@ function renderTrendCharts(summary) {
   const wrap = document.createElement('div');
   wrap.className = 'pie-wrap';
   wrap.innerHTML = `<svg viewBox="0 0 42 42" role="img"><title></title>${arcs}</svg><div class="pie-legend"></div>`;
-  wrap.querySelector('title').textContent = 'Расходы по категориям: ' + parts.map(c => `${c.name} ${c.share}%`).join(', ');
+  wrap.querySelector('title').textContent = t('Расходы по категориям:') + ' ' + parts.map(c => `${c.name} ${c.share}%`).join(', ');
   const legend = wrap.querySelector('.pie-legend');
   parts.forEach(c => {
     const item = document.createElement('span');
@@ -7004,7 +7010,7 @@ function renderTrendMain(summary, series) {
     <div class="money-figure"><span>Доходы</span><b class="i"></b></div>
     <div class="money-figure"><span>Расходы</span><b class="e"></b></div>
     <div class="money-figure balance"><span>Баланс месяца</span><b class="b"></b></div></div>`;
-  card.querySelector('.money-card-cur').textContent = `${monthTitle(moneyMonth || currentMonthKey())} · в ${m.currency === 'KZT' ? 'тенге' : 'евро'}`;
+  card.querySelector('.money-card-cur').textContent = monthTitle(moneyMonth || currentMonthKey()) + ' · ' + t("в {0}", t(CURRENCY_IN[m.currency] || m.currency));
   card.querySelector('.i').textContent = ap + moneyFmt(m.income, m.currency);
   card.querySelector('.e').textContent = ap + moneyFmt(m.expense, m.currency);
   const b = card.querySelector('.b');
@@ -7091,7 +7097,7 @@ function pieWrapEl(parts) {
   const wrap = document.createElement('div');
   wrap.className = 'pie-wrap';
   wrap.innerHTML = `<svg viewBox="0 0 42 42" role="img"><title></title>${arcs}</svg><div class="pie-legend"></div>`;
-  wrap.querySelector('title').textContent = 'По категориям: ' + parts.map(c => `${c.name} ${c.share}%`).join(', ');
+  wrap.querySelector('title').textContent = t('По категориям:') + ' ' + parts.map(c => `${c.name} ${c.share}%`).join(', ');
   parts.forEach(c => {
     const item = document.createElement('span');
     item.innerHTML = '<i class="cat-dot"></i><span class="n"></span><b></b>';
@@ -7140,7 +7146,7 @@ async function loadAnalytics() {
   bl.classList.toggle('neg', neg);
   const ch = a.expense_change_pct;
   top.querySelector('.money-compare').textContent = ch === null ? 'В предыдущий такой же период трат не было'
-    : `Расходы на ${Math.abs(ch)}% ${ch >= 0 ? 'больше' : 'меньше'}, чем за ${dayLabel(a.previous.from)} — ${dayLabel(a.previous.to)}`;
+    : t(ch >= 0 ? "Расходы на {0}% больше, чем за {1} — {2}" : "Расходы на {0}% меньше, чем за {1} — {2}", Math.abs(ch), dayLabel(a.previous.from), dayLabel(a.previous.to));
   body.appendChild(top);
   if (!a.by_category.length) {
     const empty = document.createElement('div');
@@ -7178,7 +7184,7 @@ async function loadAnalytics() {
     const name = document.createElement('span');
     name.textContent = p.name;
     const small = document.createElement('small');
-    small.textContent = ` · ${p.count} раз`;
+    small.textContent = t(" · {0} раз", p.count);
     name.appendChild(small);
     const v = document.createElement('b');
     v.textContent = apx(p.approx) + moneyFmt(p.amount, a.currency);
@@ -7251,12 +7257,12 @@ function renderCurrencyGroup(boxId, field) {
     btn.dataset.focusKey = `cur-${field}-${cur}`;
     const symbol = CURRENCY_SYMBOLS[cur] || cur;
     btn.innerHTML = `<span></span>${cur === current ? '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>' : ''}`;
-    btn.querySelector('span').textContent = `${symbol}  ${CURRENCY_NAMES[cur] || cur}`;
+    btn.querySelector('span').textContent = `${symbol}  ${t(CURRENCY_NAMES[cur] || cur)}`;
     btn.onclick = async () => {
       if (cur === current) return;
       try {
         moneyMe = await apiJson('/me', { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify({ [field]: cur }) });
-        toast(`${field === 'default_currency' ? 'Основная' : 'Дополнительная'} валюта: ${CURRENCY_NAMES[cur] || cur}`);
+        toast(t(field === 'default_currency' ? "Основная валюта: {0}" : "Дополнительная валюта: {0}", t(CURRENCY_NAMES[cur] || cur)));
       } catch (e) { toast(e.message || 'Не удалось сохранить'); }
       renderCurrencyOptions();
       loadMoney();
@@ -7355,7 +7361,7 @@ function renderMoneyForm() {
   } else if (f.repeat) {
     hint.hidden = false;
     const next = rec ? date : nextRepeat(date, f.frequency, dom);
-    hint.textContent = `Следующий раз: ${dayLabel(next)}. Дальше ${freqText(f.frequency, date, dom)}.`;
+    hint.textContent = t("Следующий раз: {0}. Дальше {1}.", dayLabel(next), freqText(f.frequency, date, dom));
   } else {
     hint.hidden = !rec;
     hint.textContent = 'Повтор будет остановлен. Уже созданные операции останутся.';
@@ -7367,8 +7373,9 @@ function renderMoneyForm() {
   const asHint = document.getElementById('moneyAsTaskHint');
   asHint.hidden = !asTaskOn;
   asHint.textContent = f.asTask
-    ? `В срок появится задача «💳 …» в «Задачах». Отметите её — ${expense ? 'трата' : 'доход'} запишется в кошелёк, а задача встанет на следующий срок.`
-    : `${expense ? 'Трата' : 'Доход'} записывается сам в день платежа.`;
+    ? t(expense ? 'В срок появится задача «💳 …» в «Задачах». Отметите её — трата запишется в кошелёк, а задача встанет на следующий срок.'
+      : 'В срок появится задача «💳 …» в «Задачах». Отметите её — доход запишется в кошелёк, а задача встанет на следующий срок.')
+    : t(expense ? 'Трата записывается сам в день платежа.' : 'Доход записывается сам в день платежа.');
 }
 
 async function openMoneyForm(item, mode, opts) {
@@ -7526,7 +7533,7 @@ function renderMoneyDrafts(items) {
     label.append(cb, text);
     box.appendChild(label);
   });
-  toast(`Нашёл операций: ${items.length}. Отметьте нужные и нажмите «Сохранить»`);
+  toast(t("Нашёл операций: {0}. Отметьте нужные и нажмите «Сохранить»", items.length));
 }
 
 async function saveMoneyDrafts() {
@@ -7542,7 +7549,7 @@ async function saveMoneyDrafts() {
       saved++;
     } catch (e) { /* остальные сохраняем дальше */ }
   }
-  toast(saved === chosen.length ? `Сохранено операций: ${saved}` : `Сохранено ${saved} из ${chosen.length}`);
+  toast(saved === chosen.length ? t("Сохранено операций: {0}", saved) : t("Сохранено {0} из {1}", saved, chosen.length));
   closeMoneyForm();
   loadMoney();
 }
@@ -7732,8 +7739,8 @@ function renderNewTaskDay() {
   chip.hidden = !newTaskDefaultDay;
   if (!newTaskDefaultDay) return;
   const { d, m } = ymd(newTaskDefaultDay);
-  chip.textContent = `📅 На ${d} ${MONTH_GENITIVE[m - 1]} ✕`;
-  chip.setAttribute('aria-label', `Задача на ${d} ${MONTH_GENITIVE[m - 1]}. Нажмите, чтобы не подставлять день`);
+  chip.textContent = t("📅 На {0} {1} ✕", d, MONTH_GENITIVE[m - 1]);
+  chip.setAttribute('aria-label', t("Задача на {0} {1}. Нажмите, чтобы не подставлять день", d, MONTH_GENITIVE[m - 1]));
 }
 document.getElementById('newTaskDay').onclick = () => {
   newTaskDefaultDay = null;
@@ -7754,7 +7761,7 @@ function openNewTask() {
   folderChoice.new = newTaskFolder ? newTaskFolder.id : null;
   renderFolderChips('new', newTaskGroup ? newTaskGroup.id : null);
   document.getElementById('newTaskGroup').hidden = !newTaskGroup;
-  document.getElementById('newTaskGroup').textContent = newTaskGroup ? `👥 В группу «${newTaskGroup.name}» — появится у всех участников` : '';
+  document.getElementById('newTaskGroup').textContent = newTaskGroup ? t("👥 В группу «{0}» — появится у всех участников", newTaskGroup.name) : '';
   document.getElementById('newCatSection').hidden = !!newTaskGroup;
   if (newTaskGroup) { repeatState.new = { pattern: null, days: [] }; renderRepeat('new'); }
   document.getElementById('newRepeatSection').hidden = !!newTaskGroup;
@@ -7822,10 +7829,7 @@ function highlightedEl(tag, text, query) {
 }
 
 function pluralFound(n) {
-  const a = n % 10, b = n % 100;
-  if (a === 1 && b !== 11) return `Найдена ${n} задача`;
-  if (a >= 2 && a <= 4 && (b < 12 || b > 14)) return `Найдено ${n} задачи`;
-  return `Найдено ${n} задач`;
+  return t('Найдено: {0}', n + ' ' + tn(n, 'задача|задачи|задач'));
 }
 
 function renderSearch() {
@@ -7847,7 +7851,7 @@ function renderSearch() {
     return byDeadline(a, b);
   });
 
-  count.textContent = found.length ? pluralFound(found.length) : `Ничего не найдено по «${raw.trim()}»`;
+  count.textContent = found.length ? pluralFound(found.length) : t("Ничего не найдено по «{0}»", raw.trim());
   found.forEach(task => {
     const row = document.createElement('button');
     row.className = 'search-row' + (task.status === 'Done' ? ' done' : '');
@@ -8043,7 +8047,7 @@ function renderGroups() {
   const page = openGroupId && groupById(openGroupId);
   document.getElementById('groupsListView').hidden = !!page;
   document.getElementById('groupPageView').hidden = !page;
-  document.getElementById('fabBtn').setAttribute('aria-label', page ? `Новая задача в группу «${page.name}»` : 'Новая группа');
+  document.getElementById('fabBtn').setAttribute('aria-label', page ? t("Новая задача в группу «{0}»", page.name) : 'Новая группа');
   if (page) { renderGroupPage(page); return; }
   const list = document.getElementById('groupsList');
   list.innerHTML = '';
@@ -8062,7 +8066,7 @@ function renderGroups() {
     row.innerHTML = '<span class="people-av" aria-hidden="true">👥</span><span class="people-name"><span></span><small></small></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg>';
     row.querySelector('.people-name span').textContent = g.name;
     row.querySelector('.people-name small').textContent =
-      `${g.members.length > 1 ? g.members.map(m => m.name).join(', ') : 'пока только вы'} · ${pluralTasks(open)}`;
+      `${g.members.length > 1 ? g.members.map(m => m.name).join(', ') : t('пока только вы')} · ${pluralTasks(open)}`;
     row.onclick = () => { openGroupId = g.id; groupDoneOpen = false; renderChips(); renderGroups(); window.scrollTo(0, 0); };
     list.appendChild(row);
   });
@@ -8084,7 +8088,7 @@ function renderGroupPage(g) {
   const label = document.createElement('span');
   label.className = 'group-members-text';
   label.textContent = g.members.length > 1
-    ? `${g.members.map(m => m.name).join(', ')} · ${g.tick_all ? 'галочка у всех' : 'у каждого своя галочка'}`
+    ? `${g.members.map(m => m.name).join(', ')} · ${g.tick_all ? t('галочка у всех') : t('у каждого своя галочка')}`
     : 'Пока только вы — пригласите людей в настройках группы';
   mem.appendChild(label);
   if (!folderLists[g.id]) loadFolders(g.id).then(() => { if (currentPage === 'groups' && openGroupId === g.id) renderGroups(); });
@@ -8106,7 +8110,7 @@ function renderGroupPage(g) {
   open.forEach(t => box.appendChild(taskRowEl(t, t.deadline ? (dateKey(t.deadline) < localDateKey(new Date()) ? DAY_OVERDUE : 'group') : DAY_NODATE)));
   const toggle = document.getElementById('groupDoneToggle');
   toggle.hidden = !done.length;
-  toggle.textContent = groupDoneOpen ? `Скрыть выполненные (${done.length})` : `Выполненные (${done.length})`;
+  toggle.textContent = groupDoneOpen ? t("Скрыть выполненные ({0})", done.length) : t("Выполненные ({0})", done.length);
   const doneBox = document.getElementById('groupDoneTasks');
   doneBox.hidden = !groupDoneOpen;
   doneBox.innerHTML = '';
@@ -8172,8 +8176,8 @@ function renderGroupSheet() {
     row.querySelector('.people-name span').textContent = m.name;
     row.querySelector('.people-name small').textContent = m.owner ? 'создатель' : '';
     if (g.owner && !m.owner) {
-      const del = iconButton('M7 7l10 10M17 7L7 17', `Убрать ${m.name} из группы`, async () => {
-        try { await apiJson(`/groups/${g.id}/members/${m.id}`, { method: 'DELETE' }); toast(`${m.name} больше не в группе`); }
+      const del = iconButton('M7 7l10 10M17 7L7 17', t("Убрать {0} из группы", m.name), async () => {
+        try { await apiJson(`/groups/${g.id}/members/${m.id}`, { method: 'DELETE' }); toast(t("{0} больше не в группе", m.name)); }
         catch (e) { toast(e.message || 'Не получилось'); }
         await loadGroups();
         groupEditing = groupById(g.id);
@@ -8215,7 +8219,7 @@ document.getElementById('groupInvite').onclick = async () => {
   const hint = document.getElementById('groupLinkHint');
   const link = g.invite || {};
   if (link.url) {
-    const text = `Вступай в группу «${g.name}» в JulYera — там наши общие задачи`;
+    const text = t("Вступай в группу «{0}» в JulYera — там наши общие задачи", g.name);
     if (inTelegram && tg && typeof tg.openTelegramLink === 'function') {
       try { tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link.url)}&text=${encodeURIComponent(text)}`); } catch (e) { /* ниже */ }
     } else if (navigator.share) {
@@ -8223,9 +8227,9 @@ document.getElementById('groupInvite').onclick = async () => {
     } else {
       try { await navigator.clipboard.writeText(link.url); toast('Ссылка скопирована'); } catch (e) { /* покажем ниже */ }
     }
-    hint.textContent = `Ссылка на группу: ${link.url}`;
+    hint.textContent = t("Ссылка на группу: {0}", link.url);
   } else {
-    hint.textContent = `Пусть человек отправит боту: ${link.start}`;
+    hint.textContent = t("Пусть человек отправит боту: {0}", link.start);
   }
   hint.hidden = false;
 };
@@ -8251,8 +8255,8 @@ function renderEditGroup(task) {
   if (!sh) return;
   const parts = [];
   parts.push(sh.group ? `👥 «${sh.group.name}»` : '👥 Общая задача');
-  if (sh.with.length) parts.push(`вместе с ${sh.with.join(', ')}`);
-  parts.push(sh.tick_all ? '— галочка закрывает у всех.' : `— у каждого своя галочка, готово ${sh.done} из ${sh.total}.`);
+  if (sh.with.length) parts.push(t("вместе с {0}", sh.with.join(', ')));
+  parts.push(sh.tick_all ? '— галочка закрывает у всех.' : t("— у каждого своя галочка, готово {0} из {1}.", sh.done, sh.total));
   parts.push('Название, срок, место, заметка, шаги и комментарии общие. Удалить — значит выйти из задачи.');
   document.getElementById('editShareHint').textContent = parts.join(' ');
 }
@@ -8285,7 +8289,7 @@ function folderCardEl(f, from) {
   b.querySelector('b').textContent = f.name;
   const open = allTasks.filter(t => t.folder_id === f.id);
   const done = open.filter(t => t.status === 'Done').length;
-  b.querySelector('small').textContent = open.length ? `${done} из ${open.length} готово` : 'пока пусто';
+  b.querySelector('small').textContent = open.length ? t("{0} из {1} готово", done, open.length) : 'пока пусто';
   b.onclick = () => openFolderPage(f, from);
   return b;
 }
@@ -8321,7 +8325,7 @@ function renderFolderPage() {
   const open = mine.filter(t => t.status !== 'Done').sort(byDeadline);
   const done = mine.filter(t => t.status === 'Done');
   document.getElementById('folderSub').textContent =
-    `${g ? `👥 ${g.name} · ` : ''}${mine.length ? `${done.length} из ${mine.length} готово` : 'Пока пусто'}`;
+    `${g ? `👥 ${g.name} · ` : ''}${mine.length ? t('{0} из {1} готово', done.length, mine.length) : t('Пока пусто')}`;
   const box = document.getElementById('folderTasks');
   box.innerHTML = '';
   if (!open.length) {
@@ -8333,12 +8337,12 @@ function renderFolderPage() {
   open.forEach(t => box.appendChild(taskRowEl(t, 'folder')));
   const toggle = document.getElementById('folderDoneToggle');
   toggle.hidden = !done.length;
-  toggle.textContent = folderDoneOpen ? `Скрыть выполненные (${done.length})` : `Выполненные (${done.length})`;
+  toggle.textContent = folderDoneOpen ? t("Скрыть выполненные ({0})", done.length) : t("Выполненные ({0})", done.length);
   const doneBox = document.getElementById('folderDoneTasks');
   doneBox.hidden = !folderDoneOpen;
   doneBox.innerHTML = '';
   if (folderDoneOpen) done.forEach(t => doneBox.appendChild(doneRowEl(t)));
-  document.getElementById('fabBtn').setAttribute('aria-label', `Новая задача в папку «${f.name}»`);
+  document.getElementById('fabBtn').setAttribute('aria-label', t("Новая задача в папку «{0}»", f.name));
 }
 function doneRowEl(t) {
   const row = document.createElement('div');
@@ -8366,11 +8370,11 @@ function openFolderPick() {
   const f = openFolderObj;
   if (!f) return;
   folderPicked = new Set();
-  document.getElementById('folderPickTitle').textContent = `В папку «${f.name}»`;
+  document.getElementById('folderPickTitle').textContent = t("В папку «{0}»", f.name);
   document.getElementById('folderPickSearch').value = '';
   const g = f.group_id ? groupById(f.group_id) : null;
   document.getElementById('folderPickHint').textContent = g
-    ? `Здесь задачи группы «${g.name}». Отмеченные переедут в папку у всех участников.`
+    ? t("Здесь задачи группы «{0}». Отмеченные переедут в папку у всех участников.", g.name)
     : 'Здесь ваши задачи (не групповые). Если задача уже в другой папке, она переедет сюда.';
   renderFolderPick();
   folderPickSheet.hidden = false;
@@ -8395,28 +8399,28 @@ function renderFolderPick() {
     empty.textContent = q ? 'Ничего не нашлось' : 'Подходящих задач нет';
     list.appendChild(empty);
   }
-  items.forEach(t => {
+  items.forEach(tk => {
     const row = document.createElement('button');
     row.type = 'button';
     row.className = 'people-row';
     row.setAttribute('role', 'checkbox');
-    row.setAttribute('aria-checked', String(folderPicked.has(t.id)));
-    row.dataset.focusKey = 'fp-' + t.id;
+    row.setAttribute('aria-checked', String(folderPicked.has(tk.id)));
+    row.dataset.focusKey = 'fp-' + tk.id;
     row.innerHTML = '<span class="step-circle"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="people-name"><span></span><small></small></span>';
-    row.querySelector('.people-name span').textContent = t.task;
-    const dt = t.deadline && parseNaiveDeadline(t.deadline);
-    const other = t.folder_id && folderById(t.folder_id);
-    row.querySelector('small').textContent = `${dt ? `${dt.getDate()} ${MONTH_SHORT[dt.getMonth()]}` : 'без срока'} · ${other ? `📁 ${other.name} → переедет` : 'без папки'}`;
+    row.querySelector('.people-name span').textContent = tk.task;
+    const dt = tk.deadline && parseNaiveDeadline(tk.deadline);
+    const other = tk.folder_id && folderById(tk.folder_id);
+    row.querySelector('small').textContent = `${dt ? `${dt.getDate()} ${MONTH_SHORT[dt.getMonth()]}` : t('без срока')} · ${other ? t('📁 {0} → переедет', other.name) : t('без папки')}`;
     row.onclick = () => {
-      if (folderPicked.has(t.id)) folderPicked.delete(t.id); else folderPicked.add(t.id);
+      if (folderPicked.has(tk.id)) folderPicked.delete(tk.id); else folderPicked.add(tk.id);
       renderFolderPick();
-      const again = list.querySelector(`[data-focus-key="fp-${t.id}"]`);
+      const again = list.querySelector(`[data-focus-key="fp-${tk.id}"]`);
       if (again) again.focus({ preventScroll: true });
     };
     list.appendChild(row);
   });
   const btn = document.getElementById('folderPickSave');
-  btn.textContent = folderPicked.size ? `Добавить в папку (${folderPicked.size})` : 'Отметьте задачи';
+  btn.textContent = folderPicked.size ? t("Добавить в папку ({0})", folderPicked.size) : 'Отметьте задачи';
   btn.disabled = !folderPicked.size;
 }
 document.getElementById('folderAddExisting').onclick = openFolderPick;
@@ -8434,7 +8438,7 @@ document.getElementById('folderPickSave').onclick = async () => {
   }
   const moved = folderPicked.size - failed;
   closeFolderPick();
-  toast(failed ? `Добавлено: ${moved}, не получилось: ${failed}` : `Добавлено в папку: ${moved}`);
+  toast(failed ? t("Добавлено: {0}, не получилось: {1}", moved, failed) : t("Добавлено в папку: {0}", moved));
   await loadTasks();
 };
 document.getElementById('folderSettingsBtn').onclick = () => { if (openFolderObj) openFolderSheet(openFolderObj, openFolderObj.group_id); };
@@ -8449,7 +8453,7 @@ function openFolderSheet(f, groupId) {
   document.getElementById('folderSheetTitle').textContent = f ? 'Папка' : 'Новая папка';
   document.getElementById('folderName').value = f ? f.name : '';
   document.getElementById('folderSheetHint').textContent = g
-    ? `Папка группы «${g.name}»: её видят все участники, задачи в ней — у всех.`
+    ? t("Папка группы «{0}»: её видят все участники, задачи в ней — у всех.", g.name)
     : 'Личная папка: видите только вы. Задачи из неё видны и в общем списке по дням.';
   document.getElementById('folderDelete').hidden = !f || !f.can_delete;
   document.getElementById('folderSave').textContent = f ? 'Сохранить' : 'Создать папку';
@@ -8557,7 +8561,8 @@ function renderTaskView() {
   const parts = [task.category];
   const f = task.folder_id && folderById(task.folder_id);
   if (f) parts.push(`📁 ${f.name}`);
-  if (task.shared && task.shared.with.length) parts.push(`👥 с ${task.shared.with.join(', ')}${!task.shared.tick_all ? ` · готово ${task.shared.done} из ${task.shared.total}` : ''}`);
+  if (task.shared && task.shared.with.length) parts.push(task.shared.tick_all ? t("👥 с {0}", task.shared.with.join(', '))
+    : t("👥 с {0} · готово {1} из {2}", task.shared.with.join(', '), task.shared.done, task.shared.total));
   if (task.status === 'Done') parts.push('✅ выполнена');
   badges.textContent = parts.filter(Boolean).join(' · ');
   main.append(title, badges);
@@ -8578,7 +8583,7 @@ function renderTaskView() {
     link.dataset.focusKey = 'tv-place';
     link.innerHTML = PIN_ICON + '<span></span>';
     link.querySelector('span').textContent = task.location;
-    link.setAttribute('aria-label', `Открыть в Google Maps: ${task.location}`);
+    link.setAttribute('aria-label', t("Открыть в Google Maps: {0}", task.location));
     link.onclick = () => openExternal(mapsUrl(task.location));
     const map = document.createElement('iframe');
     map.className = 'place-map';
@@ -8608,7 +8613,7 @@ function renderTaskView() {
     stepsBox.appendChild(stepInputEl(input, task.id));
     stepsBox.appendChild(breakdownBtnEl(task.id, 'tv-breakdown'));
   }
-  main.appendChild(tvBlock(steps.length ? `Шаги · ${steps.filter(x => x.is_done).length} из ${steps.length}` : 'Шаги', stepsBox));
+  main.appendChild(tvBlock(steps.length ? t("Шаги · {0} из {1}", steps.filter(x => x.is_done).length, steps.length) : 'Шаги', stepsBox));
   document.getElementById('tvDeleteLabel').textContent = task.shared_id ? 'Выйти' : 'Удалить';
   if (focusKey) { const again = main.querySelector(`[data-focus-key="${focusKey}"]`); if (again) again.focus({ preventScroll: true }); }
 }
@@ -8639,8 +8644,8 @@ function choiceChipEl(label, pressed, extraClass, onPick) {
 // ---------- «Повторять» (recurrence_pattern + recurrence_days, как task_service.next_occurrence) ----------
 const REPEAT_OPTIONS = [[null, 'Нет'], ['daily', 'Каждый день'], ['weekdays', 'По будням'], ['days', 'По дням недели'],
   ['monthly', 'Каждый месяц'], ['yearly', 'Каждый год']];
-const REPEAT_WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-const WEEKDAY_GEN = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
+const REPEAT_WEEKDAYS = i18nArray('REPEAT_WEEKDAYS', ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']);
+const WEEKDAY_GEN = i18nArray('WEEKDAY_GEN', ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс']);
 const repeatState = { new: { pattern: null, days: [] }, edit: { pattern: null, days: [] } };
 
 const mondayIndex = (d) => (d.getDay() + 6) % 7;  // 0 = пн … 6 = вс, как на сервере
@@ -8659,7 +8664,7 @@ function repeatFromTask(task) {
 function repeatLabel(task) {
   const r = repeatFromTask(task);
   if (!r.pattern) return '';
-  if (r.pattern === 'days') return r.days.length === 7 ? 'каждый день' : r.days.map(i => WEEKDAY_GEN[i]).join(', ');
+  if (r.pattern === 'days') return r.days.length === 7 ? t('каждый день') : r.days.map(i => WEEKDAY_GEN[i]).join(', ');
   return { daily: 'каждый день', weekdays: 'по будням', monthly: 'каждый месяц', yearly: 'каждый год' }[r.pattern] || '';
 }
 
@@ -8731,7 +8736,7 @@ function renderRepeat(prefix) {
   if (st.pattern === 'days' && !st.days.length) { hint.textContent = 'Выберите хотя бы один день'; return; }
   if (!dateStr) { hint.textContent = 'Поставьте дату — от неё считаются повторы'; return; }
   const next = nextTaskRepeat(dateStr, document.getElementById(prefix + 'Time').value, st.pattern, st.days);
-  hint.textContent = next ? `Когда закроете, следующая — ${WEEKDAY_GEN[mondayIndex(next)]}, ${next.getDate()} ${MONTH_GENITIVE[next.getMonth()]}` : '';
+  hint.textContent = next ? t("Когда закроете, следующая — {0}, {1} {2}", WEEKDAY_GEN[mondayIndex(next)], next.getDate(), MONTH_GENITIVE[next.getMonth()]) : '';
 }
 
 function repeatPayload(prefix) {
@@ -8787,7 +8792,7 @@ function renderEditSteps() {
   list.innerHTML = '';
   steps.forEach(step => list.appendChild(stepRowEl(step, () => deleteSubtask(step.id))));
   document.getElementById('editStepsCount').textContent =
-    steps.length ? `${steps.filter(s => s.is_done).length} из ${steps.length}` : '';
+    steps.length ? t("{0} из {1}", steps.filter(s => s.is_done).length, steps.length) : '';
   if (focusKey) {
     const again = list.querySelector(`[data-focus-key="${focusKey}"]`);
     if (again) again.focus({ preventScroll: true });
@@ -8988,7 +8993,7 @@ function commentEl(c) {
     const f = document.createElement('button');
     f.type = 'button';
     f.className = 'comment-file';
-    f.textContent = `📄 ${c.file.name || 'Файл'}`;
+    f.textContent = `📄 ${c.file.name || t('Файл')}`;
     f.onclick = () => { if (c.file.url) openExternal(c.file.url); else toast('Ссылка на файл устарела, откройте задачу заново'); };
     body.appendChild(f);
   }

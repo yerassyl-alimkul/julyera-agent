@@ -207,8 +207,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     name = " ".join(filter(None, [tg_user.first_name, tg_user.last_name])) or "Без имени"
     username = f" (@{tg_user.username})" if tg_user.username else ""
+    # Язык Telegram человека едет в кнопке: стартовые категории создадутся на нём.
+    lang = (getattr(tg_user, "language_code", None) or "")[:2].lower()
+    lang_part = f":{lang}" if lang in ("en", "kk") else ""
     markup = InlineKeyboardMarkup([[
-        InlineKeyboardButton("Разрешить", callback_data=f"approve:{tg_user.id}"),
+        InlineKeyboardButton("Разрешить", callback_data=f"approve:{tg_user.id}{lang_part}"),
         InlineKeyboardButton("Отклонить", callback_data=f"deny:{tg_user.id}"),
     ]])
     sent = 0
@@ -241,8 +244,9 @@ async def access_decision(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
 
     try:
-        action, raw_id = query.data.split(":", 1)
+        action, raw_id, *rest = query.data.split(":")
         telegram_user_id = int(raw_id)
+        lang = rest[0] if rest and rest[0] in ("en", "kk") else "ru"
     except (ValueError, AttributeError):
         await query.answer("Некорректная кнопка.", show_alert=True)
         return
@@ -281,8 +285,8 @@ async def access_decision(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         logger.exception("Не удалось получить имя нового пользователя")
     user = users_service.create_user(name, telegram_user_id)
     users_service.link_chat(telegram_user_id, user["id"])  # в личном чате chat_id = Telegram-id
-    categories_service.ensure_default(user["id"])  # у каждого всегда есть хотя бы «Общее»
-    money_service.ensure_defaults(user["id"])  # стартовый набор категорий расходов и доходов
+    categories_service.ensure_default(user["id"], lang)  # у каждого всегда есть хотя бы «Общее»
+    money_service.ensure_defaults(user["id"], lang)  # стартовый набор категорий расходов и доходов
     _last_access_request.pop(telegram_user_id, None)
 
     await query.answer("Доступ открыт")
@@ -1307,7 +1311,7 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(goal_save_callback, pattern=r"^gs:[0-9a-f-]{36}:-?\d+\.\d{2}$"))
     app.add_handler(CallbackQueryHandler(split_callback, pattern=r"^sp:[0-9a-f]{8}:(\d+|ok|x)$"))
     app.add_handler(CommandHandler("backup", backup_command))
-    app.add_handler(CallbackQueryHandler(access_decision, pattern=r"^(approve|deny):\d+$"))
+    app.add_handler(CallbackQueryHandler(access_decision, pattern=r"^(approve|deny):\d+(:[a-z]{2})?$"))
     app.add_handler(CallbackQueryHandler(money_callback, pattern=r"^m:"))
     app.add_handler(CallbackQueryHandler(help_callback, pattern=r"^h:[a-z]+$"))
     app.add_handler(CallbackQueryHandler(comment_callback, pattern=r"^(cmt:[0-9a-fA-F-]{36}|cm:[0-9a-f]{8}:(\d+|x))$"))

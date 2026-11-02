@@ -44,12 +44,22 @@ PAGE = 1000          # Supabase отдаёт не больше 1000 строк �
 DATE_RANGE_YEARS = 5
 CATCH_UP_MAX = 12    # повторяющийся платёж догоняет не больше 12 пропущенных месяцев за прогон
 FALLBACK_NAME = "Прочее"
+FALLBACK_NAMES = ("прочее", "other", "басқа")  # «Прочее» на трёх языках интерфейса
 
 # Стартовый набор — как в migrations/001_money.sql (цвета из палитры категорий задач).
 DEFAULT_SET = {
     "expense": [("Еда", "#A9C89D"), ("Транспорт", "#85AACB"), ("Жильё", "#E2D47E"), ("Здоровье", "#DCE5FB"),
                 ("Развлечения", "#F2B8A2"), ("Подписки", "#D9C2EC"), ("Одежда", "#F4C8D8"), ("Прочее", "#B9E0DA")],
     "income": [("Зарплата", "#A9C89D"), ("Прочее", "#B9E0DA")],
+}
+# Названия стартового набора на других языках (новый пользователь получает их на языке своего Telegram).
+DEFAULT_NAMES = {
+    "en": {"Еда": "Food", "Транспорт": "Transport", "Жильё": "Housing", "Здоровье": "Health",
+           "Развлечения": "Entertainment", "Подписки": "Subscriptions", "Одежда": "Clothes", "Прочее": "Other",
+           "Зарплата": "Salary"},
+    "kk": {"Еда": "Тамақ", "Транспорт": "Көлік", "Жильё": "Тұрғын үй", "Здоровье": "Денсаулық",
+           "Развлечения": "Ойын-сауық", "Подписки": "Жазылымдар", "Одежда": "Киім", "Прочее": "Басқа",
+           "Зарплата": "Жалақы"},
 }
 
 
@@ -266,13 +276,15 @@ def create_category(user_id: str, kind, name, color) -> dict:
     return rows[0]
 
 
-def ensure_defaults(user_id: str) -> None:
-    """Стартовый набор категорий (для нового пользователя при одобрении). Существующие не трогает."""
+def ensure_defaults(user_id: str, lang: str = "ru") -> None:
+    """Стартовый набор категорий (для нового пользователя при одобрении) на языке lang (ru | en | kk).
+    Существующие не трогает."""
+    names = DEFAULT_NAMES.get(lang, {})
     for kind, items in DEFAULT_SET.items():
         if list_categories(user_id, kind):
             continue
         supabase.table(CAT_TABLE).insert([
-            {"user_id": user_id, "kind": kind, "name": name, "color": color, "sort_order": i}
+            {"user_id": user_id, "kind": kind, "name": names.get(name, name), "color": color, "sort_order": i}
             for i, (name, color) in enumerate(items)
         ]).execute()
 
@@ -362,7 +374,8 @@ def resolve_category(user_id: str, kind: str, name: Optional[str]) -> dict:
         ensure_defaults(user_id)
         cats = list_categories(user_id, kind)
     by_name = {c["name"].lower(): c for c in cats}
-    return by_name.get((name or "").strip().lower()) or by_name.get(FALLBACK_NAME.lower()) or cats[0]
+    found = by_name.get((name or "").strip().lower())
+    return found or next((by_name[n] for n in FALLBACK_NAMES if n in by_name), cats[0])
 
 
 # ---------------------------------------------------------------- операции

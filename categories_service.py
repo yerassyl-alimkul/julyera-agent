@@ -25,6 +25,7 @@ PALETTE = [
     "#B9E0DA",  # мятный
 ]
 DEFAULT_NAME = "Общее"
+DEFAULT_NAMES = {"ru": "Общее", "en": "General", "kk": "Жалпы"}  # на языке Telegram нового пользователя
 DEFAULT_COLOR = "#A9C89D"
 NAME_MAX = 30
 
@@ -103,12 +104,12 @@ def create_category(user_id: str, name: str, color: str) -> dict:
     return result.data[0]
 
 
-def ensure_default(user_id: str) -> dict:
-    """У пользователя всегда есть хотя бы одна категория: новому создаём «Общее»."""
+def ensure_default(user_id: str, lang: str = "ru") -> dict:
+    """У пользователя всегда есть хотя бы одна категория: новому создаём «Общее» (на его языке)."""
     cats = list_categories(user_id)
     if cats:
         return cats[0]
-    return create_category(user_id, DEFAULT_NAME, DEFAULT_COLOR)
+    return create_category(user_id, DEFAULT_NAMES.get(lang, DEFAULT_NAME), DEFAULT_COLOR)
 
 
 def update_category(category_id: str, user_id: str, name: Optional[str] = None, color: Optional[str] = None) -> dict:
