@@ -14,7 +14,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="apple-mobile-web-app-title" content="JulYera" />
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="i18n.js?v=2"></script>
+<script src="i18n.js?v=3"></script>
 <script>
 // Тема ставится до отрисовки, иначе тёмная тема мигнёт светлой. «Авто» повторяет Telegram (в Mini App)
 // или систему (браузер, иконка на экране Домой); выбор в меню хранится в localStorage.
@@ -745,6 +745,7 @@ applyTheme();
     background: var(--bg);
   }
   .topbar-group { display: flex; gap: var(--gap-s); }
+  .tb-btn.lang-btn { width: auto; min-width: var(--touch); padding: 0 10px; gap: 4px; font-size: 13px; font-weight: 600; }
   .tb-btn {
     width: var(--touch);
     height: var(--touch);
@@ -1121,6 +1122,9 @@ applyTheme();
   #currencySecondLabel { margin-top: var(--gap-section); }
   #currencySheet .cur-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding-top: var(--gap-m); }
   #currencySheet .cur-option { min-height: var(--touch); padding: 0 14px; font-size: 16px; }
+  .lang-name { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; }
+  .lang-name small { font-size: 13px; color: var(--ink-muted); }
+  .lang-name small:empty { display: none; }
   .goal-cur button { min-width: 52px; }
   .goal-amount { font-size: 22px; font-weight: 600; }
   .goal-history { display: flex; flex-direction: column; }
@@ -1836,6 +1840,9 @@ applyTheme();
       <h2 class="t-modal-title" id="settingsTitle">Настройки</h2>
       <span></span>
     </div>
+    <div class="set-card">
+      <button class="set-row" id="setLanguage" type="button"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.5 5.2 3.5 8.5s-1.1 6.2-3.5 8.5c-2.4-2.3-3.5-5.2-3.5-8.5s1.1-6.2 3.5-8.5z"/></svg><span class="set-label">Язык</span><span class="set-val" id="setLanguageVal" data-noi18n></span><svg class="set-chev" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></svg></button>
+    </div>
     <h3 class="set-group">Задачи</h3>
     <div class="set-card">
       <button class="set-row" id="setTaskCats" type="button"><svg viewBox="0 0 24 24"><path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="8.5" r="1.5"/></svg><span class="set-label">Категории задач</span><span class="set-val" id="setTaskCatsVal"></span><svg class="set-chev" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></svg></button>
@@ -1880,15 +1887,6 @@ applyTheme();
       <button type="button" data-theme-pref="dark" aria-pressed="false">Тёмная</button>
     </div>
   </div>
-  <div class="menu-theme set-block">
-    <span class="menu-theme-label" id="langLabel">Язык</span>
-    <div class="segmented" role="group" aria-labelledby="langLabel">
-      <button type="button" data-lang-pref="auto" aria-pressed="true">Авто</button>
-      <button type="button" data-lang-pref="ru" aria-pressed="false" lang="ru" data-noi18n>Русский</button>
-      <button type="button" data-lang-pref="en" aria-pressed="false" lang="en">English</button>
-      <button type="button" data-lang-pref="kk" aria-pressed="false" lang="kk" data-noi18n>Қазақша</button>
-    </div>
-  </div>
     <button class="set-row" id="exportCsvBtn">
       <svg viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14"/></svg>
       <span class="set-label">Экспорт задач CSV</span>
@@ -1906,12 +1904,16 @@ applyTheme();
 
 <div class="app">
   <header class="topbar">
+    <div class="topbar-group">
     <button class="tb-btn" id="menuBtn" aria-label="Меню">
       <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
     </button>
     <button class="tb-btn" id="backBtn" aria-label="Назад к задачам" hidden>
       <svg viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></svg>
     </button>
+    <!-- Язык — в один тап с любой страницы (тот же экран, что «Настройки» → «Язык») -->
+    <button class="tb-btn lang-btn" id="langBtn" aria-label="Язык"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.5 5.2 3.5 8.5s-1.1 6.2-3.5 8.5c-2.4-2.3-3.5-5.2-3.5-8.5s1.1-6.2 3.5-8.5z"/></svg><span id="langBtnCode" data-noi18n></span></button>
+    </div>
     <div class="topbar-group">
       <button class="tb-btn" id="layoutBtn" aria-label="Все задачи"></button>
       <div class="tools-wrap" id="moneyMenuWrap" hidden>
@@ -2647,6 +2649,19 @@ applyTheme();
   </div>
 </div>
 
+<!-- Экран «Язык» (из «Настроек»): приложение и бот говорят на выбранном языке -->
+<div class="sheet" id="languageSheet" role="dialog" aria-modal="true" aria-labelledby="languageTitle" hidden>
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <button class="tb-btn" id="languageClose" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <h2 class="t-modal-title" id="languageTitle">Язык</h2>
+      <span></span>
+    </div>
+    <p class="newtask-hint">Приложение и бот говорят на выбранном языке.</p>
+    <div class="cur-options" id="languageOptions" role="radiogroup" aria-labelledby="languageTitle"></div>
+  </div>
+</div>
+
 <!-- Экран «Фильтры» (макет Filters) -->
 <div class="sheet" id="filtersSheet" role="dialog" aria-modal="true" aria-labelledby="filtersTitle" hidden>
   <div class="sheet-inner">
@@ -2932,10 +2947,51 @@ if (inTelegram) {
 try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme); } catch (e) { /* старый Safari */ }
 
 // Язык интерфейса (web/i18n.js): выбор хранится в памяти браузера, «Авто» — язык Telegram или браузера.
-document.querySelectorAll('[data-lang-pref]').forEach(btn => {
-  btn.setAttribute('aria-pressed', String(btn.dataset.langPref === languageChoice()));
-  btn.onclick = () => { if (btn.dataset.langPref !== languageChoice()) setLanguage(btn.dataset.langPref); };
-});
+// Строка «Язык» вверху «Настроек» → экран languageSheet. Названия языков — на самих языках, ниже — по-нашему.
+const LANGUAGE_OPTIONS = [
+  ['auto', 'Авто', 'как в Telegram'], ['ru', 'Русский', 'русский'], ['en', 'English', 'английский'],
+  ['kk', 'Қазақша', 'казахский'], ['az', 'Azərbaycanca', 'азербайджанский'],
+];
+const languageSheet = document.getElementById('languageSheet');
+function languageLabel() {
+  const opt = LANGUAGE_OPTIONS.find(o => o[0] === languageChoice()) || LANGUAGE_OPTIONS[0];
+  return opt[0] === 'auto' ? t('Авто') : opt[1];
+}
+function renderLanguageOptions() {
+  const box = document.getElementById('languageOptions');
+  box.innerHTML = '';
+  const current = languageChoice();
+  LANGUAGE_OPTIONS.forEach(([code, name, about]) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'cur-option lang-option';
+    btn.setAttribute('role', 'radio');
+    btn.setAttribute('aria-checked', String(code === current));
+    btn.setAttribute('lang', code === 'auto' ? LANG : code);
+    btn.dataset.focusKey = 'lang-' + code;
+    btn.innerHTML = `<span class="lang-name"><span data-noi18n></span><small data-noi18n></small></span>${code === current ? '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>' : ''}`;
+    btn.querySelector('.lang-name span').textContent = code === 'auto' ? t(name) : name;
+    btn.querySelector('small').textContent = code === LANG ? '' : t(about);
+    btn.onclick = () => { if (code !== current) setLanguage(code); };
+    box.appendChild(btn);
+  });
+}
+function openLanguage() {
+  renderLanguageOptions();
+  languageSheet.hidden = false;
+  document.body.classList.add('no-scroll');
+  setBackgroundInert(true);
+  document.getElementById('languageClose').focus();
+}
+function closeLanguage() {
+  languageSheet.hidden = true;
+  document.body.classList.remove('no-scroll');
+  setBackgroundInert(false);
+}
+document.getElementById('languageClose').onclick = closeLanguage;
+document.getElementById('setLanguageVal').textContent = languageLabel();
+document.getElementById('langBtnCode').textContent = LANG.toUpperCase();
+document.getElementById('langBtn').onclick = openLanguage;
 
 function renderThemeButtons() {
   const pref = themePreference();
@@ -6030,6 +6086,7 @@ document.getElementById('settingsClose').onclick = closeSettings;
 document.getElementById('setTaskCats').onclick = fromSettings(() => openCategories('tasks'));
 document.getElementById('setMoneyCats').onclick = fromSettings(() => openCategories('expense'));
 document.getElementById('setCurrencies').onclick = fromSettings(openCurrency);
+document.getElementById('setLanguage').onclick = fromSettings(openLanguage);
 document.getElementById('setStatement').onclick = fromSettings(openStatement);
 document.getElementById('moneyStatementBtn').onclick = openStatement;
 
@@ -9131,6 +9188,7 @@ document.addEventListener('keydown', (e) => {
   else if (!editSheet.hidden) closeEdit();
   else if (!moneySheet.hidden) closeMoneyForm();
   else if (!currencySheet.hidden) closeCurrency();
+  else if (!languageSheet.hidden) closeLanguage();
   else if (!statementSheet.hidden) closeStatement();
   else if (!folderSheet.hidden) closeFolderSheet();
   else if (!folderPickSheet.hidden) closeFolderPick();

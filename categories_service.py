@@ -27,7 +27,7 @@ PALETTE = [
     "#B9E0DA",  # мятный
 ]
 DEFAULT_NAME = "Общее"
-DEFAULT_NAMES = {"ru": "Общее", "en": "General", "kk": "Жалпы"}  # на языке Telegram нового пользователя
+DEFAULT_NAMES = {"ru": "Общее", "en": "General", "kk": "Жалпы", "az": "Ümumi"}  # на языке Telegram нового пользователя
 DEFAULT_COLOR = "#A9C89D"
 NAME_MAX = 30
 

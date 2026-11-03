@@ -38,9 +38,12 @@ def main():
     notifier.send_telegram = lambda chat_id, text, with_app_button=False, buttons=None: sent.append((chat_id, text, buttons)) or True
 
     section("Словарь")
-    en, kk = i18n_server_keys.load()
+    dicts = i18n_server_keys.load()
     keys = i18n_server_keys.collect()
-    check("у всех фраз есть английский и казахский", all(k in en and k in kk for k in keys))
+    check("у всех фраз есть английский, казахский и азербайджанский", all(k in d for d in dicts.values() for k in keys))
+    i18n.use("az")
+    check("азербайджанский: перевод и месяц", i18n.tr("Категория: {0}", "Yemək") == "Kateqoriya: Yemək"
+          and i18n.month_gen(10) == "oktyabr")
     i18n.use("en")
     check("tr с подстановкой", i18n.tr("Категория: {0}", "Food") == "Category: Food")
     check("пробелы и переводы строк по краям сохраняются", i18n.tr("\nЗавтра:") == "\nTomorrow:")

@@ -143,7 +143,7 @@ async def lifespan(app: FastAPI):
             try:
                 from telegram_handlers import bot_commands
                 await telegram_app.bot.set_my_commands(bot_commands("ru"))
-                for lang in ("en", "kk"):  # Telegram сам покажет меню на языке приложения Telegram
+                for lang in ("en", "kk", "az"):  # Telegram сам покажет меню на языке приложения Telegram
                     await telegram_app.bot.set_my_commands(bot_commands(lang), language_code=lang)
             except Exception:
                 logger.exception("Не удалось установить список команд бота")
@@ -561,7 +561,7 @@ def update_me(payload: MeUpdate, background: BackgroundTasks, user: dict = Depen
             raise HTTPException(status_code=422, detail=tr("Можно 0, 15, 30 или 60 минут"))
     if payload.language is not None:
         if not i18n.norm(payload.language):
-            raise HTTPException(status_code=422, detail=tr("Язык: ru, en или kk"))
+            raise HTTPException(status_code=422, detail=tr("Язык: ru, en, kk или az"))
         users_service.set_language(user["id"], i18n.norm(payload.language))
     if payload.calendar_import is not None:
         users_service.set_calendar_import(user["id"], payload.calendar_import)

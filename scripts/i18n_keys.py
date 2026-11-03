@@ -2,7 +2,7 @@
 Собирает все русские фразы интерфейса web/index.html — ключи словаря перевода (web/i18n.js).
 
     python scripts/i18n_keys.py            → печатает, сколько ключей и сколько ещё без перевода
-    python scripts/i18n_keys.py --missing  → список ключей без перевода (en и kk)
+    python scripts/i18n_keys.py --missing  → список ключей без перевода (en, kk, az)
 
 Ключ — русская фраза как есть (без пробелов по краям): строки в скриптах, тексты и подписи (aria-label,
 placeholder, title, alt) в разметке и внутри HTML-кусочков, формы окончаний «задача|задачи|задач».
@@ -136,24 +136,26 @@ def collect():
     return sorted(k for k in keys if k and CYR.search(k) and not SKIP.match(k))
 
 
+LANGS = ('en', 'kk', 'az')
+
+
 def load_dicts():
     path = os.path.join(ROOT, 'web', 'i18n.js')
     if not os.path.exists(path):
-        return {}, {}
+        return {lang: {} for lang in LANGS}
     src = open(path).read()
     m = re.search(r'/\*DICT-START\*/(.*?)/\*DICT-END\*/', src, re.S)
     data = json.loads(m.group(1)) if m else {}
-    return data.get('en', {}), data.get('kk', {})
+    return {lang: data.get(lang, {}) for lang in LANGS}
 
 
 if __name__ == '__main__':
     keys = collect()
-    en, kk = load_dicts()
-    miss_en = [k for k in keys if k not in en]
-    miss_kk = [k for k in keys if k not in kk]
+    dicts = load_dicts()
+    missing = {lang: [k for k in keys if k not in d] for lang, d in dicts.items()}
     if '--missing' in sys.argv:
-        print(json.dumps({'en': miss_en, 'kk': miss_kk}, ensure_ascii=False, indent=1))
+        print(json.dumps(missing, ensure_ascii=False, indent=1))
     elif '--json' in sys.argv:
         print(json.dumps(keys, ensure_ascii=False, indent=0))
     else:
-        print(f'ключей: {len(keys)}, без английского: {len(miss_en)}, без казахского: {len(miss_kk)}')
+        print(f'ключей: {len(keys)}, без перевода: ' + ', '.join(f'{lang} {len(m)}' for lang, m in missing.items()))

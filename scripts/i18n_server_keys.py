@@ -2,7 +2,7 @@
 Собирает русские фразы сервера (бот, сводки, выписка, ошибки API) — ключи словаря locales/server.json.
 
     python scripts/i18n_server_keys.py            → сколько ключей и сколько без перевода
-    python scripts/i18n_server_keys.py --missing  → какие без перевода (en и kk)
+    python scripts/i18n_server_keys.py --missing  → какие без перевода (en, kk, az)
     python scripts/i18n_server_keys.py --json     → все ключи
 
 Ключ — первый аргумент tr(…), tn(…), i18n.L(…) (строка или имя константы модуля), плюс описания команд
@@ -17,6 +17,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CYR = re.compile("[А-Яа-яЁё]")
 SKIP = {"groq_client.py", "i18n.py"}
+LANGS = ("en", "kk", "az")
 
 
 def _str(node, consts):
@@ -67,19 +68,17 @@ def collect():
 def load():
     path = os.path.join(ROOT, "locales", "server.json")
     if not os.path.exists(path):
-        return {}, {}
+        return {lang: {} for lang in LANGS}
     data = json.load(open(path, encoding="utf-8"))
-    return data.get("en", {}), data.get("kk", {})
+    return {lang: data.get(lang, {}) for lang in LANGS}
 
 
 if __name__ == "__main__":
     keys = collect()
-    en, kk = load()
-    miss_en = [k for k in keys if k not in en]
-    miss_kk = [k for k in keys if k not in kk]
+    missing = {lang: [k for k in keys if k not in d] for lang, d in load().items()}
     if "--missing" in sys.argv:
-        print(json.dumps({"en": miss_en, "kk": miss_kk}, ensure_ascii=False, indent=1))
+        print(json.dumps(missing, ensure_ascii=False, indent=1))
     elif "--json" in sys.argv:
         print(json.dumps(keys, ensure_ascii=False, indent=0))
     else:
-        print(f"ключей: {len(keys)}, без английского: {len(miss_en)}, без казахского: {len(miss_kk)}")
+        print(f"ключей: {len(keys)}, без перевода: " + ", ".join(f"{lang} {len(m)}" for lang, m in missing.items()))

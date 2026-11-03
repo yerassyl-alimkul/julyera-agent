@@ -604,3 +604,7 @@ alter table users add column if not exists blocked boolean not null default fals
 alter table users add column if not exists language text;
 alter table users drop constraint if exists users_language_check;
 alter table users add constraint users_language_check check (language is null or language in ('ru', 'en', 'kk'));
+
+-- ---------------------------------------------------------------- 018: азербайджанский язык (3 ноября 2026)
+alter table users drop constraint if exists users_language_check;
+alter table users add constraint users_language_check check (language is null or language in ('ru', 'en', 'kk', 'az'));

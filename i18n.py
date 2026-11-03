@@ -1,6 +1,6 @@
 """
 Языки сервера: тексты бота, сводок, напоминаний, выписки PDF и сообщения об ошибках API (решение владельца
-3 ноября 2026). Языки — ru (исходный), en, kk; словарь — locales/server.json, ключ — русская фраза как есть.
+3 ноября 2026). Языки — ru (исходный), en, kk, az; словарь — locales/server.json, ключ — русская фраза как есть.
 
 Язык берётся из контекста (ContextVar): бот ставит его по пользователю (`use_for`), рассылки — на каждого
 получателя (`for_user`), API — из заголовка X-Lang приложения (LangMiddleware в main.py).
@@ -15,7 +15,7 @@ import json
 import os
 import re
 
-LANGS = ("ru", "en", "kk")
+LANGS = ("ru", "en", "kk", "az")
 _current = contextvars.ContextVar("julyera_lang", default="ru")
 
 _PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "locales", "server.json")
@@ -32,11 +32,14 @@ MONTHS_GEN = {
            "November", "December"],
     "kk": ["қаңтар", "ақпан", "наурыз", "сәуір", "мамыр", "маусым", "шілде", "тамыз", "қыркүйек", "қазан",
            "қараша", "желтоқсан"],
+    "az": ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avqust", "sentyabr", "oktyabr", "noyabr",
+           "dekabr"],
 }
 MONTHS_SHORT = {
     "ru": ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"],
     "en": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
     "kk": ["қаң", "ақп", "нау", "сәу", "мам", "мау", "шіл", "там", "қыр", "қаз", "қар", "жел"],
+    "az": ["yan", "fev", "mar", "apr", "may", "iyn", "iyl", "avq", "sen", "okt", "noy", "dek"],
 }
 MONTHS_NOMINATIVE = {
     "ru": ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь",
@@ -44,11 +47,14 @@ MONTHS_NOMINATIVE = {
     "en": MONTHS_GEN["en"],
     "kk": ["Қаңтар", "Ақпан", "Наурыз", "Сәуір", "Мамыр", "Маусым", "Шілде", "Тамыз", "Қыркүйек", "Қазан",
            "Қараша", "Желтоқсан"],
+    "az": ["Yanvar", "Fevral", "Mart", "Aprel", "May", "İyun", "İyul", "Avqust", "Sentyabr", "Oktyabr", "Noyabr",
+           "Dekabr"],
 }
 WEEKDAYS_SHORT = {  # 0 = понедельник
     "ru": ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
     "en": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
     "kk": ["Дс", "Сс", "Ср", "Бс", "Жм", "Сн", "Жс"],
+    "az": ["B.e.", "Ç.a.", "Ç.", "C.a.", "C.", "Ş.", "B."],
 }
 
 

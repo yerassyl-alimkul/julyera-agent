@@ -226,7 +226,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     username = f" (@{tg_user.username})" if tg_user.username else ""
     # Язык Telegram человека едет в кнопке: стартовые категории создадутся на нём.
     lang = (getattr(tg_user, "language_code", None) or "")[:2].lower()
-    lang_part = f":{lang}" if lang in ("en", "kk") else ""
+    lang_part = f":{lang}" if lang in ("en", "kk", "az") else ""
     markup = InlineKeyboardMarkup([[
         InlineKeyboardButton(tr("Разрешить"), callback_data=f"approve:{tg_user.id}{lang_part}"),
         InlineKeyboardButton(tr("Отклонить"), callback_data=f"deny:{tg_user.id}"),
@@ -263,7 +263,7 @@ async def access_decision(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     try:
         action, raw_id, *rest = query.data.split(":")
         telegram_user_id = int(raw_id)
-        lang = rest[0] if rest and rest[0] in ("en", "kk") else "ru"
+        lang = rest[0] if rest and rest[0] in ("en", "kk", "az") else "ru"
     except (ValueError, AttributeError):
         await query.answer(tr("Некорректная кнопка."), show_alert=True)
         return

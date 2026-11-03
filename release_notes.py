@@ -11,12 +11,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-RELEASE_ID = "2026-11-03-bot-languages"
-RELEASE_TEXT = """🌍 Бот тоже заговорил на английском и казахском: ответы, сводки, напоминания и выписка PDF — на языке,
-выбранном в приложении («Настройки» → «Язык»).
+RELEASE_ID = "2026-11-03-azerbaijani"
+RELEASE_TEXT = """🌍 Добавили азербайджанский язык. Выбрать язык теперь проще: «Настройки» → «Язык» в самом верху.
 
-🌍 The bot now speaks English too: replies, digests, reminders and the PDF statement follow the app language.
-🌍 Бот енді қазақша да сөйлейді: жауаптар, шолулар, еске салулар және PDF үзінді — қолданба тілінде."""
+🇦🇿 JulYera artıq Azərbaycan dilindədir: Parametrlər → Dil."""
 
 
 async def announce(bot, supabase, users: list[dict], reply_markup=None) -> bool:
