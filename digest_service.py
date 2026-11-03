@@ -15,6 +15,8 @@
 
 Изоляция как везде: всё по user_id; задача из кнопки проверяется на принадлежность нажавшему.
 """
+from i18n import tr
+import i18n
 import logging
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
@@ -36,16 +38,12 @@ SLOTS = [("morning", time(8, 0)), ("remind_1", time(13, 0)), ("remind_2", time(1
 REMIND_CHOICES = (0, 15, 30, 60)   # минут до задачи со временем; 0 — не напоминать (users.remind_before)
 DEFAULT_REMIND_BEFORE = 30
 PRE_LOG = "pre_reminder_log"
-WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 BACKUP_WEEKDAY = 6  # воскресенье
 WINDOW = timedelta(hours=1)
 SNOOZE = timedelta(hours=1)
 REMINDER_DAYS_AHEAD = 2   # как раньше: дедлайн до «сегодня + 2 дня» по дате
 REMINDER_BUTTONS_MAX = 10  # строк с кнопками в одном напоминании (остальные задачи — просто списком)
 
-MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября",
-              "октября", "ноября", "декабря"]
-MONTHS_SHORT = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"]
 
 
 # ---------------------------------------------------------------- время
@@ -88,7 +86,7 @@ def current_slot(local: datetime) -> Optional[str]:
 
 
 def short_date(d: date) -> str:
-    return f"{d.day} {MONTHS_SHORT[d.month - 1]}"
+    return f"{d.day} {i18n.month_short(d.month)}"
 
 
 # ---------------------------------------------------------------- выборки
@@ -158,7 +156,7 @@ def _time_or_date(t: dict, today: date) -> str:
     if d.date() == today:
         return hm
     if d.date() == today + timedelta(days=1):
-        return f"завтра {hm}"
+        return tr('завтра {0}', hm)
     return f"{short_date(d.date())} {hm}"
 
 
@@ -166,7 +164,7 @@ def _grouped(tasks: list[dict], today: date) -> list[str]:
     """Строка на задачу, сгруппировано по категориям (категории в порядке первого появления)."""
     lines, by_cat = [], {}
     for t in tasks:
-        by_cat.setdefault(t.get("category") or "Без категории", []).append(t)
+        by_cat.setdefault(t.get("category") or tr("Без категории"), []).append(t)
     for cat, items in by_cat.items():
         lines.append(f"  {cat}:")
         for t in items:
@@ -178,11 +176,11 @@ def _grouped(tasks: list[dict], today: date) -> list[str]:
 def today_text(user_id: str, now_utc: Optional[datetime] = None, title: Optional[str] = None) -> str:
     v = today_view(user_id, now_utc)
     today = v["today"]
-    lines = [title or f"📋 На {today.day} {MONTHS_GEN[today.month - 1]}"]
+    lines = [title or tr('📋 На {0} {1}', today.day, i18n.month_gen(today.month))]
     if not (v["overdue"] or v["today_tasks"] or v["next24"]):
-        lines.append("На сегодня задач нет — свободный день 🌿")
+        lines.append(tr("На сегодня задач нет — свободный день 🌿"))
         return "\n".join(lines)
-    for key, label in (("overdue", "Просрочено"), ("today_tasks", "Сегодня"), ("next24", "Ближайшие 24 часа")):
+    for key, label in (("overdue", tr("Просрочено")), ("today_tasks", tr("Сегодня")), ("next24", tr("Ближайшие 24 часа"))):
         if v[key]:
             lines.append(f"\n{label}:")
             lines += _grouped(v[key], today)
@@ -204,7 +202,7 @@ def _yesterday_spent_line(user_id: str, today: date) -> Optional[str]:
         if not totals:
             return None
         parts = [f"{money_service.fmt(totals[c])} {c}" for c in money_service.CURRENCIES if c in totals]
-        return "💸 Вчера потрачено: " + " · ".join(parts)
+        return tr("💸 Вчера потрачено: ") + " · ".join(parts)
     except Exception as exc:  # трекер денег не обязателен для сводки
         logger.warning("Траты за вчера для сводки не посчитаны: %s", type(exc).__name__)
         return None
@@ -212,7 +210,7 @@ def _yesterday_spent_line(user_id: str, today: date) -> Optional[str]:
 
 def morning_text(user_id: str, now_utc: Optional[datetime] = None) -> str:
     local = local_now(user_id, now_utc)
-    text = today_text(user_id, now_utc, title=f"☀️ Доброе утро! План на {local.day} {MONTHS_GEN[local.month - 1]}")
+    text = today_text(user_id, now_utc, title=tr('☀️ Доброе утро! План на {0} {1}', local.day, i18n.month_gen(local.month)))
     spent = _yesterday_spent_line(user_id, local.date())
     return text + (f"\n\n{spent}" if spent else "")
 
@@ -224,15 +222,15 @@ def evening(user_id: str, now_utc: Optional[datetime] = None) -> tuple[str, bool
     done = done_today(user_id, now_utc)
     unfinished = v["overdue"] + v["today_tasks"]
     tomorrow = [t for t in _open_tasks(user_id) if _deadline(t) and _deadline(t).date() == today + timedelta(days=1)]
-    lines = ["🌙 Итоги дня"]
-    lines.append(f"\n✅ Выполнено: {len(done)}" if done else "\nСегодня ничего не закрыто.")
+    lines = [tr("🌙 Итоги дня")]
+    lines.append(tr('\n✅ Выполнено: {0}', len(done)) if done else tr("\nСегодня ничего не закрыто."))
     for t in done[:10]:
         lines.append(f"    • {t['task']}")
     if unfinished:
-        lines.append("\nНе закрыто:")
+        lines.append(tr("\nНе закрыто:"))
         lines += _grouped(sorted(unfinished, key=lambda t: t["deadline"]), today)
     if tomorrow:
-        lines.append("\nЗавтра:")
+        lines.append(tr("\nЗавтра:"))
         lines += _grouped(sorted(tomorrow, key=lambda t: t["deadline"]), today)
     return "\n".join(lines), bool(unfinished)
 
@@ -240,19 +238,19 @@ def evening(user_id: str, now_utc: Optional[datetime] = None) -> tuple[str, bool
 def reminder_message(user_id: str, tasks: list[dict], now_utc: Optional[datetime] = None) -> tuple[str, list]:
     """Текст напоминания и строки кнопок: по строке «✅ задача» / «⏰ +1 ч» на задачу (не больше 10)."""
     today = local_now(user_id, now_utc).date()
-    lines = ["⏰ Напоминание о дедлайнах:"]
+    lines = [tr("⏰ Напоминание о дедлайнах:")]
     for t in tasks:
         when = _time_or_date(t, today)
         overdue = _deadline(t).date() < today
-        lines.append(f"{'🔴' if overdue else '•'} {t['task']} · {t.get('category', '')} — {'просрочено, ' if overdue else ''}{when}")
+        lines.append(f"{'🔴' if overdue else '•'} {t['task']} · {t.get('category', '')} — {tr('просрочено, ') if overdue else ''}{when}")
     rows = []
     for t in tasks[:REMINDER_BUTTONS_MAX]:
         row = [{"text": "✅ " + _short(t["task"]), "callback_data": f"done:{t['id']}"}]
         if _deadline(t).date() < today:  # просрочена — перенести на завтра или послезавтра
-            row += [{"text": "➡️ Завтра", "callback_data": f"mv1:{t['id']}"},
-                    {"text": "➡️ +2 дня", "callback_data": f"mv2:{t['id']}"}]
+            row += [{"text": tr("➡️ Завтра"), "callback_data": f"mv1:{t['id']}"},
+                    {"text": tr("➡️ +2 дня"), "callback_data": f"mv2:{t['id']}"}]
         else:
-            row.append({"text": "⏰ +1 ч", "callback_data": f"snooze:{t['id']}"})
+            row.append({"text": tr("⏰ +1 ч"), "callback_data": f"snooze:{t['id']}"})
         rows.append(row)
     return "\n".join(lines), rows
 
@@ -275,6 +273,12 @@ def claim(user_id: str, kind: str, day: date) -> bool:
 
 
 def due_messages(user: dict, now_utc: Optional[datetime] = None) -> list[tuple[str, Optional[list]]]:
+    """Сообщения, которым пришло время, — на языке пользователя (i18n.for_user)."""
+    with i18n.for_user(user):
+        return _due_messages(user, now_utc)
+
+
+def _due_messages(user: dict, now_utc: Optional[datetime] = None) -> list[tuple[str, Optional[list]]]:
     """Что отправить пользователю в этот запуск: [(текст, строки кнопок или None)].
     Сводки — если включены и у пользователя вообще есть задачи; напоминания — если есть что напомнить;
     плюс отложенные задачи, чей срок наступил (каждая — отдельным сообщением с кнопками)."""
@@ -292,7 +296,7 @@ def due_messages(user: dict, now_utc: Optional[datetime] = None) -> list[tuple[s
                     out.append(report)
             else:
                 text, can_move = weekly(uid, now_utc) if local.weekday() == 6 else evening(uid, now_utc)
-                buttons = [[{"text": "➡️ Перенести невыполненное на завтра",
+                buttons = [[{"text": tr("➡️ Перенести невыполненное на завтра"),
                              "callback_data": f"dmove:{local.date().isoformat()}"}]] if can_move else None
                 out.append((text, buttons))
     if slot == "evening" and user.get("digest_enabled", True) is not False:
@@ -328,7 +332,7 @@ def monthly_report(user_id: str, today: date) -> Optional[tuple[str, list]]:
         if not text or not money_service.claim_monthly_report(user_id, prev.strftime("%Y-%m")):
             return None
         from notifier import APP_URL
-        return text, [[{"text": "Открыть аналитику", "web_app": {"url": APP_URL}}]]
+        return text, [[{"text": tr("Открыть аналитику"), "web_app": {"url": APP_URL}}]]
     except Exception as exc:
         logger.warning("Месячный отчёт не собран: %s", type(exc).__name__)
         return None
@@ -382,10 +386,10 @@ def _claim_pre(task: dict) -> bool:
 def pre_reminder(task: dict, local: datetime) -> tuple[str, list]:
     d = _deadline(task)
     left = max(1, round((d - local).total_seconds() / 60))
-    left_text = f"через {left} мин" if left < 60 else "через час"
+    left_text = tr('через {0} мин', left) if left < 60 else tr("через час")
     cat = f" · {task['category']}" if task.get("category") else ""
-    text = f"🔔 В {d.strftime('%H:%M')} ({left_text}): {task['task']}{cat}"
-    return text, [[{"text": "✅ Готово", "callback_data": f"done:{task['id']}"}]]
+    text = tr('🔔 В {0} ({1}): {2}{3}', d.strftime('%H:%M'), left_text, task['task'], cat)
+    return text, [[{"text": tr("✅ Готово"), "callback_data": f"done:{task['id']}"}]]
 
 
 # ---------------------------------------------------------------- итоги недели (воскресенье, вместо вечерней)
@@ -413,7 +417,7 @@ def _spent_between_line(user_id: str, start: date, end: date) -> Optional[str]:
             totals[r["currency"]] = totals.get(r["currency"], Decimal(0)) + Decimal(str(r["amount"]))
         if not totals:
             return None
-        return "💸 Потрачено за неделю: " + " · ".join(
+        return tr("💸 Потрачено за неделю: ") + " · ".join(
             f"{money_service.fmt(totals[c])} {c}" for c in money_service.CURRENCIES if c in totals)
     except Exception as exc:
         logger.warning("Траты за неделю не посчитаны: %s", type(exc).__name__)
@@ -430,25 +434,25 @@ def weekly(user_id: str, now_utc: Optional[datetime] = None) -> tuple[str, bool]
     next_monday = monday + timedelta(days=7)
     ahead = [t for t in _open_tasks(user_id)
              if _deadline(t) and next_monday <= _deadline(t).date() < next_monday + timedelta(days=7)]
-    lines = [f"📅 Итоги недели · {short_date(monday)} – {short_date(today)}"]
-    lines.append(f"\n✅ Выполнено за неделю: {len(done)}" if done else "\nЗа неделю ничего не закрыто.")
+    lines = [tr('📅 Итоги недели · {0} – {1}', short_date(monday), short_date(today))]
+    lines.append(tr('\n✅ Выполнено за неделю: {0}', len(done)) if done else tr("\nЗа неделю ничего не закрыто."))
     for t in done[:10]:
         lines.append(f"    • {t['task']}")
     if len(done) > 10:
-        lines.append(f"    …и ещё {len(done) - 10}")
+        lines.append(tr('    …и ещё {0}', len(done) - 10))
     if unfinished:
-        lines.append(f"\nНе закрыто: {len(unfinished)}")
+        lines.append(tr('\nНе закрыто: {0}', len(unfinished)))
         lines += _grouped(unfinished, today)
     if ahead:
-        lines.append("\nПлан на неделю:")
+        lines.append(tr("\nПлан на неделю:"))
         by_day = {}
         for t in sorted(ahead, key=lambda t: t["deadline"]):
             by_day.setdefault(_deadline(t).date(), []).append(t)
         for day, items in by_day.items():
-            names = ", ".join(_short(t["task"], 30) for t in items[:4]) + (f" и ещё {len(items) - 4}" if len(items) > 4 else "")
-            lines.append(f"  {WEEKDAYS[day.weekday()]} {short_date(day)}: {names}")
+            names = ", ".join(_short(t["task"], 30) for t in items[:4]) + (tr(' и ещё {0}', len(items) - 4) if len(items) > 4 else "")
+            lines.append(f"  {i18n.weekday_short(day.weekday())} {short_date(day)}: {names}")
     else:
-        lines.append("\nНа следующую неделю задач пока нет.")
+        lines.append(tr("\nНа следующую неделю задач пока нет."))
     spent = _spent_between_line(user_id, monday, today)
     if spent:
         lines.append(f"\n{spent}")
@@ -470,9 +474,9 @@ def charges_text(user_id: str, today: date) -> Optional[str]:
             return None
         cats = {c["id"]: c["name"] for c in supabase.table(money_service.CAT_TABLE).select("id,name")
                 .eq("user_id", user_id).execute().data}
-        lines = ["💳 Завтра спишется:"]
+        lines = [tr("💳 Завтра спишется:")]
         for r in rows:
-            what = r.get("note") or cats.get(r["category_id"]) or "платёж"
+            what = r.get("note") or cats.get(r["category_id"]) or tr("платёж")
             lines.append(f"  • {money_service.fmt(r['amount'])} {r['currency']} — {what}")
         return "\n".join(lines)
     except Exception as exc:

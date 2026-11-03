@@ -8,6 +8,8 @@
 tick_all — галочка закрывает задачу у всех или у каждого своя («1 из 3 готово»), выбирается при создании.
 У каждого участника задачи группы лежат в категории с её названием. Всё по user_id; в логи — только id.
 """
+from i18n import tr
+import i18n
 import logging
 import os
 import secrets
@@ -59,7 +61,7 @@ def bot_username() -> Optional[str]:
 def _clean_name(value) -> str:
     name = " ".join(str(value or "").split())
     if not 1 <= len(name) <= NAME_MAX:
-        raise CategoryError(422, f"Название группы — от 1 до {NAME_MAX} символов", "bad_name")
+        raise CategoryError(422, tr('Название группы — от 1 до {0} символов', NAME_MAX), "bad_name")
     return name
 
 
@@ -120,9 +122,9 @@ def create_group(user_id: str, name, tick_all: bool = True) -> dict:
 def _owned(group_id: str, user_id: str) -> dict:
     row = group_for_member(group_id, user_id)
     if not row:
-        raise CategoryError(404, "Группа не найдена", "not_found")
+        raise CategoryError(404, tr("Группа не найдена"), "not_found")
     if row["owner_id"] != user_id:
-        raise CategoryError(403, "Это может только создатель группы", "not_owner")
+        raise CategoryError(403, tr("Это может только создатель группы"), "not_owner")
     return row
 
 
@@ -155,18 +157,19 @@ def delete_group(group_id: str, user_id: str) -> None:
     supabase.table(GROUPS).delete().eq("id", group_id).eq("owner_id", user_id).execute()
     import notifier
     for m in others:
-        notifier.notify_user(m, f"Группу «{name}» удалили. Её задачи остались у вас.")
+        notifier.notify_user(m, i18n.L('Группу «{0}» удалили. Её задачи остались у вас.', name))
 
 
 def preview(token: str, user_id: str) -> tuple[Optional[dict], str]:
     """Человек открыл ссылку на группу: (группа | None, текст для бота)."""
     rows = supabase.table(GROUPS).select("*").eq("invite_token", (token or "")[:32]).execute().data
     if not rows:
-        return None, "Ссылка устарела или группу удалили."
+        return None, tr("Ссылка устарела или группу удалили.")
     row = rows[0]
     if user_id in member_ids(row["id"]):
-        return None, f"Вы уже в группе «{row['name']}» — она в приложении на вкладке «Группы»."
-    return row, f"👥 {_name(row['owner_id'])} зовёт вас в группу «{row['name']}» — общие задачи будут на её странице."
+        return None, tr("Вы уже в группе «{0}» — она в приложении на вкладке «Группы».", row['name'])
+    return row, tr("👥 {0} зовёт вас в группу «{1}» — общие задачи будут на её странице.", _name(row['owner_id']),
+                  row['name'])
 
 
 def join(token: str, user_id: str) -> str:
@@ -180,15 +183,15 @@ def join(token: str, user_id: str) -> str:
     except Exception as exc:  # нажали дважды
         if "duplicate" not in str(exc) and getattr(exc, "code", None) != "23505":
             raise
-        return f"Вы уже в группе «{row['name']}»."
+        return tr("Вы уже в группе «{0}».", row['name'])
     shared_service.ensure_category(user_id, row["name"])
     added = shared_service.copy_open_tasks(row, user_id)
     for m in member_ids(row["id"]):
         if m != user_id:
-            notifier.notify_user(m, f"👥 {_name(user_id)} теперь в группе «{row['name']}».")
+            notifier.notify_user(m, i18n.L('👥 {0} теперь в группе «{1}».', _name(user_id), row['name']))
     logger.info("В группу %s вступил %s", row["id"], user_id)
-    tail = f" Добавил открытые задачи группы: {added}." if added else ""
-    return f"Готово: вы в группе «{row['name']}». Она в приложении на вкладке «Группы».{tail}"
+    tail = tr(" Добавил открытые задачи группы: {0}.", added) if added else ""
+    return tr("Готово: вы в группе «{0}». Она в приложении на вкладке «Группы».", row['name']) + tail
 
 
 def leave(group_id: str, user_id: str, by_owner: Optional[str] = None) -> None:
@@ -198,9 +201,9 @@ def leave(group_id: str, user_id: str, by_owner: Optional[str] = None) -> None:
     import task_service
     row = group_for_member(group_id, user_id)
     if not row:
-        raise CategoryError(404, "Группа не найдена", "not_found")
+        raise CategoryError(404, tr("Группа не найдена"), "not_found")
     if row["owner_id"] == user_id:
-        raise CategoryError(422, "Создатель не может выйти — удалите группу", "owner")
+        raise CategoryError(422, tr("Создатель не может выйти — удалите группу"), "owner")
     tasks = supabase.table("tasks").select("*").eq("user_id", user_id).eq("group_id", group_id).execute().data
     for t in tasks:
         if t.get("status") == "Done":
@@ -209,13 +212,13 @@ def leave(group_id: str, user_id: str, by_owner: Optional[str] = None) -> None:
             task_service.delete_task(t["id"], user_id, quiet=True)
     supabase.table(MEMBERS).delete().eq("group_id", group_id).eq("user_id", user_id).execute()
     for m in member_ids(group_id):
-        notifier.notify_user(m, f"{_name(user_id)} больше не в группе «{row['name']}».")
+        notifier.notify_user(m, i18n.L('{0} больше не в группе «{1}».', _name(user_id), row['name']))
     if by_owner:
-        notifier.notify_user(user_id, f"Вас убрали из группы «{row['name']}». Выполненные задачи остались у вас.")
+        notifier.notify_user(user_id, i18n.L('Вас убрали из группы «{0}». Выполненные задачи остались у вас.', row['name']))
 
 
 def remove_member(group_id: str, owner_id: str, member_id: str) -> None:
     _owned(group_id, owner_id)
     if member_id == owner_id:
-        raise CategoryError(422, "Себя убрать нельзя — удалите группу", "owner")
+        raise CategoryError(422, tr("Себя убрать нельзя — удалите группу"), "owner")
     leave(group_id, member_id, by_owner=owner_id)

@@ -4,9 +4,11 @@
 цели накопления (отложено за период и всего).
 
 Шрифты — фирменные Onest (текст) и Unbounded (заголовки), файлы в assets/fonts (OFL, с Google Fonts). В Unbounded
-нет казахских букв, поэтому им пишутся только постоянные заголовки, имена — Onest. Только данные пользователя.
+нет казахских букв, поэтому им пишутся только постоянные заголовки (в казахской выписке и они — Onest), имена — Onest. Только данные пользователя.
 В логи — только количество операций.
 """
+from i18n import tr
+import i18n
 import io
 import logging
 import os
@@ -63,11 +65,11 @@ def _period(date_from: str, date_to: str) -> tuple[date, date]:
     try:
         start, end = date.fromisoformat(date_from), date.fromisoformat(date_to)
     except (TypeError, ValueError):
-        raise MoneyError(422, "Период — даты в формате ГГГГ-ММ-ДД", "bad_period")
+        raise MoneyError(422, tr("Период — даты в формате ГГГГ-ММ-ДД"), "bad_period")
     if end < start:
-        raise MoneyError(422, "Дата «по» раньше даты «с»", "bad_period")
+        raise MoneyError(422, tr("Дата «по» раньше даты «с»"), "bad_period")
     if (end - start).days > MAX_DAYS:
-        raise MoneyError(422, "Выписка — не больше чем за год", "bad_period")
+        raise MoneyError(422, tr("Выписка — не больше чем за год"), "bad_period")
     return start, end
 
 
@@ -84,7 +86,7 @@ def collect(user_id: str, start: date, end: date) -> dict:
         t = totals.setdefault(cur, {"income": Decimal(0), "expense": Decimal(0)})
         t[r["kind"]] += amount
         if r["kind"] == "expense":
-            by_cat.setdefault(cats.get(r["category_id"], "Без категории"), {}).setdefault(cur, Decimal(0))
+            by_cat.setdefault(cats.get(r["category_id"], tr("Без категории")), {}).setdefault(cur, Decimal(0))
             by_cat[cats.get(r["category_id"], "Без категории")][cur] += amount
     main = money_service.default_currency(user_id)
     rates = rates_service.get_rates() if set(totals) - {main} else None
@@ -119,10 +121,12 @@ def collect(user_id: str, start: date, end: date) -> dict:
 
 def _styles() -> dict:
     base = dict(fontName="Onest-Regular", fontSize=9, leading=12, textColor=INK)
+    # В Unbounded нет казахских букв (ә, қ, ү…): в казахской выписке заголовки — Onest
+    head = "Onest-SemiBold" if i18n.current() == "kk" else "Unbounded-SemiBold"
     return {
         "brand": ParagraphStyle("brand", fontName="Unbounded-SemiBold", fontSize=13, leading=16, textColor=INK),
-        "title": ParagraphStyle("title", fontName="Unbounded-SemiBold", fontSize=17, leading=22, textColor=INK),
-        "h2": ParagraphStyle("h2", fontName="Unbounded-SemiBold", fontSize=10.5, leading=14, textColor=INK,
+        "title": ParagraphStyle("title", fontName=head, fontSize=17, leading=22, textColor=INK),
+        "h2": ParagraphStyle("h2", fontName=head, fontSize=10.5, leading=14, textColor=INK,
                              spaceBefore=10, spaceAfter=6),
         "text": ParagraphStyle("text", **base),
         "muted": ParagraphStyle("muted", **{**base, "textColor": MUTED, "fontSize": 8.5}),
@@ -177,13 +181,13 @@ def _draw_frame(canvas, doc, owner: str, period: str):
     canvas.drawString(x + 27 * mm, y - 12.5 * mm, "JulYera")
     canvas.setFont("Onest-Regular", 8.5)
     canvas.setFillColor(MUTED)
-    canvas.drawRightString(w - 18 * mm, y - 9 * mm, "Выписка по кошельку")
+    canvas.drawRightString(w - 18 * mm, y - 9 * mm, tr("Выписка по кошельку"))
     canvas.drawRightString(w - 18 * mm, y - 13.5 * mm, period)
     canvas.setStrokeColor(LINE)
     canvas.setLineWidth(0.6)
     canvas.line(18 * mm, h - 33 * mm, w - 18 * mm, h - 33 * mm)
     canvas.drawString(18 * mm, 11 * mm, owner)
-    canvas.drawRightString(w - 18 * mm, 11 * mm, f"Страница {doc.page}")
+    canvas.drawRightString(w - 18 * mm, 11 * mm, tr('Страница {0}', doc.page))
     canvas.restoreState()
 
 
@@ -193,22 +197,21 @@ def build(user_id: str, date_from: str, date_to: str) -> tuple[str, bytes, int]:
     start, end = _period(date_from, date_to)
     data = collect(user_id, start, end)
     user = users_service.get_by_id(user_id) or {}
-    owner = user.get("name") or "Пользователь JulYera"
+    owner = user.get("name") or tr("Пользователь JulYera")
     st = _styles()
     period = f"{start.strftime('%d.%m.%Y')} — {end.strftime('%d.%m.%Y')}"
     width = A4[0] - 36 * mm
-    story = [Paragraph("Выписка по кошельку", st["title"]), Spacer(1, 4),
-             Paragraph(f"{_esc(owner)} · за период {period}", st["text"]),
-             Paragraph(f"Сформирована {datetime.now(timezone.utc).astimezone().strftime('%d.%m.%Y %H:%M')} · "
-                       f"основная валюта {data['main']}", st["muted"]), Spacer(1, 10)]
+    story = [Paragraph(tr("Выписка по кошельку"), st["title"]), Spacer(1, 4),
+             Paragraph(tr('{0} · за период {1}', _esc(owner), period), st["text"]),
+             Paragraph(tr('Сформирована {0} · основная валюта {1}', datetime.now(timezone.utc).astimezone().strftime('%d.%m.%Y %H:%M'), data['main']), st["muted"]), Spacer(1, 10)]
 
     # --- итоги
-    story.append(Paragraph("Итоги", st["h2"]))
+    story.append(Paragraph(tr("Итоги"), st["h2"]))
     mt = data["main_totals"]
     if mt:
         net = mt["income"] - mt["expense"]
         approx = "≈ " if mt["approx"] else ""
-        cells = [[Paragraph("Доходы", st["muted"]), Paragraph("Расходы", st["muted"]), Paragraph("Разница", st["muted"])],
+        cells = [[Paragraph(tr("Доходы"), st["muted"]), Paragraph(tr("Расходы"), st["muted"]), Paragraph(tr("Разница"), st["muted"])],
                  [Paragraph(approx + money(mt["income"], data["main"]), st["big"]),
                   Paragraph(approx + money(mt["expense"], data["main"]), st["big"]),
                   Paragraph(approx + money(net, data["main"], sign=True), st["big"])]]
@@ -218,10 +221,9 @@ def build(user_id: str, date_from: str, date_to: str) -> tuple[str, bytes, int]:
         story += [box, Spacer(1, 6)]
         if mt["approx"] and mt["rate"]:
             r = mt["rate"]
-            story.append(Paragraph(f"Пересчёт в {data['main']} по курсу Нацбанка РК на {r['date']}: "
-                                   f"1 {r['currency']} = {r['kzt']} KZT. Операции хранятся в своей валюте.", st["muted"]))
-    rows = [[Paragraph("Валюта", st["bold"]), Paragraph("Доходы", st["boldnum"]), Paragraph("Расходы", st["boldnum"]),
-             Paragraph("Разница", st["boldnum"])]]
+            story.append(Paragraph(tr('Пересчёт в {0} по курсу Нацбанка РК на {1}: 1 {2} = {3} KZT. Операции хранятся в своей валюте.', data['main'], r['date'], r['currency'], r['kzt']), st["muted"]))
+    rows = [[Paragraph(tr("Валюта"), st["bold"]), Paragraph(tr("Доходы"), st["boldnum"]), Paragraph(tr("Расходы"), st["boldnum"]),
+             Paragraph(tr("Разница"), st["boldnum"])]]
     for cur in money_service.CURRENCIES:
         t = data["totals"].get(cur)
         if not t:
@@ -232,12 +234,12 @@ def build(user_id: str, date_from: str, date_to: str) -> tuple[str, bytes, int]:
     if len(rows) > 1:
         story += [Spacer(1, 6), _table(rows, [width * 0.16, width * 0.28, width * 0.28, width * 0.28])]
     else:
-        story.append(Paragraph("За этот период операций нет.", st["muted"]))
+        story.append(Paragraph(tr("За этот период операций нет."), st["muted"]))
 
     # --- по категориям
     if data["categories"]:
-        story.append(Paragraph("Расходы по категориям", st["h2"]))
-        rows = [[Paragraph("Категория", st["bold"]), Paragraph("Сумма", st["boldnum"])]]
+        story.append(Paragraph(tr("Расходы по категориям"), st["h2"]))
+        rows = [[Paragraph(tr("Категория"), st["bold"]), Paragraph(tr("Сумма"), st["boldnum"])]]
         for name, sums in data["categories"]:
             parts = " · ".join(money(-sums[c], c) for c in money_service.CURRENCIES if c in sums)
             rows.append([Paragraph(_esc(name), st["text"]), Paragraph(parts, st["num"])])
@@ -245,9 +247,9 @@ def build(user_id: str, date_from: str, date_to: str) -> tuple[str, bytes, int]:
 
     # --- цели
     if data["goals"]:
-        story.append(Paragraph("Цели накопления", st["h2"]))
-        rows = [[Paragraph("Цель", st["bold"]), Paragraph("За период", st["boldnum"]), Paragraph("Отложено", st["boldnum"]),
-                 Paragraph("Нужно", st["boldnum"])]]
+        story.append(Paragraph(tr("Цели накопления"), st["h2"]))
+        rows = [[Paragraph(tr("Цель"), st["bold"]), Paragraph(tr("За период"), st["boldnum"]), Paragraph(tr("Отложено"), st["boldnum"]),
+                 Paragraph(tr("Нужно"), st["boldnum"])]]
         for g in data["goals"]:
             pct = int(g["saved"] / g["target"] * 100) if g["target"] else 0
             rows.append([Paragraph(f"{_esc(g['name'])} <font color='#5D5F69'>· {min(pct, 100)}%</font>", st["text"]),
@@ -255,18 +257,18 @@ def build(user_id: str, date_from: str, date_to: str) -> tuple[str, bytes, int]:
                          Paragraph(money(g["saved"], g["currency"]), st["num"]),
                          Paragraph(money(g["target"], g["currency"]), st["num"])])
         story.append(_table(rows, [width * 0.34, width * 0.22, width * 0.22, width * 0.22]))
-        story.append(Paragraph("Отложенное в цели не считается расходом.", st["muted"]))
+        story.append(Paragraph(tr("Отложенное в цели не считается расходом."), st["muted"]))
 
     # --- операции
-    story.append(Paragraph(f"Операции · {len(data['rows'])}", st["h2"]))
+    story.append(Paragraph(tr('Операции · {0}', len(data['rows'])), st["h2"]))
     if data["rows"]:
-        rows = [[Paragraph("Дата", st["bold"]), Paragraph("Описание", st["bold"]), Paragraph("Категория", st["bold"]),
-                 Paragraph("Сумма", st["boldnum"])]]
+        rows = [[Paragraph(tr("Дата"), st["bold"]), Paragraph(tr("Описание"), st["bold"]), Paragraph(tr("Категория"), st["bold"]),
+                 Paragraph(tr("Сумма"), st["boldnum"])]]
         for r in data["rows"]:
             amount = Decimal(str(r["amount"])) * (-1 if r["kind"] == "expense" else 1)
             d = str(r["spent_on"])[:10]
-            what = r.get("note") or ("Доход" if r["kind"] == "income" else "Расход")
-            src = {"applepay": " · Apple Pay", "recurring": " · повтор"}.get(r.get("source"), "")
+            what = r.get("note") or (tr("Доход") if r["kind"] == "income" else tr("Расход"))
+            src = {"applepay": " · Apple Pay", "recurring": tr(" · повтор")}.get(r.get("source"), "")
             color = "#557546" if amount > 0 else "#17181C"
             rows.append([Paragraph(f"{d[8:10]}.{d[5:7]}.{d[:4]}", st["text"]),
                          Paragraph(f"{_esc(what)}<font color='#5D5F69'>{src}</font>", st["text"]),
@@ -276,7 +278,7 @@ def build(user_id: str, date_from: str, date_to: str) -> tuple[str, bytes, int]:
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm, topMargin=38 * mm,
-                            bottomMargin=18 * mm, title="Выписка JulYera", author="JulYera")
+                            bottomMargin=18 * mm, title=tr("Выписка JulYera"), author="JulYera")
     frame = lambda c, d: _draw_frame(c, d, owner, period)
     doc.build(story, onFirstPage=frame, onLaterPages=frame)
     logger.info("Выписка собрана: %s операций", len(data["rows"]))
@@ -285,4 +287,4 @@ def build(user_id: str, date_from: str, date_to: str) -> tuple[str, bytes, int]:
 
 def caption(start: str, end: str) -> str:
     s, e = date.fromisoformat(start), date.fromisoformat(end)
-    return f"🧾 Выписка JulYera за {s.strftime('%d.%m.%Y')} — {e.strftime('%d.%m.%Y')}"
+    return tr('🧾 Выписка JulYera за {0} — {1}', s.strftime('%d.%m.%Y'), e.strftime('%d.%m.%Y'))

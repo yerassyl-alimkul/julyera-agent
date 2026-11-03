@@ -11,6 +11,8 @@
 и события задачи пишутся только в календарь её владельца.
 """
 import hashlib
+
+import i18n
 import hmac
 import logging
 import os
@@ -159,7 +161,7 @@ def _mark_needs_reconnect(user_id: str, reason: str) -> None:
         return  # уже помечено — сообщение было, повторять не нужно
     supabase.table(CREDENTIALS_TABLE).update({"needs_reconnect": True}).eq("user_id", user_id).execute()
     logger.warning("Google Calendar пользователя требует переподключения: %s", reason)
-    notifier.notify_user(user_id, RECONNECT_MESSAGE, with_app_button=True)
+    notifier.notify_user(user_id, i18n.L(RECONNECT_MESSAGE), with_app_button=True)
 
 
 def status(user_id: str) -> dict:

@@ -28,6 +28,8 @@ Backend для персонального агента структуриров�
 приложение само зарегистрирует webhook в Telegram и кнопку меню Mini App.
 Локально WEBHOOK_BASE_URL не задавай — вместо этого используй bot.py (polling).
 """
+from i18n import tr
+import i18n
 import logging
 import asyncio
 import os
@@ -139,8 +141,10 @@ async def lifespan(app: FastAPI):
             except Exception:
                 logger.exception("Не удалось установить кнопку меню Mini App")
             try:
-                from telegram_handlers import BOT_COMMANDS
-                await telegram_app.bot.set_my_commands(BOT_COMMANDS)
+                from telegram_handlers import bot_commands
+                await telegram_app.bot.set_my_commands(bot_commands("ru"))
+                for lang in ("en", "kk"):  # Telegram сам покажет меню на языке приложения Telegram
+                    await telegram_app.bot.set_my_commands(bot_commands(lang), language_code=lang)
             except Exception:
                 logger.exception("Не удалось установить список команд бота")
             try:
@@ -156,6 +160,21 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Task Agent API", version="0.3.0", lifespan=lifespan)
 
+class LangMiddleware:
+    """Язык ответов API (сообщения об ошибках) — из заголовка X-Lang, который шлёт приложение (ru | en | kk).
+    Чистый ASGI, чтобы язык (ContextVar) дошёл до обработчиков, в том числе выполняемых в потоках."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            raw = dict(scope.get("headers") or []).get(b"x-lang", b"")
+            i18n.use(raw.decode("latin-1", "ignore"))
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(LangMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -232,7 +251,7 @@ def current_user(
 def admin_user(user: dict = Depends(current_user)) -> dict:
     """Только владелец (is_admin): раздел «Администрирование»."""
     if not user.get("is_admin"):
-        raise HTTPException(status_code=403, detail="Только для владельца")
+        raise HTTPException(status_code=403, detail=tr("Только для владельца"))
     return user
 
 
@@ -247,7 +266,7 @@ def admin_user_tasks(user_id: UUID, user: dict = Depends(admin_user)):
     """Задачи и шаги человека — только просмотр."""
     data = admin_service.user_tasks(str(user_id))
     if data is None:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
+        raise HTTPException(status_code=404, detail=tr("Пользователь не найден"))
     return data
 
 
@@ -276,15 +295,15 @@ def transcribe_voice(payload: VoiceIn, user: dict = Depends(current_user)):
     try:
         audio = base64.b64decode(payload.audio, validate=True)
     except (binascii.Error, ValueError):
-        raise HTTPException(status_code=422, detail="Запись повреждена, попробуйте ещё раз")
+        raise HTTPException(status_code=422, detail=tr("Запись повреждена, попробуйте ещё раз"))
     if len(audio) < 1000:
-        raise HTTPException(status_code=422, detail="Слишком короткая запись")
+        raise HTTPException(status_code=422, detail=tr("Слишком короткая запись"))
     ext = VOICE_EXT.get(payload.type.split(";")[0].strip().lower(), "webm")
     try:
         text = transcribe_audio(audio, f"voice.{ext}").strip()
     except Exception as exc:
         logger.warning("Диктовка не распознана: %s", type(exc).__name__)
-        raise HTTPException(status_code=502, detail="Не получилось распознать, попробуйте ещё раз")
+        raise HTTPException(status_code=502, detail=tr("Не получилось распознать, попробуйте ещё раз"))
     logger.info("Диктовка: %s символов", len(text))
     return {"text": text}
 
@@ -296,7 +315,7 @@ def preview_tasks(payload: ParseRequest, user: dict = Depends(current_user)):
     try:
         return task_service.preview_tasks_from_text(payload.text, user["id"])
     except ValueError as exc:
-        raise HTTPException(status_code=502, detail=f"Ошибка разбора LLM: {exc}")
+        raise HTTPException(status_code=502, detail=tr('Ошибка разбора LLM: {0}', exc))
 
 
 @app.post("/tasks/{task_id}/breakdown", status_code=201)
@@ -306,9 +325,9 @@ def breakdown_task(task_id: UUID, user: dict = Depends(current_user)):
         added = task_service.breakdown(str(task_id), user["id"])
     except Exception as exc:
         logger.warning("Шаги не предложены: %s", type(exc).__name__)
-        raise HTTPException(status_code=502, detail="ИИ не ответил, попробуйте ещё раз")
+        raise HTTPException(status_code=502, detail=tr("ИИ не ответил, попробуйте ещё раз"))
     if added is None:
-        raise HTTPException(status_code=404, detail="Задача не найдена")
+        raise HTTPException(status_code=404, detail=tr("Задача не найдена"))
     return {"added": added}
 
 
@@ -320,12 +339,12 @@ def parse_and_create_tasks(payload: ParseRequest, user: dict = Depends(current_u
                                                       group_id=str(payload.group_id) if payload.group_id else None,
                                                       folder_id=str(payload.folder_id) if payload.folder_id else None)
     except ValueError as exc:
-        raise HTTPException(status_code=502, detail=f"Ошибка разбора LLM: {exc}")
+        raise HTTPException(status_code=502, detail=tr('Ошибка разбора LLM: {0}', exc))
 
     if not created:
         raise HTTPException(
             status_code=422,
-            detail="Не удалось извлечь ни одной подходящей задачи из текста",
+            detail=tr("Не удалось извлечь ни одной подходящей задачи из текста"),
         )
     return created
 
@@ -369,14 +388,14 @@ def create_folder(payload: FolderIn, user: dict = Depends(current_user)):
 def rename_folder(folder_id: UUID, payload: FolderIn, user: dict = Depends(current_user)):
     folder = folders_service.rename_folder(str(folder_id), user["id"], payload.name)
     if not folder:
-        raise HTTPException(status_code=404, detail="Папка не найдена")
+        raise HTTPException(status_code=404, detail=tr("Папка не найдена"))
     return folder
 
 
 @app.delete("/folders/{folder_id}", status_code=204)
 def delete_folder(folder_id: UUID, user: dict = Depends(current_user)):
     if not folders_service.delete_folder(str(folder_id), user["id"]):
-        raise HTTPException(status_code=404, detail="Папка не найдена")
+        raise HTTPException(status_code=404, detail=tr("Папка не найдена"))
     return None
 
 
@@ -395,7 +414,7 @@ def create_group(payload: GroupIn, user: dict = Depends(current_user)):
 def get_group(group_id: UUID, user: dict = Depends(current_user)):
     group = groups_service.get_group(str(group_id), user["id"])
     if not group:
-        raise HTTPException(status_code=404, detail="Группа не найдена")
+        raise HTTPException(status_code=404, detail=tr("Группа не найдена"))
     return group
 
 
@@ -428,14 +447,14 @@ def search_places(q: str = Query("", max_length=120), user: dict = Depends(curre
     try:
         return places_service.search(q)
     except Exception:
-        raise HTTPException(status_code=502, detail="Поиск адреса сейчас недоступен, впишите адрес вручную")
+        raise HTTPException(status_code=502, detail=tr("Поиск адреса сейчас недоступен, впишите адрес вручную"))
 
 
 @app.get("/tasks/{task_id}", response_model=Task)
 def get_task(task_id: UUID, user: dict = Depends(current_user)):
     task = task_service.get_task(str(task_id), user["id"])
     if not task:
-        raise HTTPException(status_code=404, detail="Задача не найдена")
+        raise HTTPException(status_code=404, detail=tr("Задача не найдена"))
     return task
 
 
@@ -443,7 +462,7 @@ def get_task(task_id: UUID, user: dict = Depends(current_user)):
 def update_task(task_id: UUID, payload: TaskUpdate, user: dict = Depends(current_user)):
     updated = task_service.update_task(str(task_id), payload, user["id"])
     if not updated:
-        raise HTTPException(status_code=404, detail="Задача не найдена")
+        raise HTTPException(status_code=404, detail=tr("Задача не найдена"))
     return updated
 
 
@@ -451,7 +470,7 @@ def update_task(task_id: UUID, payload: TaskUpdate, user: dict = Depends(current
 def delete_task(task_id: UUID, user: dict = Depends(current_user)):
     deleted = task_service.delete_task(str(task_id), user["id"])
     if not deleted:
-        raise HTTPException(status_code=404, detail="Задача не найдена")
+        raise HTTPException(status_code=404, detail=tr("Задача не найдена"))
     return None
 
 
@@ -459,7 +478,7 @@ def delete_task(task_id: UUID, user: dict = Depends(current_user)):
 def list_task_comments(task_id: UUID, user: dict = Depends(current_user)):
     comments = comments_service.list_comments(str(task_id), user["id"])
     if comments is None:
-        raise HTTPException(status_code=404, detail="Задача не найдена")
+        raise HTTPException(status_code=404, detail=tr("Задача не найдена"))
     return comments
 
 
@@ -472,14 +491,14 @@ def add_task_comment(task_id: UUID, payload: CommentCreate, user: dict = Depends
         fname = payload.file.name
     comment = comments_service.add_comment(str(task_id), user["id"], payload.text, data, ftype, fname)
     if comment is None:
-        raise HTTPException(status_code=404, detail="Задача не найдена")
+        raise HTTPException(status_code=404, detail=tr("Задача не найдена"))
     return comment
 
 
 @app.delete("/comments/{comment_id}", status_code=204)
 def delete_task_comment(comment_id: UUID, user: dict = Depends(current_user)):
     if not comments_service.delete_comment(str(comment_id), user["id"]):
-        raise HTTPException(status_code=404, detail="Комментарий не найден")
+        raise HTTPException(status_code=404, detail=tr("Комментарий не найден"))
     return None
 
 
@@ -525,7 +544,8 @@ def get_me(user: dict = Depends(current_user)):
             "second_currency": money_service.second_currency(user["id"]),
             "currencies": list(money_service.CURRENCIES),
             "calendar_import": user.get("calendar_import") is not False,
-            "remind_before": digest_service.remind_before(user)}
+            "remind_before": digest_service.remind_before(user),
+            "language": i18n.norm(user.get("language"))}
 
 
 @app.patch("/me")
@@ -538,7 +558,11 @@ def update_me(payload: MeUpdate, background: BackgroundTasks, user: dict = Depen
         try:
             digest_service.set_remind_before(user["id"], payload.remind_before)
         except ValueError:
-            raise HTTPException(status_code=422, detail="Можно 0, 15, 30 или 60 минут")
+            raise HTTPException(status_code=422, detail=tr("Можно 0, 15, 30 или 60 минут"))
+    if payload.language is not None:
+        if not i18n.norm(payload.language):
+            raise HTTPException(status_code=422, detail=tr("Язык: ru, en или kk"))
+        users_service.set_language(user["id"], i18n.norm(payload.language))
     if payload.calendar_import is not None:
         users_service.set_calendar_import(user["id"], payload.calendar_import)
         if payload.calendar_import:  # включили обратно — сразу подтянуть, что накопилось в календаре
@@ -635,7 +659,7 @@ def create_money_transaction(payload: TransactionCreate, user: dict = Depends(cu
 def get_money_transaction(tx_id: UUID, user: dict = Depends(current_user)):
     tx = money_service.get_transaction(str(tx_id), user["id"])
     if not tx:
-        raise HTTPException(status_code=404, detail="Операция не найдена")
+        raise HTTPException(status_code=404, detail=tr("Операция не найдена"))
     return tx
 
 
@@ -643,14 +667,14 @@ def get_money_transaction(tx_id: UUID, user: dict = Depends(current_user)):
 def update_money_transaction(tx_id: UUID, payload: TransactionUpdate, user: dict = Depends(current_user)):
     tx = money_service.update_transaction(str(tx_id), user["id"], payload.model_dump(exclude_unset=True))
     if not tx:
-        raise HTTPException(status_code=404, detail="Операция не найдена")
+        raise HTTPException(status_code=404, detail=tr("Операция не найдена"))
     return tx
 
 
 @app.delete("/money/transactions/{tx_id}", status_code=204)
 def delete_money_transaction(tx_id: UUID, user: dict = Depends(current_user)):
     if not money_service.delete_transaction(str(tx_id), user["id"]):
-        raise HTTPException(status_code=404, detail="Операция не найдена")
+        raise HTTPException(status_code=404, detail=tr("Операция не найдена"))
     return None
 
 
@@ -663,9 +687,9 @@ def parse_money(payload: MoneyParseRequest, user: dict = Depends(current_user)):
         raise
     except Exception as exc:
         logger.warning("Разбор денег не удался: %s", type(exc).__name__)
-        raise HTTPException(status_code=502, detail={"code": "parse_failed", "message": "Не получилось разобрать текст"})
+        raise HTTPException(status_code=502, detail={"code": "parse_failed", "message": tr("Не получилось разобрать текст")})
     if not drafts:
-        raise HTTPException(status_code=422, detail={"code": "no_amount", "message": "Не нашёл сумму, напишите её числом"})
+        raise HTTPException(status_code=422, detail={"code": "no_amount", "message": tr("Не нашёл сумму, напишите её числом")})
     return {"items": drafts}
 
 
@@ -679,10 +703,11 @@ def money_applepay(payload: ApplePayIn, user: dict = Depends(current_user)):
     cat = (money_service.get_category(tx["category_id"], user["id"]) or {}).get("name", "?")
     text = f"{tx['note']} · {tx['amount']} {tx['currency']} · {cat}"
     if not duplicate:
-        hint = "\n(категория подобрана впервые — если не та, поправьте кнопкой, я запомню)" if how != "memory" else ""
-        notifier.notify_user(user["id"], f"💳 Apple Pay: {text}{hint}", buttons=[[
-            {"text": "Отменить", "callback_data": f"m:u:{tx['id']}"},
-            {"text": "Категория", "callback_data": f"m:c:{tx['id']}"},
+        hint = i18n.L("\n(категория подобрана впервые — если не та, поправьте кнопкой, я запомню)") \
+            if how != "memory" else ""
+        notifier.notify_user(user["id"], i18n.L("💳 Apple Pay: {0}{1}", text, hint), buttons=[[
+            {"text": i18n.L("Отменить"), "callback_data": f"m:u:{tx['id']}"},
+            {"text": i18n.L("Категория"), "callback_data": f"m:c:{tx['id']}"},
         ]])
     logger.info("Apple Pay: операция %s, категория из %s", tx["id"], how)
     return {"ok": True, "duplicate": duplicate, "text": text, "transaction": tx}
@@ -719,7 +744,7 @@ def create_money_recurring(payload: RecurringCreate, user: dict = Depends(curren
 def update_money_recurring(rec_id: UUID, payload: RecurringUpdate, user: dict = Depends(current_user)):
     rec = money_service.update_recurring(str(rec_id), user["id"], payload.model_dump(exclude_unset=True))
     if not rec:
-        raise HTTPException(status_code=404, detail="Платёж не найден")
+        raise HTTPException(status_code=404, detail=tr("Платёж не найден"))
     return rec
 
 
@@ -728,14 +753,14 @@ def pay_money_recurring(rec_id: UUID, user: dict = Depends(current_user)):
     """Галочка у повторяющегося платежа: оплата записана сегодня, срок — следующий."""
     rec = money_service.pay_now(str(rec_id), user["id"])
     if not rec:
-        raise HTTPException(status_code=404, detail="Платёж не найден")
+        raise HTTPException(status_code=404, detail=tr("Платёж не найден"))
     return rec
 
 
 @app.delete("/money/recurring/{rec_id}", status_code=204)
 def delete_money_recurring(rec_id: UUID, user: dict = Depends(current_user)):
     if not money_service.delete_recurring(str(rec_id), user["id"]):
-        raise HTTPException(status_code=404, detail="Платёж не найден")
+        raise HTTPException(status_code=404, detail=tr("Платёж не найден"))
     return None
 
 
@@ -780,7 +805,7 @@ async def money_statement(payload: StatementIn, user: dict = Depends(current_use
         sent = await _send_file_to_user(user["id"], name, pdf, statement_service.caption(payload.date_from, payload.date_to),
                                         "application/pdf")
         if not sent:
-            raise HTTPException(status_code=502, detail="Не получилось отправить в бот. Напишите боту /start и попробуйте снова")
+            raise HTTPException(status_code=502, detail=tr("Не получилось отправить в бот. Напишите боту /start и попробуйте снова"))
         return {"sent": sent}
     from fastapi.responses import Response
     return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{name}"'})
@@ -792,7 +817,7 @@ async def send_backup(user: dict = Depends(current_user)):
     name, content, count = backup_service.build(user["id"])
     sent = await _send_file_to_user(user["id"], name, content, backup_service.caption(count), "application/json")
     if not sent:
-        raise HTTPException(status_code=502, detail="Не получилось отправить в бот. Напишите боту /start и попробуйте снова")
+        raise HTTPException(status_code=502, detail=tr("Не получилось отправить в бот. Напишите боту /start и попробуйте снова"))
     return {"sent": sent}
 
 
@@ -823,7 +848,7 @@ async def run_reminders(request: Request):
                        else "нет заголовка X-Reminder-Secret" if not got else "секрет не совпал")
         raise HTTPException(status_code=403, detail="Forbidden")
     if not TELEGRAM_BOT_TOKEN:
-        raise HTTPException(status_code=500, detail="TELEGRAM_BOT_TOKEN не настроен")
+        raise HTTPException(status_code=500, detail=tr("TELEGRAM_BOT_TOKEN не настроен"))
     # Отвечаем сразу (202), работа — в фоне (решение владельца 20 октября 2026): cron-job.org ждёт ответа не
     # дольше 30 секунд, а синхронизация календаря и рассылки занимают 10–20 с и растут с числом людей.
     # Пока прошлый запуск не закончился, новый не стартует (рассылки и так уходят по одному разу — digest_log).
@@ -867,6 +892,8 @@ async def _run_reminders_once() -> dict:
         logger.warning("Повторяющиеся платежи не обработаны: %s", type(exc).__name__)
     async with httpx.AsyncClient(timeout=15) as client:
         for user_id, text in recurring_messages + calendar_messages:
+            with i18n.for_user(await asyncio.to_thread(users_service.get_by_id, user_id)):
+                text = i18n.render(text)
             for chat_id in users_service.get_chat_ids(user_id):
                 try:
                     await _send_telegram_message(client, chat_id, text)
@@ -890,7 +917,9 @@ async def _run_reminders_once() -> dict:
                 if await asyncio.to_thread(digest_service.backup_due, user):
                     name, content, count = await asyncio.to_thread(backup_service.build, user["id"])
                     for chat_id in users_service.get_chat_ids(user["id"]):
-                        await _send_telegram_document(client, chat_id, name, content, backup_service.caption(count))
+                        with i18n.for_user(user):
+                            caption = backup_service.caption(count)
+                        await _send_telegram_document(client, chat_id, name, content, caption)
             except Exception as exc:
                 logger.warning("Резервная копия не отправлена: %s", type(exc).__name__)
 
@@ -916,10 +945,10 @@ def _google_auth_url(user: dict) -> str:
     if not gcal.is_configured():
         raise HTTPException(
             status_code=500,
-            detail="Google OAuth не настроен: нет GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI",
+            detail=tr("Google OAuth не настроен: нет GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI"),
         )
     if not gcal.OAUTH_STATE_SECRET:
-        raise HTTPException(status_code=500, detail="Не задан OAUTH_STATE_SECRET")
+        raise HTTPException(status_code=500, detail=tr("Не задан OAUTH_STATE_SECRET"))
     return gcal.build_auth_url(user["id"])
 
 
@@ -952,15 +981,17 @@ def google_auth_callback(background: BackgroundTasks, code: Optional[str] = None
         return HTMLResponse(GOOGLE_DONE_PAGE.format(
             title="Доступ не предоставлен", text="Можно закрыть эту вкладку и вернуться в Telegram."))
     user_id = gcal.verify_state(state)
-    if not user_id or not users_service.get_by_id(user_id):
+    owner = users_service.get_by_id(user_id) if user_id else None
+    if not owner:
         return HTMLResponse(GOOGLE_DONE_PAGE.format(
             title="Ссылка устарела", text="Начните подключение заново из приложения."), status_code=400)
+    i18n.use_for(owner)
     if not code:
-        raise HTTPException(status_code=400, detail="Отсутствует параметр code")
+        raise HTTPException(status_code=400, detail=tr("Отсутствует параметр code"))
     gcal.exchange_code(code, user_id)
     background.add_task(calendar_sync.sync_after_connect, user_id)  # события календаря → задачи сразу
     return HTMLResponse(GOOGLE_DONE_PAGE.format(
-        title="Готово ✅", text="Google Calendar подключён. Вернитесь в Telegram."))
+        title=tr("Готово ✅"), text=tr("Google Calendar подключён. Вернитесь в Telegram.")))
 
 
 @app.get("/google/calendars")
@@ -969,7 +1000,7 @@ def google_calendars(user: dict = Depends(current_user)):
     needs_upgrade — подключение старое, без права видеть список: нужно переподключить календарь."""
     row = gcal._get_row(user["id"])
     if not row:
-        raise HTTPException(status_code=404, detail="Google Calendar не подключён")
+        raise HTTPException(status_code=404, detail=tr("Google Calendar не подключён"))
     selected = gcal.import_calendars(row)
     try:
         calendars = gcal.list_calendars(user["id"])
@@ -977,9 +1008,9 @@ def google_calendars(user: dict = Depends(current_user)):
         return {"needs_upgrade": True, "calendars": []}
     except Exception as exc:
         logger.warning("Список календарей не получен: %s", type(exc).__name__)
-        raise HTTPException(status_code=502, detail="Google Calendar не ответил, попробуйте позже")
+        raise HTTPException(status_code=502, detail=tr("Google Calendar не ответил, попробуйте позже"))
     if calendars is None:
-        raise HTTPException(status_code=409, detail="Google Calendar нужно переподключить")
+        raise HTTPException(status_code=409, detail=tr("Google Calendar нужно переподключить"))
     return {"needs_upgrade": False, "calendars": [{**c, "selected": c["id"] in selected} for c in calendars]}
 
 
@@ -987,13 +1018,13 @@ def google_calendars(user: dict = Depends(current_user)):
 def choose_google_calendars(payload: CalendarChoice, user: dict = Depends(current_user)):
     """Сохранить выбор и сразу перенести события из новых календарей (ответ — сколько задач появилось)."""
     if not gcal._get_row(user["id"]):
-        raise HTTPException(status_code=404, detail="Google Calendar не подключён")
+        raise HTTPException(status_code=404, detail=tr("Google Calendar не подключён"))
     try:
         chosen = gcal.set_import_calendars(user["id"], payload.ids)
     except gcal.CalendarListUnavailable:
-        raise HTTPException(status_code=409, detail="Переподключите Google Calendar, чтобы выбрать календари")
+        raise HTTPException(status_code=409, detail=tr("Переподключите Google Calendar, чтобы выбрать календари"))
     except ValueError:
-        raise HTTPException(status_code=422, detail="Нет такого календаря")
+        raise HTTPException(status_code=422, detail=tr("Нет такого календаря"))
     created = 0
     if users_service.calendar_import_enabled(user["id"]):
         stats = calendar_sync.sync_user(user["id"]) or {}
@@ -1021,7 +1052,7 @@ def list_notes(user: dict = Depends(current_user)):
 def update_note(note_id: UUID, payload: NoteUpdate, user: dict = Depends(current_user)):
     updated = notes_service.update_note(str(note_id), payload, user["id"])
     if not updated:
-        raise HTTPException(status_code=404, detail="Заметка не найдена")
+        raise HTTPException(status_code=404, detail=tr("Заметка не найдена"))
     return updated
 
 
@@ -1029,7 +1060,7 @@ def update_note(note_id: UUID, payload: NoteUpdate, user: dict = Depends(current
 def delete_note(note_id: UUID, user: dict = Depends(current_user)):
     deleted = notes_service.delete_note(str(note_id), user["id"])
     if not deleted:
-        raise HTTPException(status_code=404, detail="Заметка не найдена")
+        raise HTTPException(status_code=404, detail=tr("Заметка не найдена"))
     return None
 
 
@@ -1038,14 +1069,14 @@ def add_note_photo(note_id: UUID, payload: NotePhotoIn, user: dict = Depends(cur
     data, ftype = comments_service.decode_file(payload.file.data, payload.file.type)
     photo = notes_service.add_photo(str(note_id), user["id"], data, ftype)
     if not photo:
-        raise HTTPException(status_code=404, detail="Заметка не найдена")
+        raise HTTPException(status_code=404, detail=tr("Заметка не найдена"))
     return photo
 
 
 @app.delete("/note-files/{file_id}", status_code=204)
 def delete_note_photo(file_id: UUID, user: dict = Depends(current_user)):
     if not notes_service.delete_photo(str(file_id), user["id"]):
-        raise HTTPException(status_code=404, detail="Фото не найдено")
+        raise HTTPException(status_code=404, detail=tr("Фото не найдено"))
     return None
 
 
@@ -1053,7 +1084,7 @@ def delete_note_photo(file_id: UUID, user: dict = Depends(current_user)):
 def create_subtask(task_id: UUID, payload: SubtaskCreate, user: dict = Depends(current_user)):
     created = subtasks_service.create_subtask(str(task_id), payload, user["id"])
     if not created:
-        raise HTTPException(status_code=404, detail="Задача не найдена")
+        raise HTTPException(status_code=404, detail=tr("Задача не найдена"))
     return created
 
 
@@ -1066,7 +1097,7 @@ def list_subtasks(user: dict = Depends(current_user)):
 def update_subtask(subtask_id: UUID, payload: SubtaskUpdate, user: dict = Depends(current_user)):
     updated = subtasks_service.update_subtask(str(subtask_id), payload, user["id"])
     if not updated:
-        raise HTTPException(status_code=404, detail="Подзадача не найдена")
+        raise HTTPException(status_code=404, detail=tr("Подзадача не найдена"))
     return updated
 
 
@@ -1074,7 +1105,7 @@ def update_subtask(subtask_id: UUID, payload: SubtaskUpdate, user: dict = Depend
 def delete_subtask(subtask_id: UUID, user: dict = Depends(current_user)):
     deleted = subtasks_service.delete_subtask(str(subtask_id), user["id"])
     if not deleted:
-        raise HTTPException(status_code=404, detail="Подзадача не найдена")
+        raise HTTPException(status_code=404, detail=tr("Подзадача не найдена"))
     return None
 
 

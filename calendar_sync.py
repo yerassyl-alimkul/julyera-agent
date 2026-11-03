@@ -23,6 +23,8 @@ import_calendars, по умолчанию только основной; id ка
 """
 import html
 import logging
+
+import i18n
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -48,7 +50,7 @@ TITLE_MAX = 300
 NOTE_MAX = 4000
 _JULYERA_PREFIX = re.compile(r"^(?:[" + "".join(sorted(set(gcal.PRIORITY_EMOJI.values()) |
                                                       set(gcal.CATEGORY_EMOJI.values()))) + r"]️?\s*)+")
-FIRST_IMPORT_TEXT = ("📅 Перенёс из Google Calendar событий: {n}. Теперь новые события из календаря будут "
+FIRST_IMPORT_TEXT = ("📅 Перенёс из Google Calendar событий: {0}. Теперь новые события из календаря будут "
                      "появляться в задачах сами, а изменения — переноситься в обе стороны.")
 
 
@@ -361,7 +363,7 @@ def _mark_first_import(user_id: str, stats: dict) -> Optional[str]:
     """Первый проход после подключения: запоминаем его и возвращаем текст «перенёс N событий» (если что-то было)."""
     supabase.table(gcal.CREDENTIALS_TABLE).update({"imported_at": datetime.now(timezone.utc).isoformat()}) \
         .eq("user_id", user_id).execute()
-    return FIRST_IMPORT_TEXT.format(n=stats["created"]) if stats["created"] else None
+    return i18n.L(FIRST_IMPORT_TEXT, stats["created"]) if stats["created"] else None
 
 
 def sync_after_connect(user_id: str) -> None:

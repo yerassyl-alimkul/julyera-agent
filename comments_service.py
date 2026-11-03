@@ -7,6 +7,8 @@
 Изоляция: комментарий всегда проверяется через задачу пользователя (task_service.get_task) и по user_id.
 В логи не пишем ни текст комментария, ни имя файла.
 """
+from i18n import tr
+import i18n
 import base64
 import binascii
 import logging
@@ -82,15 +84,15 @@ def decode_file(data_base64: Optional[str], file_type: Optional[str]) -> tuple[b
     """Файл из JSON (base64) → (байты, тип). Только фото и PDF, не больше 10 МБ."""
     file_type = (file_type or "").lower()
     if file_type not in FILE_TYPES:
-        raise CommentError(422, "Можно прикрепить фото (JPEG, PNG, WebP, HEIC) или PDF", "bad_file_type")
+        raise CommentError(422, tr("Можно прикрепить фото (JPEG, PNG, WebP, HEIC) или PDF"), "bad_file_type")
     try:
         data = base64.b64decode(data_base64 or "", validate=True)
     except (binascii.Error, ValueError):
-        raise CommentError(422, "Файл повреждён, попробуйте ещё раз", "bad_file")
+        raise CommentError(422, tr("Файл повреждён, попробуйте ещё раз"), "bad_file")
     if not data:
-        raise CommentError(422, "Файл пустой", "bad_file")
+        raise CommentError(422, tr("Файл пустой"), "bad_file")
     if len(data) > FILE_MAX:
-        raise CommentError(422, "Файл больше 10 МБ", "file_too_big")
+        raise CommentError(422, tr("Файл больше 10 МБ"), "file_too_big")
     return data, file_type
 
 
@@ -103,16 +105,16 @@ def add_comment(task_id: str, user_id: str, text: Optional[str] = None, file_byt
     task_id = _canonical(task)  # совместная задача — комментарий общий
     text = (text or "").strip() or None
     if text and len(text) > TEXT_MAX:
-        raise CommentError(422, f"Комментарий — не длиннее {TEXT_MAX} символов", "bad_text")
+        raise CommentError(422, tr('Комментарий — не длиннее {0} символов', TEXT_MAX), "bad_text")
     if not text and not file_bytes:
-        raise CommentError(422, "Напишите текст или прикрепите файл", "empty")
+        raise CommentError(422, tr("Напишите текст или прикрепите файл"), "empty")
     comment_id = str(uuid.uuid4())
     row = {"id": comment_id, "task_id": task_id, "user_id": user_id, "text": text}
     if file_bytes:
         if file_type not in FILE_TYPES:
-            raise CommentError(422, "Можно прикрепить фото (JPEG, PNG, WebP, HEIC) или PDF", "bad_file_type")
+            raise CommentError(422, tr("Можно прикрепить фото (JPEG, PNG, WebP, HEIC) или PDF"), "bad_file_type")
         if len(file_bytes) > FILE_MAX:
-            raise CommentError(422, "Файл больше 10 МБ", "file_too_big")
+            raise CommentError(422, tr("Файл больше 10 МБ"), "file_too_big")
         path = f"{user_id}/{task_id}/{comment_id}.{FILE_TYPES[file_type]}"
         supabase.storage.from_(BUCKET).upload(path, file_bytes, {"content-type": file_type})
         name = (file_name or "").strip()[:120] or f"файл.{FILE_TYPES[file_type]}"

@@ -6,6 +6,8 @@
 у общей задачи группы папка одинаковая у всех копий (shared_service.SHARED_FIELDS). Задача в папке группы —
 всегда задача этой группы. Удалили папку — задачи остаются без папки. Всё по user_id; в логи — только id.
 """
+from i18n import tr
+import i18n
 import logging
 import uuid
 from typing import Optional
@@ -31,7 +33,7 @@ def _is_uuid(value) -> bool:
 def _clean_name(value) -> str:
     name = " ".join(str(value or "").split())
     if not 1 <= len(name) <= NAME_MAX:
-        raise CategoryError(422, f"Название папки — от 1 до {NAME_MAX} символов", "bad_name")
+        raise CategoryError(422, tr('Название папки — от 1 до {0} символов', NAME_MAX), "bad_name")
     return name
 
 
@@ -68,7 +70,7 @@ def _is_group_owner(f: dict, user_id: str) -> bool:
 def list_folders(user_id: str, group_id: Optional[str] = None) -> list[dict]:
     if group_id:
         if not _member(group_id, user_id):
-            raise CategoryError(404, "Группа не найдена", "no_group")
+            raise CategoryError(404, tr("Группа не найдена"), "no_group")
         rows = supabase.table(TABLE).select("*").eq("group_id", str(group_id)).order("created_at").execute().data
     else:
         rows = supabase.table(TABLE).select("*").eq("user_id", user_id).order("created_at").execute().data
@@ -79,7 +81,7 @@ def create_folder(user_id: str, name, group_id: Optional[str] = None) -> dict:
     name = _clean_name(name)
     existing = list_folders(user_id, group_id)
     if any(f["name"].lower() == name.lower() for f in existing):
-        raise CategoryError(409, "Папка с таким названием уже есть", "duplicate")
+        raise CategoryError(409, tr("Папка с таким названием уже есть"), "duplicate")
     palette = categories_service.PALETTE
     row = {"name": name, "color": palette[len(existing) % len(palette)], "created_by": user_id}
     if group_id:
@@ -97,7 +99,7 @@ def rename_folder(folder_id: str, user_id: str, name) -> Optional[dict]:
         return None
     name = _clean_name(name)
     if any(o["id"] != f["id"] and o["name"].lower() == name.lower() for o in list_folders(user_id, f.get("group_id"))):
-        raise CategoryError(409, "Папка с таким названием уже есть", "duplicate")
+        raise CategoryError(409, tr("Папка с таким названием уже есть"), "duplicate")
     supabase.table(TABLE).update({"name": name}).eq("id", f["id"]).execute()
     return _out({**f, "name": name}, user_id)
 
@@ -108,7 +110,7 @@ def delete_folder(folder_id: str, user_id: str) -> bool:
     if not f:
         return False
     if f.get("group_id") and f.get("created_by") != user_id and not _is_group_owner(f, user_id):
-        raise CategoryError(403, "Удалить папку может тот, кто её создал, или создатель группы", "not_owner")
+        raise CategoryError(403, tr("Удалить папку может тот, кто её создал, или создатель группы"), "not_owner")
     supabase.table(TABLE).delete().eq("id", f["id"]).execute()
     return True
 
@@ -119,9 +121,9 @@ def check_for_task(folder_id, user_id: str, group_id) -> Optional[dict]:
         return None
     f = get_folder(folder_id, user_id)
     if not f:
-        raise CategoryError(404, "Папка не найдена", "no_folder")
+        raise CategoryError(404, tr("Папка не найдена"), "no_folder")
     if f.get("group_id") and str(f["group_id"]) != str(group_id or ""):
-        raise CategoryError(422, "Эта папка — другой группы", "other_group")
+        raise CategoryError(422, tr("Эта папка — другой группы"), "other_group")
     if f.get("user_id") and group_id:
-        raise CategoryError(422, "Задачу группы можно положить только в папку группы", "personal_folder")
+        raise CategoryError(422, tr("Задачу группы можно положить только в папку группы"), "personal_folder")
     return f

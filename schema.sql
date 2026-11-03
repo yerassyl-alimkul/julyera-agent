@@ -598,3 +598,9 @@ create index if not exists tasks_folder_idx on tasks (folder_id) where folder_id
 -- 016: владелец может отключить человеку доступ (решение 20 октября 2026). Данные человека остаются.
 -- Выполнить целиком в Supabase SQL Editor. Повторный запуск безопасен. Только добавляет.
 alter table users add column if not exists blocked boolean not null default false;
+
+-- ---------------------------------------------------------------- 017: язык пользователя (3 ноября 2026)
+-- ru | en | kk; пусто — язык Telegram, иначе русский. Ставит приложение (PATCH /me) и бот при первом сообщении.
+alter table users add column if not exists language text;
+alter table users drop constraint if exists users_language_check;
+alter table users add constraint users_language_check check (language is null or language in ('ru', 'en', 'kk'));

@@ -10,6 +10,8 @@ user_id обязательным аргументом и каждый запро
 Дата операции — date без времени ("YYYY-MM-DD"); «сегодня» считается в поясе users.timezone.
 В логи не пишем суммы, заметки и тексты сообщений — только тип события, id и количество.
 """
+from i18n import tr
+import i18n
 import calendar
 import logging
 import re
@@ -84,54 +86,54 @@ def parse_amount(value) -> Decimal:
     """Сумма из запроса: строка или число, запятая как десятичный знак, пробелы между разрядами допустимы.
     Больше 0, меньше 10^12, не больше двух знаков после запятой."""
     if isinstance(value, bool) or value is None:
-        raise MoneyError(422, "Укажите сумму числом", "bad_amount")
+        raise MoneyError(422, tr("Укажите сумму числом"), "bad_amount")
     text = str(value).strip().replace(" ", "").replace(" ", "").replace(",", ".")
     if not re.fullmatch(r"\d+(\.\d+)?", text):
-        raise MoneyError(422, "Сумма должна быть положительным числом, например 3,50", "bad_amount")
+        raise MoneyError(422, tr("Сумма должна быть положительным числом, например 3,50"), "bad_amount")
     try:
         amount = Decimal(text)
     except InvalidOperation:
-        raise MoneyError(422, "Сумма должна быть положительным числом, например 3,50", "bad_amount")
+        raise MoneyError(422, tr("Сумма должна быть положительным числом, например 3,50"), "bad_amount")
     if amount != amount.quantize(CENT):
-        raise MoneyError(422, "В сумме не больше двух знаков после запятой", "bad_amount")
+        raise MoneyError(422, tr("В сумме не больше двух знаков после запятой"), "bad_amount")
     if amount <= 0:
-        raise MoneyError(422, "Сумма должна быть больше нуля", "bad_amount")
+        raise MoneyError(422, tr("Сумма должна быть больше нуля"), "bad_amount")
     if amount >= AMOUNT_MAX:
-        raise MoneyError(422, "Слишком большая сумма", "bad_amount")
+        raise MoneyError(422, tr("Слишком большая сумма"), "bad_amount")
     return amount.quantize(CENT)
 
 
 def clean_currency(value) -> str:
     cur = str(value or "").strip().upper()
     if cur not in CURRENCIES:
-        raise MoneyError(422, f"Валюта: {' или '.join(CURRENCIES)}", "bad_currency")
+        raise MoneyError(422, tr("Валюта: {0}", tr(" или ").join(CURRENCIES)), "bad_currency")
     return cur
 
 
 def clean_kind(value) -> str:
     if value not in KINDS:
-        raise MoneyError(422, "Тип операции: expense (расход) или income (доход)", "bad_kind")
+        raise MoneyError(422, tr("Тип операции: expense (расход) или income (доход)"), "bad_kind")
     return value
 
 
 def clean_note(value) -> Optional[str]:
     note = (value or "").strip()
     if len(note) > NOTE_MAX:
-        raise MoneyError(422, f"Заметка — не длиннее {NOTE_MAX} символов", "bad_note")
+        raise MoneyError(422, tr('Заметка — не длиннее {0} символов', NOTE_MAX), "bad_note")
     return note or None
 
 
 def clean_name(value) -> str:
     name = (value or "").strip()
     if not 1 <= len(name) <= NAME_MAX:
-        raise MoneyError(422, f"Название категории — от 1 до {NAME_MAX} символов", "bad_name")
+        raise MoneyError(422, tr('Название категории — от 1 до {0} символов', NAME_MAX), "bad_name")
     return name
 
 
 def clean_color(value) -> str:
     color = (value or "").strip().upper()
     if color not in PALETTE:
-        raise MoneyError(422, "Цвет нужно выбрать из палитры", "bad_color")
+        raise MoneyError(422, tr("Цвет нужно выбрать из палитры"), "bad_color")
     return color
 
 
@@ -147,14 +149,14 @@ def parse_day(value, user_id: str) -> date:
     else:
         text = str(value or "").strip()
         if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
-            raise MoneyError(422, "Дата в виде ГГГГ-ММ-ДД", "bad_date")
+            raise MoneyError(422, tr("Дата в виде ГГГГ-ММ-ДД"), "bad_date")
         try:
             day = date.fromisoformat(text)
         except ValueError:
-            raise MoneyError(422, "Такой даты нет", "bad_date")
+            raise MoneyError(422, tr("Такой даты нет"), "bad_date")
     today = today_for(user_id)
     if abs(day.year - today.year) > DATE_RANGE_YEARS or abs((day - today).days) > DATE_RANGE_YEARS * 366:
-        raise MoneyError(422, f"Дата должна быть в пределах {DATE_RANGE_YEARS} лет от сегодня", "bad_date")
+        raise MoneyError(422, tr('Дата должна быть в пределах {0} лет от сегодня', DATE_RANGE_YEARS), "bad_date")
     return day
 
 
@@ -171,11 +173,11 @@ def _parse_month(value: Optional[str], user_id: str) -> date:
     if not value:
         return _month_start(today_for(user_id))
     if not re.fullmatch(r"\d{4}-\d{2}", value or ""):
-        raise MoneyError(422, "Месяц в виде ГГГГ-ММ", "bad_month")
+        raise MoneyError(422, tr("Месяц в виде ГГГГ-ММ"), "bad_month")
     try:
         return date(int(value[:4]), int(value[5:]), 1)
     except ValueError:
-        raise MoneyError(422, "Такого месяца нет", "bad_month")
+        raise MoneyError(422, tr("Такого месяца нет"), "bad_month")
 
 
 def _clamped(year: int, month: int, day_of_month: int) -> date:
@@ -228,7 +230,7 @@ def second_currency(user_id: str) -> str:
 def set_second_currency(user_id: str, currency) -> str:
     cur = clean_currency(currency)
     if cur == default_currency(user_id):
-        raise MoneyError(422, "Дополнительная валюта должна отличаться от основной", "same_currency")
+        raise MoneyError(422, tr("Дополнительная валюта должна отличаться от основной"), "same_currency")
     supabase.table("users").update({"second_currency": cur}).eq("id", user_id).execute()
     return cur
 
@@ -267,7 +269,7 @@ def _find_by_name(user_id: str, kind: str, name: str, exclude_id: Optional[str] 
 def create_category(user_id: str, kind, name, color) -> dict:
     kind, name, color = clean_kind(kind), clean_name(name), clean_color(color)
     if _find_by_name(user_id, kind, name):
-        raise MoneyError(409, "Категория с таким названием уже есть", "duplicate")
+        raise MoneyError(409, tr("Категория с таким названием уже есть"), "duplicate")
     order = max((c.get("sort_order", 0) for c in list_categories(user_id, kind)), default=-1) + 1
     rows = supabase.table(CAT_TABLE).insert(
         {"user_id": user_id, "kind": kind, "name": name, "color": color, "sort_order": order}).execute().data
@@ -297,12 +299,12 @@ def update_category(category_id: str, user_id: str, name=None, color=None, month
     Лимит запоминается в основной валюте пользователя на момент задания (limit_currency)."""
     current = get_category(category_id, user_id)
     if not current:
-        raise MoneyError(404, "Категория не найдена", "not_found")
+        raise MoneyError(404, tr("Категория не найдена"), "not_found")
     changes = {}
     if name is not None:
         name = clean_name(name)
         if _find_by_name(user_id, current["kind"], name, exclude_id=category_id):
-            raise MoneyError(409, "Категория с таким названием уже есть", "duplicate")
+            raise MoneyError(409, tr("Категория с таким названием уже есть"), "duplicate")
         changes["name"] = name
     if color is not None:
         changes["color"] = clean_color(color)
@@ -311,7 +313,7 @@ def update_category(category_id: str, user_id: str, name=None, color=None, month
             changes.update(monthly_limit=None, limit_currency=None)
         else:
             if current["kind"] != "expense":
-                raise MoneyError(422, "Лимит бывает только у категорий расходов", "bad_limit")
+                raise MoneyError(422, tr("Лимит бывает только у категорий расходов"), "bad_limit")
             changes.update(monthly_limit=str(parse_amount(monthly_limit)), limit_currency=default_currency(user_id))
     if changes:
         supabase.table(CAT_TABLE).update(changes).eq("id", category_id).eq("user_id", user_id).execute()
@@ -325,7 +327,7 @@ def reorder_categories(user_id: str, kind, ids: list[str]) -> list[dict]:
     kind = clean_kind(kind)
     cats = list_categories(user_id, kind)
     if sorted(ids) != sorted(c["id"] for c in cats) or len(set(ids)) != len(ids):
-        raise MoneyError(422, "Нужен полный список категорий этого типа без повторов", "bad_order")
+        raise MoneyError(422, tr("Нужен полный список категорий этого типа без повторов"), "bad_order")
     for order, category_id in enumerate(ids):
         supabase.table(CAT_TABLE).update({"sort_order": order}).eq("id", category_id).eq("user_id", user_id).execute()
     return list_categories(user_id, kind)
@@ -340,17 +342,17 @@ def _usage_count(user_id: str, category_id: str) -> int:
 def delete_category(category_id: str, user_id: str, move_to: Optional[str] = None) -> None:
     current = get_category(category_id, user_id)
     if not current:
-        raise MoneyError(404, "Категория не найдена", "not_found")
+        raise MoneyError(404, tr("Категория не найдена"), "not_found")
     if len(list_categories(user_id, current["kind"])) <= 1:
-        raise MoneyError(409, "Последнюю категорию этого типа удалить нельзя", "last_category")
+        raise MoneyError(409, tr("Последнюю категорию этого типа удалить нельзя"), "last_category")
     if _usage_count(user_id, category_id):
         if not move_to:
-            raise MoneyError(409, "В категории есть операции. Укажите, куда их перенести", "has_items")
+            raise MoneyError(409, tr("В категории есть операции. Укажите, куда их перенести"), "has_items")
         target = get_category(move_to, user_id)
         if not target or target["id"] == category_id:
-            raise MoneyError(404, "Категория для переноса не найдена", "move_to_not_found")
+            raise MoneyError(404, tr("Категория для переноса не найдена"), "move_to_not_found")
         if target["kind"] != current["kind"]:
-            raise MoneyError(422, "Переносить можно только в категорию того же типа", "move_to_kind")
+            raise MoneyError(422, tr("Переносить можно только в категорию того же типа"), "move_to_kind")
         for table in (TX_TABLE, REC_TABLE):
             supabase.table(table).update({"category_id": target["id"]}).eq("user_id", user_id).eq(
                 "category_id", category_id).execute()
@@ -361,9 +363,9 @@ def _own_category(user_id: str, category_id, kind: str) -> dict:
     """Категория для операции: своя и того же типа. Чужая или неподходящая — 422, а не тихая привязка."""
     cat = get_category(str(category_id or ""), user_id)
     if not cat:
-        raise MoneyError(422, "Категория не найдена среди ваших", "bad_category")
+        raise MoneyError(422, tr("Категория не найдена среди ваших"), "bad_category")
     if cat["kind"] != kind:
-        raise MoneyError(422, "Категория другого типа (расход/доход)", "bad_category")
+        raise MoneyError(422, tr("Категория другого типа (расход/доход)"), "bad_category")
     return cat
 
 
@@ -715,15 +717,17 @@ def check_limit_alerts(user_id: str, category_id: str, spent_on: str) -> list[st
             claim(LIMIT_WARN)  # после 100% предупреждение про 80% уже не нужно
             if claim(LIMIT_OVER):
                 extra = spent - limit
-                text = (f"🔴 «{cat['name']}»: лимит {fmt(limit)} {limit_cur} " +
-                        (f"превышен на {fmt(extra)} {limit_cur}." if extra > 0 else "исчерпан."))
+                text = (i18n.L("🔴 «{0}»: лимит {1} {2} превышен на {3} {2}.", cat['name'], fmt(limit), limit_cur,
+                               fmt(extra)) if extra > 0
+                        else i18n.L("🔴 «{0}»: лимит {1} {2} исчерпан.", cat['name'], fmt(limit), limit_cur))
                 sent.append(text)
         elif claim(LIMIT_WARN):
             last_day = calendar.monthrange(today.year, today.month)[1]
             days_left = last_day - today.day + 1
             per_day = ((limit - spent) / days_left).quantize(CENT) if days_left else Decimal(0)
-            sent.append(f"⚠️ «{cat['name']}»: потрачено {fmt(spent)} {limit_cur} из {fmt(limit)} {limit_cur} ({pct}%). "
-                        f"До конца месяца {days_left} дн. — примерно {fmt(per_day)} {limit_cur} в день.")
+            sent.append(i18n.L("⚠️ «{0}»: потрачено {1} {2} из {3} {2} ({4}%). До конца месяца {5} дн. — примерно "
+                               "{6} {2} в день.", cat['name'], fmt(spent), limit_cur, fmt(limit), pct, days_left,
+                               fmt(per_day)))
         if sent:
             import notifier
             for text in sent:
@@ -738,7 +742,7 @@ def check_limit_alerts(user_id: str, category_id: str, spent_on: str) -> list[st
 def trend(user_id: str, months: int = 6) -> dict:
     """Доходы и расходы по месяцам за последние N месяцев (1–24), отдельно по валютам."""
     if not 1 <= int(months) <= 24:
-        raise MoneyError(422, "Период — от 1 до 24 месяцев", "bad_months")
+        raise MoneyError(422, tr("Период — от 1 до 24 месяцев"), "bad_months")
     months = int(months)
     last = _month_start(today_for(user_id))
     first = _add_months(last, -(months - 1))
@@ -804,14 +808,14 @@ def _clean_day_of_month(value) -> int:
     else:
         dom = 0
     if not 1 <= dom <= 31:
-        raise MoneyError(422, "День месяца — от 1 до 31", "bad_day_of_month")
+        raise MoneyError(422, tr("День месяца — от 1 до 31"), "bad_day_of_month")
     return dom
 
 
 def clean_frequency(value) -> str:
     freq = value or "monthly"
     if freq not in FREQUENCIES:
-        raise MoneyError(422, "Повтор: каждую неделю, каждые 2 недели, каждый месяц или каждый год", "bad_frequency")
+        raise MoneyError(422, tr("Повтор: каждую неделю, каждые 2 недели, каждый месяц или каждый год"), "bad_frequency")
     return freq
 
 
@@ -865,7 +869,7 @@ def create_recurring(user_id: str, data: dict) -> dict:
     else:
         dom = _clean_day_of_month(data.get("day_of_month"))
         if frequency != "monthly":
-            raise MoneyError(422, "Для такого повтора нужна дата первого платежа", "bad_anchor")
+            raise MoneyError(422, tr("Для такого повтора нужна дата первого платежа"), "bad_anchor")
         next_run = next_occurrence(today, dom)
     row = {
         "user_id": user_id, "kind": kind,
@@ -916,7 +920,7 @@ def update_recurring(rec_id: str, user_id: str, data: dict) -> Optional[dict]:
     if data.get("next_run") is not None:
         run = parse_day(data["next_run"], user_id)
         if run < today:
-            raise MoneyError(422, "Следующий платёж — сегодня или позже", "bad_next_run")
+            raise MoneyError(422, tr("Следующий платёж — сегодня или позже"), "bad_next_run")
         dom = changes["day_of_month"] = run.day
         changes["next_run"] = run.isoformat()
     elif data.get("day_of_month") is not None:
@@ -1156,9 +1160,9 @@ def run_recurring(today_of=None, utc_today: Optional[date] = None) -> list[tuple
                 check_limit_alerts(user_id, rec["category_id"], today.isoformat())
             if created:
                 name = rec.get("note") or (get_category(rec["category_id"], user_id) or {}).get("name", "Платёж")
-                text = f"Добавлен платёж: {name} · {fmt(rec['amount'])} {rec['currency']}"
-                if created > 1:
-                    text += f" (×{created}, за пропущенные периоды)"
+                text = (i18n.L("Добавлен платёж: {0} · {1} {2} (×{3}, за пропущенные периоды)", name,
+                               fmt(rec['amount']), rec['currency'], created) if created > 1
+                        else i18n.L("Добавлен платёж: {0} · {1} {2}", name, fmt(rec['amount']), rec['currency']))
                 messages.append((user_id, text))
             logger.info("Повторяющийся платёж %s: создано операций %d", rec["id"], created)
         except Exception as exc:
@@ -1259,11 +1263,11 @@ def parse_applepay_amount(text, default_cur: str) -> tuple[Decimal, str, bool]:
     low = raw.lower()
     currency = next((cur for token, cur in _CURRENCY_TOKENS if token in low), None)
     if currency is None and _OTHER_CURRENCY.search(low):
-        raise MoneyError(422, f"Валюта этой покупки не поддерживается (только {', '.join(CURRENCIES)})", "bad_currency")
+        raise MoneyError(422, tr('Валюта этой покупки не поддерживается (только {0})', ', '.join(CURRENCIES)), "bad_currency")
     refund = "-" in raw or "−" in raw
     num = re.sub(r"[^\d.,]", "", raw)
     if not re.search(r"\d", num):
-        raise MoneyError(422, "Не нашёл сумму покупки", "bad_amount")
+        raise MoneyError(422, tr("Не нашёл сумму покупки"), "bad_amount")
     if "," in num and "." in num:  # десятичный знак — тот, что правее
         num = num.replace(".", "").replace(",", ".") if num.rfind(",") > num.rfind(".") else num.replace(",", "")
     else:
@@ -1322,7 +1326,7 @@ def record_applepay(user_id: str, amount_text, merchant: Optional[str]) -> tuple
     """Покупка из Apple Pay → операция. Возвращает (операция, это повтор?, откуда категория)."""
     amount, currency, refund = parse_applepay_amount(amount_text, default_currency(user_id))
     if refund:
-        raise MoneyError(422, "Возвраты пока не записываются", "refund")
+        raise MoneyError(422, tr("Возвраты пока не записываются"), "refund")
     note = (merchant or "").strip()[:NOTE_MAX] or "Apple Pay"
     cutoff = (datetime.now(timezone.utc) - APPLEPAY_DEDUP).isoformat()
     recent = supabase.table(TX_TABLE).select("*").eq("user_id", user_id).eq("source", "applepay").gte(
@@ -1346,9 +1350,9 @@ def analytics(user_id: str, date_from=None, date_to=None) -> dict:
     start = parse_day(date_from, user_id) if date_from else _month_start(today)
     end = parse_day(date_to, user_id) if date_to else _add_months(_month_start(today), 1) - timedelta(days=1)
     if end < start:
-        raise MoneyError(422, "Конец периода раньше начала", "bad_period")
+        raise MoneyError(422, tr("Конец периода раньше начала"), "bad_period")
     if (end - start).days > 3 * 366:
-        raise MoneyError(422, "Период — не длиннее трёх лет", "bad_period")
+        raise MoneyError(422, tr("Период — не длиннее трёх лет"), "bad_period")
     days = (end - start).days + 1
     prev_end = start - timedelta(days=1)
     prev_start = prev_end - timedelta(days=days - 1)
@@ -1357,7 +1361,7 @@ def analytics(user_id: str, date_from=None, date_to=None) -> dict:
     main = default_currency(user_id)
     rates = rates_service.get_rates() if {r["currency"] for r in rows} - {main} else None
     if not rates_service.can_convert(rates, {r["currency"] for r in rows}, main):
-        raise MoneyError(503, "Курс валют сейчас недоступен, попробуйте позже", "no_rate")
+        raise MoneyError(503, tr("Курс валют сейчас недоступен, попробуйте позже"), "no_rate")
     cats = {c["id"]: c for c in list_categories(user_id)}
     cur_rows = [r for r in rows if str(r["spent_on"])[:10] >= start.isoformat()]
     prev_rows = [r for r in rows if str(r["spent_on"])[:10] < start.isoformat()]
@@ -1414,8 +1418,6 @@ def analytics(user_id: str, date_from=None, date_to=None) -> dict:
     }
 
 
-MONTHS_NOM = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь",
-              "ноябрь", "декабрь"]
 
 
 def monthly_report_text(user_id: str, month_start: date) -> Optional[str]:
@@ -1430,25 +1432,28 @@ def monthly_report_text(user_id: str, month_start: date) -> Optional[str]:
     cur = a["currency"]
     ap = "≈ " if a["expense_approx"] else ""
     ai = "≈ " if a["income_approx"] else ""
-    name = MONTHS_NOM[month_start.month - 1]
-    lines = [f"📊 Итоги: {name} {month_start.year}"]
+    name = i18n.month_name(month_start.month)
+    name = name if i18n.current() == "en" else name.lower()  # «Итоги: октябрь 2026»
+    lines = [tr("📊 Итоги: {0} {1}", name, month_start.year)]
     change = a["expense_change_pct"]
-    lines.append(f"Потрачено {ap}{a['expense']} {cur}" +
-                 (f" ({'+' if change > 0 else ''}{change}% к прошлому месяцу)" if change is not None else ""))
+    lines.append(tr("Потрачено {0}{1} {2}", ap, a['expense'], cur) +
+                 (tr(" ({0}{1}% к прошлому месяцу)", '+' if change > 0 else '', change) if change is not None else ""))
     ab = "≈ " if a["approx"] else ""
-    lines.append(f"Доходы {ai}{a['income']} {cur} · баланс {ab}{'+' if not a['balance'].startswith('-') else ''}{a['balance']} {cur}")
+    lines.append(tr("Доходы {0}{1} {2} · баланс {3}{4}{5} {2}", ai, a['income'], cur, ab,
+                    '+' if not a['balance'].startswith('-') else '', a['balance']))
     if a["by_category"]:
-        lines.append("\nБольше всего:")
+        lines.append(tr("\nБольше всего:"))
         lines += [f"  {c['name']}: {c['amount']} {cur} ({c['share']}%)" for c in a["by_category"][:3]]
     if a["largest"]:
-        lines.append("Крупнейшие траты: " + ", ".join(f"{x['name']} {x['amount']} {cur}" for x in a["largest"][:3]))
+        lines.append(tr("Крупнейшие траты: ") + ", ".join(f"{x['name']} {x['amount']} {cur}" for x in a["largest"][:3]))
     try:
         s = summary(user_id, month_start.strftime("%Y-%m"))
         limits = (s.get("main") or {}).get("limits") or {}
         total = sum(limits.values())
         if total:
             over = [c["name"] for c in s["main"]["by_category"] if (c.get("limit") or {}).get("state") == "over"]
-            lines.append(f"Лимиты: превышено {len(over)} из {total}" + (f" ({', '.join(over)})" if over else " — все в норме 👍"))
+            lines.append(tr("Лимиты: превышено {0} из {1}", len(over), total) +
+                         (f" ({', '.join(over)})" if over else tr(" — все в норме 👍")))
     except Exception as exc:
         logger.warning("Лимиты для отчёта не посчитаны: %s", type(exc).__name__)
     return "\n".join(lines)

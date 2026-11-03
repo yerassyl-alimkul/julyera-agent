@@ -11,12 +11,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-RELEASE_ID = "2026-11-02-languages"
-RELEASE_TEXT = """🌍 Приложение теперь говорит на трёх языках: русском, английском и казахском.
-Язык выбирается в «Настройках» → «Язык». «Авто» берёт язык вашего Telegram.
+RELEASE_ID = "2026-11-03-bot-languages"
+RELEASE_TEXT = """🌍 Бот тоже заговорил на английском и казахском: ответы, сводки, напоминания и выписка PDF — на языке,
+выбранном в приложении («Настройки» → «Язык»).
 
-🌍 The app now speaks English and Kazakh too: Settings → Language.
-🌍 Қолданба енді қазақ тілінде де: Баптаулар → Тіл."""
+🌍 The bot now speaks English too: replies, digests, reminders and the PDF statement follow the app language.
+🌍 Бот енді қазақша да сөйлейді: жауаптар, шолулар, еске салулар және PDF үзінді — қолданба тілінде."""
 
 
 async def announce(bot, supabase, users: list[dict], reply_markup=None) -> bool:

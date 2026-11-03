@@ -321,3 +321,4 @@ class MeUpdate(BaseModel):
     second_currency: Optional[str] = None   # дополнительная валюта (вторая кнопка в форме траты)
     calendar_import: Optional[bool] = None  # переносить ли события Google Calendar в задачи
     remind_before: Optional[int] = None     # за сколько минут напоминать о задаче со временем: 0, 15, 30, 60
+    language: Optional[str] = None          # язык приложения и бота: ru, en, kk (миграция 017)

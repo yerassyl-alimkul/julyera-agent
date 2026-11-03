@@ -5,9 +5,12 @@ Backend работает с ключом service_role, который обход
 держится только на условии user_id в каждом запросе к tasks, notes, subtasks, telegram_chats,
 google_credentials. user_id всегда берётся из проверенного входа, клиент его не присылает.
 """
+import logging
 from typing import Optional
 
 from database import supabase
+
+logger = logging.getLogger(__name__)
 
 TABLE = "users"
 CHATS_TABLE = "telegram_chats"
@@ -47,6 +50,16 @@ def list_users(include_blocked: bool = False) -> list[dict]:
     """Пользователи — для рассылок и групп. Отключённых владельцем (blocked, migration 016) — только для админа."""
     rows = supabase.table(TABLE).select("*").execute().data
     return rows if include_blocked else [u for u in rows if not u.get("blocked")]
+
+
+def set_language(user_id: str, language: str) -> bool:
+    """Язык интерфейса и бота (ru | en | kk, миграция 017). Без колонки в базе — молча False."""
+    try:
+        supabase.table(TABLE).update({"language": language}).eq("id", user_id).execute()
+        return True
+    except Exception as exc:
+        logger.warning("Язык пользователя не сохранён: %s", type(exc).__name__)
+        return False
 
 
 def set_blocked(user_id: str, blocked: bool) -> None:

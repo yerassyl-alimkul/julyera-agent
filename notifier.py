@@ -3,6 +3,8 @@
 синхронизация с Google Calendar обнаружила, что токен пользователя больше не работает.
 Ошибки отправки логируются и никогда не ломают основную операцию.
 """
+from i18n import tr
+import i18n
 import json
 import logging
 import os
@@ -25,7 +27,7 @@ def send_telegram(chat_id: int, text: str, with_app_button: bool = False, button
         payload["reply_markup"] = json.dumps({"inline_keyboard": buttons})
     elif with_app_button:
         payload["reply_markup"] = json.dumps(
-            {"inline_keyboard": [[{"text": "Открыть приложение", "web_app": {"url": APP_URL}}]]}
+            {"inline_keyboard": [[{"text": tr("Открыть приложение"), "web_app": {"url": APP_URL}}]]}
         )
     try:
         resp = httpx.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage", data=payload, timeout=10)
@@ -35,14 +37,21 @@ def send_telegram(chat_id: int, text: str, with_app_button: bool = False, button
         return False
 
 
-def notify_user(user_id: str, text: str, with_app_button: bool = False, buttons: Optional[list] = None) -> int:
+def notify_user(user_id: str, text, with_app_button: bool = False, buttons: Optional[list] = None) -> int:
     """Шлёт сообщение во все чаты пользователя; возвращает, сколько отправлено."""
     import users_service
 
-    if (users_service.get_by_id(user_id) or {}).get("blocked"):  # доступ отключён владельцем — не пишем
+    import i18n
+
+    user = users_service.get_by_id(user_id) or {}
+    if user.get("blocked"):  # доступ отключён владельцем — не пишем
         return 0
     sent = 0
-    for chat_id in users_service.get_chat_ids(user_id):
-        if send_telegram(chat_id, text, with_app_button, buttons):
-            sent += 1
+    with i18n.for_user(user):  # текст i18n.L и кнопка — на языке получателя
+        text = i18n.render(text)
+        if buttons:
+            buttons = [[{**b, "text": i18n.render(b.get("text"))} for b in row] for row in buttons]
+        for chat_id in users_service.get_chat_ids(user_id):
+            if send_telegram(chat_id, text, with_app_button, buttons):
+                sent += 1
     return sent

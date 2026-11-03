@@ -6,6 +6,8 @@
 название и в задачах — атомарно, через SQL-функцию rename_category (см. schema.sql).
 Каждый запрос фильтруется по user_id: backend ходит в базу с ключом service_role.
 """
+from i18n import tr
+import i18n
 from typing import Optional
 
 from database import supabase
@@ -43,14 +45,14 @@ class CategoryError(Exception):
 def _clean_name(name: Optional[str]) -> str:
     cleaned = (name or "").strip()
     if not 1 <= len(cleaned) <= NAME_MAX:
-        raise CategoryError(422, f"Название категории — от 1 до {NAME_MAX} символов", "bad_name")
+        raise CategoryError(422, tr('Название категории — от 1 до {0} символов', NAME_MAX), "bad_name")
     return cleaned
 
 
 def _clean_color(color: Optional[str]) -> str:
     value = (color or "").strip().upper()
     if value not in PALETTE:
-        raise CategoryError(422, "Цвет нужно выбрать из палитры", "bad_color")
+        raise CategoryError(422, tr("Цвет нужно выбрать из палитры"), "bad_color")
     return value
 
 
@@ -93,7 +95,7 @@ def names(user_id: str) -> list[str]:
 def create_category(user_id: str, name: str, color: str) -> dict:
     name, color = _clean_name(name), _clean_color(color)
     if _find_by_name(user_id, name):
-        raise CategoryError(409, "Категория с таким названием уже есть", "duplicate")
+        raise CategoryError(409, tr("Категория с таким названием уже есть"), "duplicate")
     existing = list_categories(user_id)
     order = max((c.get("sort_order", 0) for c in existing), default=-1) + 1
     result = supabase.table(TABLE).insert(
@@ -115,13 +117,13 @@ def ensure_default(user_id: str, lang: str = "ru") -> dict:
 def update_category(category_id: str, user_id: str, name: Optional[str] = None, color: Optional[str] = None) -> dict:
     current = get_category(category_id, user_id)
     if not current:
-        raise CategoryError(404, "Категория не найдена", "not_found")
+        raise CategoryError(404, tr("Категория не найдена"), "not_found")
     if color is not None:
         color = _clean_color(color)
     if name is not None:
         name = _clean_name(name)
         if _find_by_name(user_id, name, exclude_id=category_id):
-            raise CategoryError(409, "Категория с таким названием уже есть", "duplicate")
+            raise CategoryError(409, tr("Категория с таким названием уже есть"), "duplicate")
         if name != current["name"]:
             # Атомарно меняет название и в категории, и во всех задачах пользователя с этой категорией.
             supabase.rpc("rename_category", {"p_user": user_id, "p_id": category_id, "p_name": name}).execute()
@@ -134,7 +136,7 @@ def reorder(user_id: str, ids: list[str]) -> list[dict]:
     """Порядок задаётся полным списком id категорий пользователя."""
     cats = list_categories(user_id)
     if sorted(ids) != sorted(c["id"] for c in cats) or len(set(ids)) != len(ids):
-        raise CategoryError(422, "Нужен полный список категорий без повторов", "bad_order")
+        raise CategoryError(422, tr("Нужен полный список категорий без повторов"), "bad_order")
     for order, category_id in enumerate(ids):
         supabase.table(TABLE).update({"sort_order": order}).eq("id", category_id).eq("user_id", user_id).execute()
     return list_categories(user_id)
@@ -148,16 +150,16 @@ def task_count(user_id: str, name: str) -> int:
 def delete_category(category_id: str, user_id: str, move_to: Optional[str] = None) -> None:
     current = get_category(category_id, user_id)
     if not current:
-        raise CategoryError(404, "Категория не найдена", "not_found")
+        raise CategoryError(404, tr("Категория не найдена"), "not_found")
     if len(list_categories(user_id)) <= 1:
-        raise CategoryError(409, "Последнюю категорию удалить нельзя", "last_category")
+        raise CategoryError(409, tr("Последнюю категорию удалить нельзя"), "last_category")
     count = task_count(user_id, current["name"])
     if count:
         if not move_to:
-            raise CategoryError(409, f"В категории задач: {count}. Укажите, куда их перенести", "has_tasks")
+            raise CategoryError(409, tr('В категории задач: {0}. Укажите, куда их перенести', count), "has_tasks")
         target = get_category(move_to, user_id)
         if not target or target["id"] == category_id:
-            raise CategoryError(404, "Категория для переноса не найдена", "move_to_not_found")
+            raise CategoryError(404, tr("Категория для переноса не найдена"), "move_to_not_found")
         supabase.table("tasks").update({"category": target["name"]}).eq("user_id", user_id).eq(
             "category", current["name"]).execute()
     supabase.table(TABLE).delete().eq("id", category_id).eq("user_id", user_id).execute()

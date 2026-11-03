@@ -10,6 +10,8 @@
 Удаление своей копии — выход из задачи: у остальных она остаётся; осталась одна копия — становится обычной.
 Повтор у задачи группы не поддерживается (422). Копию меняет только её владелец. В логи — только id.
 """
+from i18n import tr
+import i18n
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -75,9 +77,9 @@ def prepare_group_task(data: dict, user_id: str) -> Optional[dict]:
         return None
     group = groups_service.group_for_member(str(group_id), user_id)
     if not group:
-        raise CategoryError(404, "Группа не найдена", "no_group")
+        raise CategoryError(404, tr("Группа не найдена"), "no_group")
     if data.get("recurrence_pattern") or data.get("is_recurring"):
-        raise CategoryError(422, "Задачу группы пока нельзя сделать повторяющейся", "shared_recurring")
+        raise CategoryError(422, tr("Задачу группы пока нельзя сделать повторяющейся"), "shared_recurring")
     data["group_id"] = str(group_id)
     data["category"] = ensure_category(user_id, group["name"])
     return group
@@ -110,7 +112,7 @@ def spread(task: dict, group: dict, actor_id: str) -> dict:
     for m in others:
         copy = supabase.table(TASKS).insert(_copy_row(task, m, group, canonical)).execute().data[0]
         task_service._sync_google_upsert(copy, m)
-        notifier.notify_user(m, f"👥 {group['name']}: новая задача от {_name(actor_id)}\n{task['task']}{when}")
+        notifier.notify_user(m, i18n.L('👥 {0}: новая задача от {1}\n{2}{3}', group['name'], _name(actor_id), task['task'], when))
     logger.info("Задача группы %s: копий %d", task["id"], len(others))
     return task
 
@@ -138,9 +140,8 @@ def _when(task: dict) -> str:
     if not task.get("deadline"):
         return ""
     d = datetime.fromisoformat(str(task["deadline"]).replace("Z", "+00:00")).replace(tzinfo=None)
-    days = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
     time = "" if d.strftime("%H:%M") == "23:59" else d.strftime(" · %H:%M")
-    return f"\n{days[d.weekday()]}, {d.strftime('%d.%m')}{time}"
+    return f"\n{d.strftime('%d.%m')}{time}"  # без дня недели: текст уходит людям на разных языках
 
 
 def _cmp(field: str, value) -> str:
@@ -164,7 +165,7 @@ def propagate(task: dict, changes: dict, actor_id: str) -> None:
             import notifier
             for c in group:
                 if c["user_id"] != actor_id:
-                    notifier.notify_user(c["user_id"], f"✅ «{task['task']}»: {_name(actor_id)} — готово ({done} из {len(group)}).")
+                    notifier.notify_user(c["user_id"], i18n.L('✅ «{0}»: {1} — готово ({2} из {3}).', task['task'], _name(actor_id), done, len(group)))
         if not shared:
             return
     became_done = shared.get("status") == "Done"
@@ -181,7 +182,7 @@ def propagate(task: dict, changes: dict, actor_id: str) -> None:
             continue
         if became_done and other.get("status") != "Done":
             import notifier
-            notifier.notify_user(other["user_id"], f"✅ «{task['task']}» — выполнено ({_name(actor_id)}).")
+            notifier.notify_user(other["user_id"], i18n.L('✅ «{0}» — выполнено ({1}).', task['task'], _name(actor_id)))
 
 
 def leave(task: dict, user_id: str, notify: bool = True) -> None:
@@ -204,7 +205,7 @@ def leave(task: dict, user_id: str, notify: bool = True) -> None:
     if notify:
         import notifier
         for c in others:
-            notifier.notify_user(c["user_id"], f"{_name(user_id)} больше не участвует в задаче «{task['task']}» — у вас она осталась.")
+            notifier.notify_user(c["user_id"], i18n.L('{0} больше не участвует в задаче «{1}» — у вас она осталась.', _name(user_id), task['task']))
     logger.info("Выход из общей задачи %s", task["id"])
 
 

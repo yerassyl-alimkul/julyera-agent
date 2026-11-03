@@ -8,6 +8,8 @@
 бот пишет поздравление. Суммы — Decimal, в JSON строкой, как везде в деньгах; «Отложено всего» — в основной валюте
 по курсу Нацбанка (rates_service), approx — был ли пересчёт. Всё по user_id. В логи — только id и количества.
 """
+from i18n import tr
+import i18n
 import logging
 import math
 import re
@@ -41,7 +43,7 @@ def _is_uuid(value: str) -> bool:
 def _clean_name(value) -> str:
     name = str(value or "").strip()
     if not 1 <= len(name) <= NAME_MAX:
-        raise MoneyError(422, f"Название цели — от 1 до {NAME_MAX} символов", "bad_name")
+        raise MoneyError(422, tr('Название цели — от 1 до {0} символов', NAME_MAX), "bad_name")
     return name
 
 
@@ -51,9 +53,9 @@ def _clean_due(value) -> Optional[str]:
     try:
         d = date.fromisoformat(str(value)[:10])
     except ValueError:
-        raise MoneyError(422, "Дата цели в формате ГГГГ-ММ-ДД", "bad_date")
+        raise MoneyError(422, tr("Дата цели в формате ГГГГ-ММ-ДД"), "bad_date")
     if not date(2000, 1, 1) <= d <= date(2100, 1, 1):
-        raise MoneyError(422, "Странная дата цели", "bad_date")
+        raise MoneyError(422, tr("Странная дата цели"), "bad_date")
     return d.isoformat()
 
 
@@ -136,14 +138,14 @@ def create_goal(user_id: str, data: dict) -> dict:
 def get_goal(goal_id: str, user_id: str) -> dict:
     row = _get(goal_id, user_id)
     if not row:
-        raise MoneyError(404, "Цель не найдена", "not_found")
+        raise MoneyError(404, tr("Цель не найдена"), "not_found")
     saved = _saved_by_goal(user_id).get(row["id"], Decimal(0))
     return _out(row, saved, _today(user_id))
 
 
 def update_goal(goal_id: str, user_id: str, data: dict) -> dict:
     if not _get(goal_id, user_id):
-        raise MoneyError(404, "Цель не найдена", "not_found")
+        raise MoneyError(404, tr("Цель не найдена"), "not_found")
     changes = {}
     if "name" in data:
         changes["name"] = _clean_name(data["name"])
@@ -154,7 +156,7 @@ def update_goal(goal_id: str, user_id: str, data: dict) -> dict:
     if "currency" in data:
         cur = money_service.clean_currency(data["currency"])
         if cur != _get(goal_id, user_id)["currency"] and _saved_by_goal(user_id).get(goal_id):
-            raise MoneyError(422, "Валюту можно поменять, только пока в цели ничего не отложено", "currency_locked")
+            raise MoneyError(422, tr("Валюту можно поменять, только пока в цели ничего не отложено"), "currency_locked")
         changes["currency"] = cur
     if changes:
         supabase.table(GOALS).update(changes).eq("id", goal_id).eq("user_id", user_id).execute()
@@ -166,7 +168,7 @@ def update_goal(goal_id: str, user_id: str, data: dict) -> dict:
 
 def delete_goal(goal_id: str, user_id: str) -> None:
     if not _get(goal_id, user_id):
-        raise MoneyError(404, "Цель не найдена", "not_found")
+        raise MoneyError(404, tr("Цель не найдена"), "not_found")
     supabase.table(GOALS).delete().eq("id", goal_id).eq("user_id", user_id).execute()  # движения — каскадом
 
 
@@ -175,10 +177,10 @@ def add_move(goal_id: str, user_id: str, amount: Decimal, notify: bool = True) -
     достигнута (тогда бот поздравляет, если notify)."""
     row = _get(goal_id, user_id)
     if not row:
-        raise MoneyError(404, "Цель не найдена", "not_found")
+        raise MoneyError(404, tr("Цель не найдена"), "not_found")
     saved = _saved_by_goal(user_id).get(goal_id, Decimal(0))
     if amount < 0 and -amount > saved:
-        raise MoneyError(422, f"В цели отложено только {fmt(saved)} {row['currency']}", "too_much")
+        raise MoneyError(422, tr('В цели отложено только {0} {1}', fmt(saved), row['currency']), "too_much")
     supabase.table(MOVES).insert({"goal_id": goal_id, "user_id": user_id, "amount": fmt(amount)}).execute()
     goal = get_goal(goal_id, user_id)
     goal["first_achieved"] = False
@@ -188,15 +190,14 @@ def add_move(goal_id: str, user_id: str, amount: Decimal, notify: bool = True) -
         goal["first_achieved"] = bool(claimed)
         if claimed and notify:
             import notifier
-            notifier.notify_user(user_id, f"🎉 Цель «{row['name']}» достигнута: отложено "
-                                          f"{goal['saved']} {row['currency']} из {goal['target']}!")
+            notifier.notify_user(user_id, i18n.L('🎉 Цель «{0}» достигнута: отложено {1} {2} из {3}!', row['name'], goal['saved'], row['currency'], goal['target']))
     logger.info("Цель %s: движение", goal_id)
     return goal
 
 
 def moves(goal_id: str, user_id: str) -> list[dict]:
     if not _get(goal_id, user_id):
-        raise MoneyError(404, "Цель не найдена", "not_found")
+        raise MoneyError(404, tr("Цель не найдена"), "not_found")
     rows = supabase.table(MOVES).select("*").eq("goal_id", goal_id).eq("user_id", user_id) \
         .order("created_at", desc=True).limit(HISTORY).execute().data
     return [{"id": r["id"], "amount": fmt(r["amount"]), "created_at": r["created_at"]} for r in rows]

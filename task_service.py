@@ -6,6 +6,8 @@
 Каждая функция получает user_id владельца задач, и каждый запрос к таблице tasks
 фильтруется по нему: backend ходит в базу с ключом service_role, другой защиты нет.
 """
+from i18n import tr
+import i18n
 from datetime import date, datetime, timedelta
 from typing import Optional
 
@@ -92,7 +94,7 @@ def _normalize_ends(data: dict, current: Optional[dict] = None) -> None:
     if end and not start:
         end = None
     if end and end <= start:
-        raise CategoryError(422, "Время «до» должно быть позже начала", "bad_ends_at")
+        raise CategoryError(422, tr("Время «до» должно быть позже начала"), "bad_ends_at")
     data["ends_at"] = end.isoformat() if end else None
 
 
@@ -107,7 +109,7 @@ def _normalize_recurrence(data: dict, deadline_value) -> None:
     if pattern == "days":
         days = sorted({int(x) for x in (days or []) if isinstance(x, int) and 0 <= x <= 6})
         if not days:
-            raise CategoryError(422, "Выберите хотя бы один день недели", "bad_recurrence")
+            raise CategoryError(422, tr("Выберите хотя бы один день недели"), "bad_recurrence")
         data["recurrence_days"] = days
     elif pattern in ("monthly", "yearly"):
         deadline = deadline_value if isinstance(deadline_value, datetime) else (
@@ -155,7 +157,7 @@ def _known_category(user_id: str, name: str) -> str:
     """Название категории в том виде, как оно у пользователя; чужое или несуществующее — 422."""
     resolved = categories_service.resolve_name(user_id, name)
     if not resolved:
-        raise CategoryError(422, f"Нет такой категории: {name}", "unknown_category")
+        raise CategoryError(422, tr('Нет такой категории: {0}', name), "unknown_category")
     return resolved
 
 
@@ -306,7 +308,7 @@ def update_task(task_id: str, payload: TaskUpdate, user_id: str, propagate: bool
     if "location" in update_data:
         update_data["location"] = (update_data["location"] or "").strip() or None
     if (current.get("shared_id") or current.get("group_id")) and update_data.get("recurrence_pattern"):
-        raise CategoryError(422, "Задачу группы пока нельзя сделать повторяющейся", "shared_recurring")
+        raise CategoryError(422, tr("Задачу группы пока нельзя сделать повторяющейся"), "shared_recurring")
     update_data.pop("group_id", None)  # группу у задачи не меняют
     if update_data.get("folder_id"):
         import folders_service

@@ -5,6 +5,8 @@
 приложение, ни в бота, не получает рассылок; его данные остаются, доступ можно вернуть.
 В логи — только id.
 """
+from i18n import tr
+import i18n
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -56,9 +58,9 @@ def user_tasks(user_id: str) -> Optional[dict]:
 def set_blocked(admin_id: str, user_id: str, blocked: bool) -> dict:
     user = users_service.get_by_id(user_id)
     if not user:
-        raise CategoryError(404, "Пользователь не найден", "not_found")
+        raise CategoryError(404, tr("Пользователь не найден"), "not_found")
     if user_id == admin_id or user.get("is_admin"):
-        raise CategoryError(422, "Себя и владельцев отключить нельзя", "admin")
+        raise CategoryError(422, tr("Себя и владельцев отключить нельзя"), "admin")
     users_service.set_blocked(user_id, blocked)
     logger.info("Доступ %s: %s", user_id, "отключён" if blocked else "возвращён")
     return {"id": user_id, "blocked": bool(blocked)}

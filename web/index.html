@@ -120,6 +120,8 @@ applyTheme();
     --dur-base: 200ms;
     --dur-menu: 250ms;
   }
+  /* В Unbounded нет казахских букв (ә, қ, ү…): по-казахски заголовки — Onest, иначе буквы из разных шрифтов */
+  :root[lang="kk"] { --font-display: 'Onest', system-ui, -apple-system, sans-serif; }
 
   /* ---------- Тёмная тема (data-theme ставит скрипт в <head>) ---------- */
   :root[data-theme="dark"] {
@@ -2798,7 +2800,7 @@ if (!inTelegram) {
 }
 
 function authHeaders(extra) {
-  const headers = Object.assign({}, extra);
+  const headers = Object.assign({ 'X-Lang': LANG }, extra);  // сообщения сервера — на языке приложения
   if (inTelegram) headers['X-Telegram-Init-Data'] = tg.initData;
   else if (accessKey) headers['X-Access-Key'] = accessKey;
   return headers;
@@ -5010,7 +5012,12 @@ async function firstLoad() {
       taskLoadFinished(true);
       renderCurrentPage();
       // папки и группы — для подписей «📁 …» в списке (не мешают показу задач)
-      apiJson('/me').then(me => { moneyMe = moneyMe || me; document.getElementById('menuAdmin').hidden = !me.is_admin; }).catch(() => {});
+      apiJson('/me').then(me => {
+        moneyMe = moneyMe || me;
+        document.getElementById('menuAdmin').hidden = !me.is_admin;
+        // Бот и сводки говорят на языке приложения: сервер запоминает его (users.language, миграция 017)
+        if ('language' in me && me.language !== LANG) api('/me', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ language: LANG }) }).catch(() => {});
+      }).catch(() => {});
       Promise.allSettled([loadFolders(), loadGroups()]).then(async () => {
         await Promise.allSettled((groups || []).map(g => loadFolders(g.id)));
         renderCurrentPage();

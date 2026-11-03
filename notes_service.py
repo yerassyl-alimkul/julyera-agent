@@ -6,6 +6,8 @@
 текста), ссылки — обычный текст, кликабельными их делает интерфейс. Фото (миграция 013) — note_files, файлы
 в закрытом бакете task-files: <user_id>/notes/<note_id>/<id>.<ext>, наружу — подписанные ссылки на час.
 """
+from i18n import tr
+import i18n
 import logging
 import uuid
 from datetime import datetime
@@ -88,10 +90,10 @@ def add_photo(note_id: str, user_id: str, data: bytes, file_type: str) -> dict |
     if not get_note(note_id, user_id):
         return None
     if file_type not in PHOTO_TYPES:
-        raise comments_service.CommentError(422, "К заметке можно прикрепить только фото", "bad_file_type")
+        raise comments_service.CommentError(422, tr("К заметке можно прикрепить только фото"), "bad_file_type")
     count = len(supabase.table(FILES).select("id").eq("note_id", note_id).eq("user_id", user_id).execute().data)
     if count >= PHOTOS_MAX:
-        raise comments_service.CommentError(422, f"В заметке не больше {PHOTOS_MAX} фото", "too_many")
+        raise comments_service.CommentError(422, tr('В заметке не больше {0} фото', PHOTOS_MAX), "too_many")
     file_id = str(uuid.uuid4())
     path = f"{user_id}/notes/{note_id}/{file_id}.{PHOTO_TYPES[file_type]}"
     supabase.storage.from_(comments_service.BUCKET).upload(path, data, {"content-type": file_type})
