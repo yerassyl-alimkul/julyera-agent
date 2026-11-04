@@ -14,7 +14,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="apple-mobile-web-app-title" content="JulYera" />
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="i18n.js?v=3"></script>
+<script src="i18n.js?v=4"></script>
 <script>
 // Тема ставится до отрисовки, иначе тёмная тема мигнёт светлой. «Авто» повторяет Telegram (в Mini App)
 // или систему (браузер, иконка на экране Домой); выбор в меню хранится в localStorage.
@@ -637,6 +637,20 @@ applyTheme();
   }
   .note-edit-textarea:focus { border-color: var(--ink); }
   .swipe-track > .note-card { flex: 0 0 calc(100% - 140px); min-width: 0; }
+  /* Заметки списком, как в iOS: одна карточка-группа, строки через тонкую линию */
+  #notesList { gap: 0; border: 1.5px solid var(--line); border-radius: var(--radius-card); background: var(--surface); overflow: hidden; }
+  #notesList:has(> .empty-dashed) { border: 0; background: transparent; }
+  #notesList > * + * { border-top: 1px solid var(--line); }
+  #notesList .swipe { border-radius: 0; }
+  #notesList .note-card { border: 0; border-radius: 0; }
+  .note-card.note-line { flex-direction: row; align-items: center; gap: var(--gap-m); min-height: 64px; padding: 10px 16px;
+    cursor: pointer; }
+  .note-line-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .note-line-title { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .note-line-sub { display: flex; gap: 8px; font-size: 14px; color: var(--ink-muted); white-space: nowrap; overflow: hidden; }
+  .note-line-sub b { flex: none; font-weight: 500; color: var(--ink); opacity: .75; }
+  .note-line-sub span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .note-line-thumb { flex: none; width: 44px; height: 44px; border-radius: var(--radius-compact); object-fit: cover; }
   .swipe-track > .rec-row { flex: 0 0 calc(100% - 140px); min-width: 0; }
   .rec-row .row-check { margin: -6px 0 -6px -10px; }
   .rec-row.done .check-circle { background: var(--ink); }
@@ -655,6 +669,8 @@ applyTheme();
   .nv-date { font-size: 13px; color: var(--ink-muted); margin-bottom: var(--gap-m); }
   #nvBody, #adminBody { padding-top: var(--gap-m); }
   #nvBody .note-body .comment-text, #nvBody .note-check { font-size: 17px; }
+  /* первая строка открытой заметки — заголовок, как в «Заметках» iOS */
+  #nvBody .note-body > .comment-text:first-child::first-line { font-size: 21px; font-weight: 600; line-height: 1.6; }
   .note-check { display: flex; align-items: center; gap: var(--gap-m); min-height: var(--touch); padding: 2px 0; border: 0;
     background: transparent; color: var(--ink); font: inherit; font-size: 16px; line-height: 1.35; text-align: left; cursor: pointer; }
   .note-check .step-circle { flex: 0 0 auto; }
@@ -4227,6 +4243,30 @@ function fmtNoteDate(d) {
   return dt.toLocaleString(LOCALE, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
+// Заголовок — первая непустая строка (без значка галочки), дальше — начало остального текста одной строкой.
+function noteSummary(note) {
+  const lines = (note.content || '').split('\n').map(l => { const it = noteItem(l); return it ? it.text.trim() + ',' : l.trim(); })
+    .filter(l => l && l !== ',');
+  const items = (note.content || '').split('\n').map(noteItem).filter(it => it && it.text.trim());
+  return {
+    title: (lines[0] || t('Фото')).replace(/,$/, ''),
+    rest: lines.slice(1).join(' ').replace(/,$/, '').slice(0, 140),
+    checks: items.length ? { done: items.filter(it => it.done).length, total: items.length } : null,
+  };
+}
+// Дата в строке: сегодня — время, вчера, на этой неделе — день недели, иначе число.
+function fmtNoteShort(d) {
+  const dt = new Date(d);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const day = new Date(dt); day.setHours(0, 0, 0, 0);
+  const diff = Math.round((today - day) / 86400000);
+  if (diff <= 0) return dt.toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' });
+  if (diff === 1) return t('Вчера');
+  if (diff < 7) return WEEKDAY_SHORT[dt.getDay()];
+  return dt.toLocaleDateString(LOCALE, { day: '2-digit', month: '2-digit',
+    year: dt.getFullYear() === today.getFullYear() ? undefined : '2-digit' });
+}
+
 function pluralNotes(n) {
   return n === 0 ? t('нет заметок') : n + ' ' + tn(n, 'заметка|заметки|заметок');
 }
@@ -4286,37 +4326,44 @@ function noteCardEl(note) {
     return el;
   }
 
-  // Нажимаемая часть — текст и дата (открывает правку); кнопка «Задачи из заметки» — рядом, не внутри неё.
-  const view = document.createElement('div');
-  view.className = 'note-view';
-  view.setAttribute('role', 'button');
-  view.tabIndex = 0;
-  view.dataset.focusKey = 'note-' + note.id;
-  const sr = document.createElement('span');
-  sr.className = 'sr-only';
-  sr.textContent = 'Изменить заметку: ';
-  const content = document.createElement('div');
-  content.className = 'note-body';
-  fillNoteBody(content, note);
-  const meta = document.createElement('div');
-  meta.className = 'note-meta';
-  meta.textContent = fmtNoteDate(note.updated_at || note.created_at);
-  view.append(sr, content, notePhotosEl(note, false));
-  if (note.location) {
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = 'place-chip note-place';
-    chip.dataset.focusKey = 'note-place-' + note.id;
-    chip.setAttribute('aria-label', t("Открыть в Google Maps: {0}", note.location));
-    chip.innerHTML = PIN_ICON;
-    const t = document.createElement('span');
-    t.textContent = placeShort(note.location);
-    chip.appendChild(t);
-    chip.onclick = () => openExternal(mapsUrl(note.location));
-    view.appendChild(chip);
+  // В списке — строка как в «Заметках» iOS: заголовок (первая строка), дата и начало текста, фото справа.
+  // Всё содержимое (галочки, фото, место, «Задачи из заметки») — в просмотре по нажатию (решение владельца 4 ноября 2026).
+  el.classList.add('note-line');
+  el.setAttribute('role', 'button');
+  el.tabIndex = 0;
+  el.dataset.focusKey = 'note-' + note.id;
+  const { title, rest, checks } = noteSummary(note);
+  const text = document.createElement('div');
+  text.className = 'note-line-text';
+  const head = document.createElement('div');
+  head.className = 'note-line-title';
+  head.setAttribute('data-noi18n', '');
+  head.textContent = title;
+  const sub = document.createElement('div');
+  sub.className = 'note-line-sub';
+  const when = document.createElement('b');
+  when.textContent = fmtNoteShort(note.updated_at || note.created_at);
+  const preview = document.createElement('span');
+  preview.setAttribute('data-noi18n', '');
+  preview.textContent = [checks ? `☑ ${checks.done}/${checks.total}` : '', note.location ? '📍 ' + placeShort(note.location) : '',
+    rest].filter(Boolean).join(' · ') || t('Нет текста');
+  sub.append(when, preview);
+  text.append(head, sub);
+  el.appendChild(text);
+  const photo = (note.files || []).find(f => f.url);
+  if (photo) {
+    const img = document.createElement('img');
+    img.className = 'note-line-thumb';
+    img.alt = '';
+    img.src = photo.url;
+    el.appendChild(img);
   }
-  view.append(meta);
-  const startEdit = () => {
+  el.onclick = () => { if (Date.now() >= suppressRowClickUntil) openNoteView(note.id); };
+  el.onkeydown = (e) => {
+    if (e.target !== el) return;
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openNoteView(note.id); }
+  };
+  noteStartEdit[note.id] = () => {
     editingNoteId = note.id;
     noteDraft = null;
     noteEditPlace = undefined;
@@ -4325,28 +4372,6 @@ function noteCardEl(note) {
     const area = document.querySelector('#notesList .note-edit-textarea');
     if (area) { area.focus(); area.setSelectionRange(area.value.length, area.value.length); }
   };
-  // Нажатие открывает заметку целиком (просмотр), «Изменить» — там же или свайпом (решение владельца 20 октября 2026)
-  view.onclick = (e) => {
-    if (e.target.closest('a, .note-check, .note-photo, .note-place')) return; // ссылка, галочка, фото и место — свои действия
-    if (Date.now() >= suppressRowClickUntil) openNoteView(note.id);
-  };
-  view.onkeydown = (e) => {
-    if (e.target !== view) return;
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openNoteView(note.id); }
-  };
-  if (note.content.split('\n').length > 6 || note.content.length > 320) content.classList.add('clamped');
-  noteStartEdit[note.id] = startEdit;
-  el.appendChild(view);
-  if (notePreview && notePreview.noteId === note.id) el.appendChild(notePreviewEl(note));
-  else {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn-soft';
-    btn.dataset.focusKey = 'note-split-' + note.id;
-    btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg><span>Задачи из заметки</span>';
-    btn.onclick = () => previewNoteTasks(note, btn);
-    el.appendChild(btn);
-  }
   return el;
 }
 
@@ -4751,6 +4776,17 @@ function renderNoteView() {
     chip.querySelector('span').textContent = note.location;
     chip.onclick = () => openExternal(mapsUrl(note.location));
     box.appendChild(chip);
+  }
+  if (notePreview && notePreview.noteId === note.id) box.appendChild(notePreviewEl(note));
+  else {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-soft';
+    btn.style.marginTop = 'var(--gap-section)';
+    btn.dataset.focusKey = 'note-split-' + note.id;
+    btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg><span>Задачи из заметки</span>';
+    btn.onclick = () => previewNoteTasks(note, btn);
+    box.appendChild(btn);
   }
   if (focusKey) { const again = box.querySelector(`[data-focus-key="${focusKey}"]`); if (again) again.focus({ preventScroll: true }); }
 }

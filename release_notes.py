@@ -11,10 +11,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-RELEASE_ID = "2026-11-03-azerbaijani"
-RELEASE_TEXT = """🌍 Добавили азербайджанский язык. Выбрать язык теперь проще: «Настройки» → «Язык» в самом верху.
-
-🇦🇿 JulYera artıq Azərbaycan dilindədir: Parametrlər → Dil."""
+RELEASE_ID = "2026-11-04-notes-list"
+RELEASE_TEXT = """📝 Заметки теперь аккуратным списком, как в iPhone: заголовок, дата и начало текста.
+Нажмите на заметку — откроется целиком, со списками, фото и местом."""
 
 
 async def announce(bot, supabase, users: list[dict], reply_markup=None) -> bool:
