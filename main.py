@@ -39,6 +39,7 @@ from typing import Optional
 from uuid import UUID
 
 import httpx
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -860,6 +861,37 @@ async def run_reminders(request: Request):
         return JSONResponse({"status": "already_running"}, status_code=202)
     _reminders_task = asyncio.create_task(_reminders_job())
     return JSONResponse({"status": "started"}, status_code=202)
+
+
+
+class GymSyncBody(BaseModel):
+    telegram_id: int
+    action: str  # upsert | remove
+    ref: str = Field(..., min_length=1, max_length=64)
+    title: Optional[str] = Field(None, max_length=120)
+    start: Optional[datetime] = None
+    end: Optional[datetime] = None
+    place: Optional[str] = Field(None, max_length=200)
+
+
+@app.post("/internal/gym/sync")
+async def gym_sync(body: GymSyncBody, request: Request):
+    """Бронь зала из бота @unimegym_bot → задача (и событие Google Calendar) у человека с этим Telegram-id.
+    Защищено секретным заголовком X-Gym-Secret (GYM_SYNC_SECRET на Render)."""
+    import hmac
+    got = (request.headers.get("X-Gym-Secret") or "").strip()
+    expected = (os.environ.get("GYM_SYNC_SECRET") or "").strip()
+    if not expected or not got or not hmac.compare_digest(got, expected):
+        logger.warning("Брони зала отклонены: %s", "секрет не задан на сервере" if not expected
+                       else "нет заголовка X-Gym-Secret" if not got else "секрет не совпал")
+        raise HTTPException(status_code=403, detail="Forbidden")
+    if body.action not in ("upsert", "remove"):
+        raise HTTPException(status_code=422, detail="action")
+    import gym_service
+    result = await asyncio.to_thread(gym_service.sync, body.telegram_id, body.action, body.ref, body.title,
+                                     body.start, body.end, body.place)
+    logger.info("Бронь зала: %s", result)  # без имён и времени
+    return {"result": result}
 
 
 _reminders_task = None
