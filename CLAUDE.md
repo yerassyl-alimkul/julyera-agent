@@ -54,6 +54,9 @@
 - `comments_service.py`: комментарии к задачам (текст, фото, PDF; файлы в Supabase Storage, бакет `task-files`).
 - `money_service.py`: учёт расходов и доходов (категории денег, операции, итоги, повторяющиеся платежи, «деньги или задача»).
 - `google_calendar_service.py`: OAuth и события календаря (задачи → события).
+- `gym_service.py`: брони зала UNIME из бота @unimegym_bot → задачи (категория «Gym») и события Google Calendar:
+  `POST /internal/gym/sync` (заголовок `X-Gym-Secret` = `GYM_SYNC_SECRET` на Render), время приходит моментом и
+  переводится в часовой пояс пользователя; задача брони — `tasks.source = 'unime-gym:<lid>:<sid>'`.
 - `calendar_sync.py`: обратное направление — события Google Calendar → задачи (см. договорённость 7).
 - `groq_client.py`: промпт `SYSTEM_PROMPT`, разбор текста, распознавание голоса.
 - `telegram_handlers.py`: обработчики бота (`/start`, `/list`, текст, голос), общие для polling и webhook.
@@ -98,7 +101,7 @@
 ## Переменные окружения (только имена)
 
 `SUPABASE_URL`, `SUPABASE_KEY` (service_role), `GROQ_API_KEY`, `TELEGRAM_BOT_TOKEN`,
-`WEBHOOK_BASE_URL` (только прод), `REMINDERS_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+`WEBHOOK_BASE_URL` (только прод), `REMINDERS_SECRET`, `GYM_SYNC_SECRET` (секрет бота зала), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
 `GOOGLE_REDIRECT_URI`, `OAUTH_STATE_SECRET` (подпись `state` при подключении календаря, случайная строка от 32 символов;
 задаёт владелец на Render, в репозиторий не попадает), `PYTHON_VERSION` (только Render).
 Шаблон с комментариями: `.env.example`.
